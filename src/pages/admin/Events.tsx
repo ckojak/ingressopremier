@@ -39,6 +39,7 @@ import { ptBR } from "date-fns/locale";
 import { z } from "zod";
 import ImageUpload from "@/components/ImageUpload";
 import { useIBGEStates, useIBGECities } from "@/hooks/useIBGE";
+import { EVENT_CATEGORIES } from "@/lib/constants";
 
 const eventSchema = z.object({
   title: z.string().min(1, "Título é obrigatório").max(200, "Título deve ter no máximo 200 caracteres"),
@@ -70,19 +71,6 @@ const statusLabels: Record<string, string> = {
   cancelled: "Cancelado",
   completed: "Concluído",
 };
-
-const categories = [
-  "Festival",
-  "Show",
-  "Stand-up",
-  "Teatro",
-  "Esportes",
-  "Workshop",
-  "Conferência",
-  "Eletrônica",
-  "Sertanejo",
-  "Outros",
-];
 
 const Events = () => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -444,7 +432,7 @@ const Events = () => {
                       <SelectValue placeholder="Selecione a categoria" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((category) => (
+                      {EVENT_CATEGORIES.map((category) => (
                         <SelectItem key={category} value={category}>
                           {category}
                         </SelectItem>
