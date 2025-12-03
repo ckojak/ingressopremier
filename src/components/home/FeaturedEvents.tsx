@@ -1,74 +1,108 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import EventCard from "@/components/events/EventCard";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowRight, Calendar, MapPin, Ticket } from "lucide-react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Tables } from "@/integrations/supabase/types";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
-// Mock data - will be replaced with real data from backend
-const featuredEvents = [
-  {
-    id: "1",
-    title: "Rock in Rio 2024 - Dia 1",
-    date: "15 Set 2024 • 14:00",
-    location: "Parque Olímpico, Rio de Janeiro",
-    image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=800",
-    price: 595,
-    category: "Festival",
-    availableTickets: 234,
-  },
-  {
-    id: "2",
-    title: "Stand-up Comedy com Fábio Porchat",
-    date: "22 Set 2024 • 21:00",
-    location: "Teatro Renault, São Paulo",
-    image: "https://images.unsplash.com/photo-1585699324551-f6c309eedeca?w=800",
-    price: 120,
-    category: "Stand-up",
-    availableTickets: 45,
-  },
-  {
-    id: "3",
-    title: "Flamengo x Palmeiras - Brasileirão",
-    date: "28 Set 2024 • 16:00",
-    location: "Maracanã, Rio de Janeiro",
-    image: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800",
-    price: 180,
-    category: "Esportes",
-    availableTickets: 1250,
-  },
-  {
-    id: "4",
-    title: "Workshop de Fotografia Digital",
-    date: "05 Out 2024 • 09:00",
-    location: "Centro de Convenções, Belo Horizonte",
-    image: "https://images.unsplash.com/photo-1542038784456-1ea8e935640e?w=800",
-    price: 250,
-    category: "Workshop",
-    availableTickets: 30,
-  },
-  {
-    id: "5",
-    title: "Anitta World Tour 2024",
-    date: "12 Out 2024 • 20:00",
-    location: "Allianz Parque, São Paulo",
-    image: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800",
-    price: 350,
-    category: "Show",
-    availableTickets: 890,
-  },
-  {
-    id: "6",
-    title: "O Fantasma da Ópera - Musical",
-    date: "18 Out 2024 • 20:30",
-    location: "Teatro Santander, São Paulo",
-    image: "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800",
-    price: 280,
-    category: "Teatro",
-    availableTickets: 156,
-  },
-];
+type Event = Tables<"events">;
 
 const FeaturedEvents = () => {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("events")
+          .select("*")
+          .eq("status", "published")
+          .eq("is_featured", true)
+          .gte("start_date", new Date().toISOString())
+          .order("start_date", { ascending: true })
+          .limit(6);
+
+        if (error) throw error;
+        
+        // If no featured events, get recent published events
+        if (!data || data.length === 0) {
+          const { data: recentData } = await supabase
+            .from("events")
+            .select("*")
+            .eq("status", "published")
+            .gte("start_date", new Date().toISOString())
+            .order("start_date", { ascending: true })
+            .limit(6);
+          setEvents(recentData || []);
+        } else {
+          setEvents(data);
+        }
+      } catch (error) {
+        console.error("Error fetching featured events:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="py-20 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="mb-12">
+            <div className="h-8 bg-muted rounded w-64 animate-pulse mb-3" />
+            <div className="h-4 bg-muted rounded w-96 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="bg-muted rounded-2xl h-64" />
+                <div className="mt-4 space-y-2">
+                  <div className="h-4 bg-muted rounded w-3/4" />
+                  <div className="h-4 bg-muted rounded w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (events.length === 0) {
+    return (
+      <section className="py-20 bg-background">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center py-16"
+          >
+            <Ticket className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+            <h2 className="text-2xl font-bold text-foreground mb-2">
+              Nenhum evento disponível no momento
+            </h2>
+            <p className="text-muted-foreground mb-6">
+              Novos eventos serão adicionados em breve. Fique ligado!
+            </p>
+            <Link to="/auth">
+              <Button>Seja um organizador</Button>
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="py-20 bg-background">
       <div className="container mx-auto px-4">
@@ -96,8 +130,74 @@ const FeaturedEvents = () => {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {featuredEvents.map((event, index) => (
-            <EventCard key={event.id} {...event} index={index} />
+          {events.map((event, index) => (
+            <motion.div
+              key={event.id}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.1, duration: 0.5 }}
+            >
+              <Link to={`/evento/${event.id}`} className="group block">
+                <div className="gradient-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-500 hover:-translate-y-2">
+                  {/* Image */}
+                  <div className="relative aspect-[16/10] overflow-hidden">
+                    {event.image_url ? (
+                      <img
+                        src={event.image_url}
+                        alt={event.title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                        <Ticket className="w-12 h-12 text-muted-foreground/50" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent" />
+                    {event.category && (
+                      <Badge className="absolute top-4 left-4 gradient-primary text-primary-foreground border-0">
+                        {event.category}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-5">
+                    <h3 className="font-bold text-lg text-foreground mb-3 line-clamp-2 group-hover:text-primary transition-colors">
+                      {event.title}
+                    </h3>
+
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                        <Calendar className="w-4 h-4 text-primary" />
+                        <span>
+                          {format(new Date(event.start_date), "dd MMM yyyy • HH:mm", { locale: ptBR })}
+                        </span>
+                      </div>
+                      {event.city && (
+                        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                          <MapPin className="w-4 h-4 text-primary" />
+                          <span className="line-clamp-1">
+                            {event.venue_name && `${event.venue_name}, `}
+                            {event.city}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-4 border-t border-border">
+                      <div>
+                        <span className="text-xs text-muted-foreground">A partir de</span>
+                        <p className="text-lg font-bold text-gradient">Ver ingressos</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-primary-foreground text-lg">→</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
           ))}
         </div>
       </div>

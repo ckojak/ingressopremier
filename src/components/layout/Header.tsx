@@ -1,11 +1,61 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Search, Menu, X, Ticket } from "lucide-react";
-import { useState } from "react";
+import { Search, Menu, X, Ticket, User, LogOut, LayoutDashboard } from "lucide-react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/integrations/supabase/client";
+import { User as SupabaseUser } from "@supabase/supabase-js";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserRole(session.user.id);
+      } else {
+        setUserRole(null);
+      }
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserRole(session.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchUserRole = async (userId: string) => {
+    const { data } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .single();
+    setUserRole(data?.role || "user");
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    toast.success("Você saiu da sua conta");
+    navigate("/");
+  };
+
+  const isAdmin = userRole === "admin" || userRole === "organizer";
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 glass">
@@ -26,25 +76,65 @@ const Header = () => {
             <Link to="/eventos" className="text-muted-foreground hover:text-foreground transition-colors">
               Eventos
             </Link>
-            <Link to="/categorias" className="text-muted-foreground hover:text-foreground transition-colors">
-              Categorias
-            </Link>
-            <Link to="/sobre" className="text-muted-foreground hover:text-foreground transition-colors">
-              Sobre
-            </Link>
+            {user && (
+              <Link to="/meus-ingressos" className="text-muted-foreground hover:text-foreground transition-colors">
+                Meus Ingressos
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/admin" className="text-muted-foreground hover:text-foreground transition-colors">
+                Painel Admin
+              </Link>
+            )}
           </nav>
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-3">
-            <Button variant="ghost" size="icon">
-              <Search className="w-5 h-5" />
-            </Button>
-            <Link to="/auth">
-              <Button variant="outline">Entrar</Button>
+            <Link to="/eventos">
+              <Button variant="ghost" size="icon">
+                <Search className="w-5 h-5" />
+              </Button>
             </Link>
-            <Link to="/auth">
-              <Button>Criar conta</Button>
-            </Link>
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <User className="w-4 h-4" />
+                    {user.user_metadata?.full_name || user.email?.split("@")[0]}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link to="/meus-ingressos" className="cursor-pointer">
+                      <Ticket className="w-4 h-4 mr-2" />
+                      Meus Ingressos
+                    </Link>
+                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="cursor-pointer">
+                        <LayoutDashboard className="w-4 h-4 mr-2" />
+                        Painel Admin
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sair
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <>
+                <Link to="/auth">
+                  <Button variant="outline">Entrar</Button>
+                </Link>
+                <Link to="/auth">
+                  <Button>Criar conta</Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -76,27 +166,40 @@ const Header = () => {
               >
                 Eventos
               </Link>
-              <Link
-                to="/categorias"
-                className="text-muted-foreground hover:text-foreground transition-colors py-2"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Categorias
-              </Link>
-              <Link
-                to="/sobre"
-                className="text-muted-foreground hover:text-foreground transition-colors py-2"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Sobre
-              </Link>
+              {user && (
+                <Link
+                  to="/meus-ingressos"
+                  className="text-muted-foreground hover:text-foreground transition-colors py-2"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Meus Ingressos
+                </Link>
+              )}
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className="text-muted-foreground hover:text-foreground transition-colors py-2"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Painel Admin
+                </Link>
+              )}
               <div className="flex flex-col gap-2 pt-4 border-t border-border">
-                <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                  <Button variant="outline" className="w-full">Entrar</Button>
-                </Link>
-                <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                  <Button className="w-full">Criar conta</Button>
-                </Link>
+                {user ? (
+                  <Button variant="outline" className="w-full" onClick={() => { handleLogout(); setIsMenuOpen(false); }}>
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sair
+                  </Button>
+                ) : (
+                  <>
+                    <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+                      <Button variant="outline" className="w-full">Entrar</Button>
+                    </Link>
+                    <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+                      <Button className="w-full">Criar conta</Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>
