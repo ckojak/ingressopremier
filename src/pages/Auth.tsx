@@ -93,8 +93,8 @@ const Auth = () => {
           description: "Bem-vindo de volta.",
         });
       } else {
-        // Sign up
-        const { data, error } = await supabase.auth.signUp({
+        // Sign up - role is set automatically by database trigger based on user_type
+        const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -106,21 +106,6 @@ const Auth = () => {
           },
         });
         if (error) throw error;
-
-        // If organizer, update role after signup
-        if (userType === "organizer" && data.user) {
-          // Wait a moment for the trigger to create the default user role
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          const { error: updateError } = await supabase
-            .from("user_roles")
-            .update({ role: "organizer" })
-            .eq("user_id", data.user.id);
-          
-          if (updateError) {
-            console.error("Error updating role:", updateError);
-          }
-        }
 
         toast({
           title: "Cadastro realizado!",
