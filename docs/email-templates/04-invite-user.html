@@ -1,0 +1,81 @@
+<!-- 
+  TEMPLATE: Convite de Usuário
+  USO: Supabase Dashboard > Authentication > Email Templates > Invite user
+  
+  VARIÁVEIS DISPONÍVEIS NO SUPABASE:
+  {{ .ConfirmationURL }} - Link de convite
+  {{ .Email }} - Email do usuário
+  {{ .SiteURL }} - URL do site
+-->
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Você foi convidado - Eventix</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #0a0a0a; -webkit-font-smoothing: antialiased;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+    <!-- Card Container -->
+    <div style="background: linear-gradient(135deg, #06b6d4, #0891b2); padding: 2px; border-radius: 16px;">
+      <div style="background-color: #18181b; border-radius: 14px; padding: 40px;">
+        
+        <!-- Logo -->
+        <div style="text-align: center; margin-bottom: 32px;">
+          <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Eventix</h1>
+          <p style="color: #52525b; font-size: 12px; margin: 8px 0 0 0; text-transform: uppercase; letter-spacing: 2px;">Sua plataforma de eventos</p>
+        </div>
+
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 32px;">
+          <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(8, 145, 178, 0.1)); border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+            <span style="font-size: 40px;">🎉</span>
+          </div>
+          <h2 style="color: #ffffff; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+            Você foi convidado!
+          </h2>
+          <p style="color: #a1a1aa; font-size: 16px; margin: 0;">
+            Crie sua conta e comece a usar a Eventix
+          </p>
+        </div>
+        
+        <!-- Content -->
+        <div style="margin-bottom: 32px;">
+          <p style="color: #d4d4d8; font-size: 16px; line-height: 1.7; margin: 0 0 16px 0;">
+            Olá! 👋
+          </p>
+          <p style="color: #d4d4d8; font-size: 16px; line-height: 1.7; margin: 0 0 16px 0;">
+            Você foi convidado para criar uma conta na <strong style="color: #06b6d4;">Eventix</strong>, a plataforma que conecta você aos melhores eventos!
+          </p>
+        </div>
+        
+        <!-- CTA Button -->
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: linear-gradient(135deg, #06b6d4, #0891b2); color: #ffffff; text-decoration: none; padding: 16px 48px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 14px rgba(6, 182, 212, 0.4);">
+            Aceitar convite
+          </a>
+        </div>
+        
+        <!-- Alternative Link -->
+        <div style="margin: 24px 0; padding: 16px; background-color: #27272a; border-radius: 8px;">
+          <p style="color: #71717a; font-size: 13px; margin: 0 0 8px 0;">
+            Se o botão não funcionar, copie e cole este link no seu navegador:
+          </p>
+          <p style="color: #06b6d4; font-size: 12px; margin: 0; word-break: break-all;">
+            {{ .ConfirmationURL }}
+          </p>
+        </div>
+        
+        <!-- Footer -->
+        <div style="margin-top: 32px; text-align: center;">
+          <p style="color: #52525b; font-size: 12px; margin: 0;">
+            © 2024 Eventix. Todos os direitos reservados.
+          </p>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -85,9 +85,9 @@ serve(async (req) => {
 
     // Generate ticket codes HTML
     const ticketCodesHtml = tickets?.map(ticket => `
-      <div style="background: #f4f4f4; padding: 16px; border-radius: 8px; margin: 8px 0; text-align: center;">
-        <p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">${(ticket.ticket_types as any)?.name || 'Ingresso'}</p>
-        <p style="margin: 0; font-family: monospace; font-size: 18px; font-weight: bold; color: #333;">
+      <div style="background-color: #27272a; padding: 20px; border-radius: 12px; margin: 12px 0; text-align: center; border: 1px solid #3f3f46;">
+        <p style="margin: 0 0 8px 0; color: #a1a1aa; font-size: 14px;">${(ticket.ticket_types as any)?.name || 'Ingresso'}</p>
+        <p style="margin: 0; font-family: 'Courier New', monospace; font-size: 20px; font-weight: bold; color: #06b6d4; letter-spacing: 2px;">
           ${ticket.ticket_code}
         </p>
       </div>
@@ -96,8 +96,8 @@ serve(async (req) => {
     // Order items HTML
     const orderItemsHtml = order.order_items?.map((item: any) => `
       <tr>
-        <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.quantity}x ${item.ticket_types?.name}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">R$ ${(item.unit_price * item.quantity).toFixed(2)}</td>
+        <td style="padding: 12px 0; border-bottom: 1px solid #27272a; color: #d4d4d8;">${item.quantity}x ${item.ticket_types?.name}</td>
+        <td style="padding: 12px 0; border-bottom: 1px solid #27272a; text-align: right; color: #d4d4d8;">R$ ${(item.unit_price * item.quantity).toFixed(2)}</td>
       </tr>
     `).join("") || "";
 
@@ -108,66 +108,95 @@ serve(async (req) => {
       subject: `🎫 Seus ingressos para ${order.events?.title}`,
       html: `
         <!DOCTYPE html>
-        <html>
+        <html lang="pt-BR">
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f9fafb;">
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #0a0a0a; -webkit-font-smoothing: antialiased;">
           <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-            <!-- Header -->
-            <div style="text-align: center; margin-bottom: 32px;">
-              <h1 style="color: #0d9488; margin: 0; font-size: 28px;">Eventix</h1>
-              <p style="color: #666; margin: 8px 0 0 0;">Confirmação de Compra</p>
-            </div>
-
-            <!-- Main Card -->
-            <div style="background: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-              <!-- Success Message -->
-              <div style="text-align: center; margin-bottom: 24px;">
-                <div style="width: 64px; height: 64px; background: #d1fae5; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
-                  <span style="font-size: 32px;">✓</span>
+            <!-- Card Container -->
+            <div style="background: linear-gradient(135deg, #06b6d4, #0891b2); padding: 2px; border-radius: 16px;">
+              <div style="background-color: #18181b; border-radius: 14px; padding: 40px;">
+                
+                <!-- Logo -->
+                <div style="text-align: center; margin-bottom: 32px;">
+                  <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Eventix</h1>
+                  <p style="color: #52525b; font-size: 12px; margin: 8px 0 0 0; text-transform: uppercase; letter-spacing: 2px;">Confirmação de compra</p>
                 </div>
-                <h2 style="color: #333; margin: 0 0 8px 0;">Compra Confirmada!</h2>
-                <p style="color: #666; margin: 0;">Seus ingressos estão prontos</p>
-              </div>
 
-              <!-- Event Details -->
-              <div style="background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); border-radius: 12px; padding: 24px; color: white; margin-bottom: 24px;">
-                <h3 style="margin: 0 0 16px 0; font-size: 20px;">${order.events?.title}</h3>
-                <p style="margin: 0 0 8px 0; opacity: 0.9;">📅 ${formattedDate}</p>
-                ${order.events?.venue_name ? `<p style="margin: 0 0 8px 0; opacity: 0.9;">📍 ${order.events.venue_name}</p>` : ""}
-                ${order.events?.city ? `<p style="margin: 0; opacity: 0.9;">${order.events.city}${order.events.state ? `, ${order.events.state}` : ""}</p>` : ""}
-              </div>
+                <!-- Success Icon -->
+                <div style="text-align: center; margin-bottom: 32px;">
+                  <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1)); border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 20px; line-height: 80px;">
+                    <span style="font-size: 40px;">✅</span>
+                  </div>
+                  <h2 style="color: #10b981; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+                    Compra Confirmada!
+                  </h2>
+                  <p style="color: #a1a1aa; font-size: 16px; margin: 0;">
+                    Seus ingressos estão prontos
+                  </p>
+                </div>
 
-              <!-- Ticket Codes -->
-              <div style="margin-bottom: 24px;">
-                <h3 style="color: #333; margin: 0 0 16px 0; font-size: 16px;">Seus códigos de ingresso:</h3>
-                ${ticketCodesHtml}
-                <p style="color: #666; font-size: 12px; margin: 8px 0 0 0; text-align: center;">
-                  Apresente estes códigos na entrada do evento
-                </p>
-              </div>
+                <!-- Event Details Card -->
+                <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(8, 145, 178, 0.1)); border-radius: 12px; padding: 24px; margin-bottom: 24px; border: 1px solid rgba(6, 182, 212, 0.3);">
+                  <h3 style="color: #ffffff; font-size: 20px; margin: 0 0 16px 0; font-weight: 600;">${order.events?.title}</h3>
+                  <div style="color: #d4d4d8; font-size: 15px; line-height: 1.8;">
+                    <p style="margin: 0 0 8px 0;">📅 ${formattedDate}</p>
+                    ${order.events?.venue_name ? `<p style="margin: 0 0 8px 0;">📍 ${order.events.venue_name}</p>` : ""}
+                    ${order.events?.city ? `<p style="margin: 0;">🏙️ ${order.events.city}${order.events.state ? `, ${order.events.state}` : ""}</p>` : ""}
+                  </div>
+                </div>
 
-              <!-- Order Summary -->
-              <div style="border-top: 1px solid #eee; padding-top: 24px;">
-                <h3 style="color: #333; margin: 0 0 16px 0; font-size: 16px;">Resumo do Pedido</h3>
-                <table style="width: 100%; border-collapse: collapse;">
-                  ${orderItemsHtml}
-                  <tr>
-                    <td style="padding: 12px 8px 8px; font-weight: bold;">Total</td>
-                    <td style="padding: 12px 8px 8px; text-align: right; font-weight: bold; color: #0d9488; font-size: 18px;">
-                      R$ ${Number(order.total_amount).toFixed(2)}
-                    </td>
-                  </tr>
-                </table>
-              </div>
-            </div>
+                <!-- Ticket Codes -->
+                <div style="margin-bottom: 24px;">
+                  <h3 style="color: #ffffff; font-size: 16px; margin: 0 0 16px 0; font-weight: 600;">🎫 Seus códigos de ingresso:</h3>
+                  ${ticketCodesHtml}
+                  <p style="color: #71717a; font-size: 13px; margin: 16px 0 0 0; text-align: center;">
+                    Apresente estes códigos ou o QR Code na entrada do evento
+                  </p>
+                </div>
 
-            <!-- Footer -->
-            <div style="text-align: center; margin-top: 32px; color: #666; font-size: 12px;">
-              <p style="margin: 0 0 8px 0;">Este é um email automático. Não responda a esta mensagem.</p>
-              <p style="margin: 0;">© ${new Date().getFullYear()} Eventix. Todos os direitos reservados.</p>
+                <!-- Order Summary -->
+                <div style="border-top: 1px solid #27272a; padding-top: 24px; margin-bottom: 24px;">
+                  <h3 style="color: #ffffff; font-size: 16px; margin: 0 0 16px 0; font-weight: 600;">📋 Resumo do Pedido</h3>
+                  <table style="width: 100%; border-collapse: collapse;">
+                    ${orderItemsHtml}
+                    <tr>
+                      <td style="padding: 16px 0 0; font-weight: 600; color: #ffffff;">Total</td>
+                      <td style="padding: 16px 0 0; text-align: right; font-weight: 700; color: #06b6d4; font-size: 20px;">
+                        R$ ${Number(order.total_amount).toFixed(2)}
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+
+                <!-- CTA Button -->
+                <div style="text-align: center; margin: 32px 0;">
+                  <a href="${Deno.env.get("SUPABASE_URL")?.replace('.supabase.co', '.lovable.app') || 'https://eventix.app'}/meus-ingressos" style="display: inline-block; background: linear-gradient(135deg, #06b6d4, #0891b2); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 14px rgba(6, 182, 212, 0.4);">
+                    Ver meus ingressos
+                  </a>
+                </div>
+
+                <!-- Help Section -->
+                <div style="background-color: #27272a; border-radius: 12px; padding: 20px; margin-top: 24px;">
+                  <p style="color: #a1a1aa; font-size: 14px; margin: 0 0 8px 0; font-weight: 600;">Precisa de ajuda?</p>
+                  <p style="color: #71717a; font-size: 13px; margin: 0; line-height: 1.6;">
+                    Acesse a área "Meus Ingressos" no site para visualizar o QR Code ou entrar em contato com o suporte.
+                  </p>
+                </div>
+                
+                <!-- Footer -->
+                <div style="margin-top: 32px; text-align: center;">
+                  <p style="color: #52525b; font-size: 12px; margin: 0;">
+                    © ${new Date().getFullYear()} Eventix. Todos os direitos reservados.
+                  </p>
+                  <p style="color: #52525b; font-size: 11px; margin: 8px 0 0 0;">
+                    Este é um email automático. Não responda a esta mensagem.
+                  </p>
+                </div>
+                
+              </div>
             </div>
           </div>
         </body>
