@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      coupons: {
+        Row: {
+          code: string
+          created_at: string | null
+          discount_type: string
+          discount_value: number
+          event_id: string | null
+          id: string
+          is_active: boolean | null
+          max_uses: number | null
+          min_purchase_amount: number | null
+          organizer_id: string
+          updated_at: string | null
+          used_count: number | null
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          discount_type: string
+          discount_value: number
+          event_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          min_purchase_amount?: number | null
+          organizer_id: string
+          updated_at?: string | null
+          used_count?: number | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          discount_type?: string
+          discount_value?: number
+          event_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          min_purchase_amount?: number | null
+          organizer_id?: string
+          updated_at?: string | null
+          used_count?: number | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupons_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           category: string | null
@@ -118,10 +177,12 @@ export type Database = {
       }
       orders: {
         Row: {
+          coupon_id: string | null
           created_at: string | null
           customer_email: string | null
           customer_name: string | null
           customer_phone: string | null
+          discount_amount: number | null
           event_id: string | null
           id: string
           payment_intent_id: string | null
@@ -131,10 +192,12 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          coupon_id?: string | null
           created_at?: string | null
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          discount_amount?: number | null
           event_id?: string | null
           id?: string
           payment_intent_id?: string | null
@@ -144,10 +207,12 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          coupon_id?: string | null
           created_at?: string | null
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          discount_amount?: number | null
           event_id?: string | null
           id?: string
           payment_intent_id?: string | null
@@ -157,6 +222,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "orders_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "orders_event_id_fkey"
             columns: ["event_id"]
@@ -195,6 +267,50 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      ticket_transfers: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          from_user_id: string
+          id: string
+          status: string
+          ticket_id: string
+          to_user_email: string
+          to_user_id: string | null
+          transfer_code: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          from_user_id: string
+          id?: string
+          status?: string
+          ticket_id: string
+          to_user_email: string
+          to_user_id?: string | null
+          transfer_code: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          from_user_id?: string
+          id?: string
+          status?: string
+          ticket_id?: string
+          to_user_email?: string
+          to_user_id?: string | null
+          transfer_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_transfers_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ticket_types: {
         Row: {
