@@ -124,10 +124,15 @@ const EventDetails = () => {
     return cart.find(item => item.ticketType.id === ticketTypeId)?.quantity || 0;
   };
 
-  const totalAmount = cart.reduce(
+  const SERVICE_FEE_PERCENTAGE = 0.05; // 5% taxa de serviço
+
+  const subtotal = cart.reduce(
     (sum, item) => sum + Number(item.ticketType.price) * item.quantity,
     0
   );
+
+  const serviceFee = subtotal * SERVICE_FEE_PERCENTAGE;
+  const totalAmount = subtotal + serviceFee;
 
   const totalTickets = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -197,6 +202,7 @@ const EventDetails = () => {
             quantity: item.quantity,
             unitPrice: Number(item.ticketType.price),
           })),
+          serviceFee,
         },
       });
 
@@ -427,6 +433,19 @@ const EventDetails = () => {
                               </span>
                             </div>
                           ))}
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Subtotal</span>
+                            <span className="text-foreground">R$ {subtotal.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Taxa de serviço (5%)</span>
+                            <span className="text-foreground">R$ {serviceFee.toFixed(2)}</span>
+                          </div>
                         </div>
 
                         <Separator />
