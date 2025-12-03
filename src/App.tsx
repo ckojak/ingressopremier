@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Events from "./pages/Events";
 import EventDetails from "./pages/EventDetails";
 import Auth from "./pages/Auth";
+import PaymentSuccess from "./pages/PaymentSuccess";
 import NotFound from "./pages/NotFound";
 import AdminLayout from "./pages/admin/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
@@ -45,6 +46,7 @@ const App = () => {
               <Route path="/eventos" element={<Events />} />
               <Route path="/evento/:id" element={<EventDetails />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/pagamento-sucesso" element={<PaymentSuccess />} />
               
               {/* Admin Routes */}
               <Route path="/admin" element={<AdminLayout />}>

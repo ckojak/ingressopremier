@@ -1,105 +1,53 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import EventCard from "@/components/events/EventCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, Calendar, MapPin } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Search, Filter, Calendar, MapPin, Users, Ticket } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Tables } from "@/integrations/supabase/types";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
-// Mock data
-const allEvents = [
-  {
-    id: "1",
-    title: "Rock in Rio 2024 - Dia 1",
-    date: "15 Set 2024 • 14:00",
-    location: "Parque Olímpico, Rio de Janeiro",
-    image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=800",
-    price: 595,
-    category: "Festival",
-    availableTickets: 234,
-  },
-  {
-    id: "2",
-    title: "Stand-up Comedy com Fábio Porchat",
-    date: "22 Set 2024 • 21:00",
-    location: "Teatro Renault, São Paulo",
-    image: "https://images.unsplash.com/photo-1585699324551-f6c309eedeca?w=800",
-    price: 120,
-    category: "Stand-up",
-    availableTickets: 45,
-  },
-  {
-    id: "3",
-    title: "Flamengo x Palmeiras - Brasileirão",
-    date: "28 Set 2024 • 16:00",
-    location: "Maracanã, Rio de Janeiro",
-    image: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800",
-    price: 180,
-    category: "Esportes",
-    availableTickets: 1250,
-  },
-  {
-    id: "4",
-    title: "Workshop de Fotografia Digital",
-    date: "05 Out 2024 • 09:00",
-    location: "Centro de Convenções, Belo Horizonte",
-    image: "https://images.unsplash.com/photo-1542038784456-1ea8e935640e?w=800",
-    price: 250,
-    category: "Workshop",
-    availableTickets: 30,
-  },
-  {
-    id: "5",
-    title: "Anitta World Tour 2024",
-    date: "12 Out 2024 • 20:00",
-    location: "Allianz Parque, São Paulo",
-    image: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800",
-    price: 350,
-    category: "Show",
-    availableTickets: 890,
-  },
-  {
-    id: "6",
-    title: "O Fantasma da Ópera - Musical",
-    date: "18 Out 2024 • 20:30",
-    location: "Teatro Santander, São Paulo",
-    image: "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=800",
-    price: 280,
-    category: "Teatro",
-    availableTickets: 156,
-  },
-  {
-    id: "7",
-    title: "Lollapalooza Brasil 2024",
-    date: "25 Out 2024 • 12:00",
-    location: "Autódromo de Interlagos, São Paulo",
-    image: "https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=800",
-    price: 890,
-    category: "Festival",
-    availableTickets: 500,
-  },
-  {
-    id: "8",
-    title: "Whindersson Nunes - Stand Up",
-    date: "02 Nov 2024 • 21:00",
-    location: "Ginásio do Ibirapuera, São Paulo",
-    image: "https://images.unsplash.com/photo-1527224538127-2104bb71c51b?w=800",
-    price: 150,
-    category: "Stand-up",
-    availableTickets: 200,
-  },
-];
+type Event = Tables<"events">;
 
-const categories = ["Todos", "Festival", "Show", "Stand-up", "Teatro", "Esportes", "Workshop"];
+const categories = ["Todos", "Festival", "Show", "Stand-up", "Teatro", "Esportes", "Workshop", "Conferência"];
 
 const Events = () => {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todos");
 
-  const filteredEvents = allEvents.filter((event) => {
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("events")
+          .select("*")
+          .eq("status", "published")
+          .gte("start_date", new Date().toISOString())
+          .order("start_date", { ascending: true });
+
+        if (error) throw error;
+        setEvents(data || []);
+      } catch (error) {
+        console.error("Error fetching events:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, []);
+
+  const filteredEvents = events.filter((event) => {
     const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.location.toLowerCase().includes(searchTerm.toLowerCase());
+      event.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.venue_name?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === "Todos" || event.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -182,20 +130,103 @@ const Events = () => {
 
           {/* Results Count */}
           <div className="mb-6 text-muted-foreground">
-            {filteredEvents.length} eventos encontrados
+            {loading ? "Carregando..." : `${filteredEvents.length} eventos encontrados`}
           </div>
 
           {/* Events Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredEvents.map((event, index) => (
-              <EventCard key={event.id} {...event} index={index} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="bg-muted rounded-2xl h-64" />
+                  <div className="mt-4 space-y-2">
+                    <div className="h-4 bg-muted rounded w-3/4" />
+                    <div className="h-4 bg-muted rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredEvents.map((event, index) => (
+                <motion.div
+                  key={event.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1, duration: 0.5 }}
+                >
+                  <Link to={`/evento/${event.id}`} className="group block">
+                    <div className="gradient-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-500 hover:-translate-y-2">
+                      {/* Image */}
+                      <div className="relative aspect-[16/10] overflow-hidden">
+                        {event.image_url ? (
+                          <img
+                            src={event.image_url}
+                            alt={event.title}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                            <Ticket className="w-12 h-12 text-muted-foreground/50" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent" />
+                        {event.category && (
+                          <Badge className="absolute top-4 left-4 gradient-primary text-primary-foreground border-0">
+                            {event.category}
+                          </Badge>
+                        )}
+                      </div>
 
-          {filteredEvents.length === 0 && (
+                      {/* Content */}
+                      <div className="p-5">
+                        <h3 className="font-bold text-lg text-foreground mb-3 line-clamp-2 group-hover:text-primary transition-colors">
+                          {event.title}
+                        </h3>
+
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                            <Calendar className="w-4 h-4 text-primary" />
+                            <span>
+                              {format(new Date(event.start_date), "dd MMM yyyy • HH:mm", { locale: ptBR })}
+                            </span>
+                          </div>
+                          {event.city && (
+                            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                              <MapPin className="w-4 h-4 text-primary" />
+                              <span className="line-clamp-1">
+                                {event.venue_name && `${event.venue_name}, `}
+                                {event.city}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-border">
+                          <div>
+                            <span className="text-xs text-muted-foreground">A partir de</span>
+                            <p className="text-lg font-bold text-gradient">Ver ingressos</p>
+                          </div>
+                          <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-primary-foreground text-lg">→</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          {!loading && filteredEvents.length === 0 && (
             <div className="text-center py-16">
+              <Ticket className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground text-lg">
                 Nenhum evento encontrado com os filtros selecionados.
+              </p>
+              <p className="text-muted-foreground text-sm mt-2">
+                Tente ajustar os filtros ou volte mais tarde.
               </p>
             </div>
           )}
