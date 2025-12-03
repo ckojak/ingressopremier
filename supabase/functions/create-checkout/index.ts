@@ -21,7 +21,10 @@ interface CheckoutItem {
 interface CheckoutRequest {
   eventId: string;
   items: CheckoutItem[];
+  serviceFee?: number;
 }
+
+const SERVICE_FEE_PERCENTAGE = 0.05; // 5% taxa de serviço
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -120,7 +123,23 @@ serve(async (req) => {
       });
     }
 
-    logStep("Line items prepared", { count: lineItems.length });
+    // Add service fee line item
+    const subtotal = orderItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    const serviceFee = subtotal * SERVICE_FEE_PERCENTAGE;
+    
+    lineItems.push({
+      price_data: {
+        currency: "brl",
+        product_data: {
+          name: "Taxa de Serviço",
+          description: "Taxa administrativa (5%)",
+        },
+        unit_amount: Math.round(serviceFee * 100),
+      },
+      quantity: 1,
+    });
+
+    logStep("Line items prepared", { count: lineItems.length, serviceFee });
 
     // Initialize Stripe
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
@@ -133,8 +152,8 @@ serve(async (req) => {
       logStep("Existing customer found", { customerId });
     }
 
-    // Calculate total
-    const totalAmount = orderItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    // Calculate total (including service fee)
+    const totalAmount = orderItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0) + serviceFee;
 
     // Create pending order in database
     const { data: order, error: orderError } = await supabaseClient
