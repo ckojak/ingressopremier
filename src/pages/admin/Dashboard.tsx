@@ -3,12 +3,21 @@ import { motion } from "framer-motion";
 import { Calendar, Ticket, DollarSign, Users, TrendingUp, ArrowUpRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface Stats {
   totalEvents: number;
   totalTicketsSold: number;
   totalRevenue: number;
   activeUsers: number;
+}
+
+interface SalesData {
+  date: string;
+  revenue: number;
+  tickets: number;
 }
 
 const Dashboard = () => {
@@ -18,6 +27,7 @@ const Dashboard = () => {
     totalRevenue: 0,
     activeUsers: 0,
   });
+  const [salesData, setSalesData] = useState<SalesData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,7 +51,7 @@ const Dashboard = () => {
         // Fetch orders for revenue
         const { data: orders } = await supabase
           .from("orders")
-          .select("total_amount, event_id, events!inner(organizer_id)")
+          .select("total_amount, event_id, created_at, events!inner(organizer_id)")
           .eq("events.organizer_id", user.id)
           .eq("status", "paid");
 
@@ -53,6 +63,33 @@ const Dashboard = () => {
           totalRevenue,
           activeUsers: 0,
         });
+
+        // Generate sales data for chart (last 7 days)
+        const last7Days = Array.from({ length: 7 }, (_, i) => {
+          const date = subDays(new Date(), 6 - i);
+          return {
+            date: format(date, "dd/MM", { locale: ptBR }),
+            fullDate: date,
+            revenue: 0,
+            tickets: 0,
+          };
+        });
+
+        // Aggregate orders by day
+        orders?.forEach(order => {
+          const orderDate = new Date(order.created_at || "");
+          const dayIndex = last7Days.findIndex(day => {
+            const start = startOfDay(day.fullDate);
+            const end = endOfDay(day.fullDate);
+            return orderDate >= start && orderDate <= end;
+          });
+          if (dayIndex !== -1) {
+            last7Days[dayIndex].revenue += Number(order.total_amount);
+            last7Days[dayIndex].tickets += 1;
+          }
+        });
+
+        setSalesData(last7Days.map(({ date, revenue, tickets }) => ({ date, revenue, tickets })));
       } catch (error) {
         console.error("Error fetching stats:", error);
       } finally {
@@ -129,6 +166,94 @@ const Dashboard = () => {
             </Card>
           </motion.div>
         ))}
+      </div>
+
+      {/* Sales Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              Receita (Últimos 7 dias)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={salesData}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis 
+                    dataKey="date" 
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                  />
+                  <YAxis 
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                    tickFormatter={(value) => `R$${value}`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      color: 'hsl(var(--foreground))'
+                    }}
+                    formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Receita']}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="revenue" 
+                    stroke="hsl(var(--primary))" 
+                    strokeWidth={3}
+                    dot={{ fill: 'hsl(var(--primary))', strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <Ticket className="w-5 h-5 text-accent" />
+              Vendas de Ingressos (Últimos 7 dias)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={salesData}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis 
+                    dataKey="date" 
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                  />
+                  <YAxis 
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      color: 'hsl(var(--foreground))'
+                    }}
+                    formatter={(value: number) => [value, 'Ingressos']}
+                  />
+                  <Bar 
+                    dataKey="tickets" 
+                    fill="hsl(var(--accent))" 
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Quick Actions */}

@@ -39,10 +39,10 @@ const Header = () => {
             <Button variant="ghost" size="icon">
               <Search className="w-5 h-5" />
             </Button>
-            <Link to="/login">
+            <Link to="/auth">
               <Button variant="outline">Entrar</Button>
             </Link>
-            <Link to="/cadastro">
+            <Link to="/auth">
               <Button>Criar conta</Button>
             </Link>
           </div>
@@ -91,10 +91,10 @@ const Header = () => {
                 Sobre
               </Link>
               <div className="flex flex-col gap-2 pt-4 border-t border-border">
-                <Link to="/login" onClick={() => setIsMenuOpen(false)}>
+                <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
                   <Button variant="outline" className="w-full">Entrar</Button>
                 </Link>
-                <Link to="/cadastro" onClick={() => setIsMenuOpen(false)}>
+                <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
                   <Button className="w-full">Criar conta</Button>
                 </Link>
               </div>
