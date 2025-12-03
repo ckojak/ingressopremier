@@ -1,43 +1,38 @@
 import { useRef } from "react";
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Building2 } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+import baruLogo from "@/assets/organizers/baru.png";
+import kauaiLogo from "@/assets/organizers/kauai.jpg";
+import sambaSunsetLogo from "@/assets/organizers/samba-sunset.jpg";
+import vistaJoaLogo from "@/assets/organizers/vista-joa.jpg";
 
 const organizers = [
   {
     name: "Baru",
-    logo: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200&h=200&fit=crop",
+    logo: baruLogo,
     category: "Bar & Lounge",
   },
   {
     name: "Kauai Gastrolounge",
-    logo: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=200&h=200&fit=crop",
+    logo: kauaiLogo,
     category: "Gastronomia",
   },
   {
     name: "Vista Joá",
-    logo: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=200&h=200&fit=crop",
+    logo: vistaJoaLogo,
     category: "Eventos",
   },
   {
     name: "Quintal da Barra",
-    logo: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&h=200&fit=crop",
+    logo: null,
     category: "Bar & Eventos",
   },
   {
     name: "Samba Sunset Festival",
-    logo: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=200&h=200&fit=crop",
+    logo: sambaSunsetLogo,
     category: "Festival",
-  },
-  {
-    name: "Casa de Shows RJ",
-    logo: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=200&h=200&fit=crop",
-    category: "Shows",
-  },
-  {
-    name: "Arena Music",
-    logo: "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=200&h=200&fit=crop",
-    category: "Eventos",
   },
 ];
 
@@ -107,13 +102,19 @@ const OrganizersSection = () => {
               className="flex-shrink-0 snap-center"
             >
               <div className="w-48 gradient-card rounded-2xl p-6 text-center hover:shadow-card-hover transition-all duration-300 hover:-translate-y-2 cursor-pointer group">
-                <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-4 ring-2 ring-border group-hover:ring-primary transition-all">
-                  <img
-                    src={organizer.logo}
-                    alt={organizer.name}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
+                <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-4 ring-2 ring-border group-hover:ring-primary transition-all bg-secondary flex items-center justify-center">
+                  {organizer.logo ? (
+                    <img
+                      src={organizer.logo}
+                      alt={organizer.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="text-2xl font-bold text-primary">
+                      {organizer.name.charAt(0)}
+                    </span>
+                  )}
                 </div>
                 <h3 className="font-semibold text-foreground mb-1 line-clamp-1">
                   {organizer.name}
