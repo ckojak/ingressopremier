@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, useNavigate, Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
+import { Database } from "@/integrations/supabase/types";
 import {
   LayoutDashboard,
   Calendar,
@@ -16,6 +17,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+
+type AppRole = Database["public"]["Enums"]["app_role"];
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
@@ -29,9 +33,11 @@ const menuItems = [
 const AdminLayout = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [roleLoading, setRoleLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -51,18 +57,62 @@ const AdminLayout = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Fetch user role after authentication
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      if (!user) {
+        setRoleLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching user role:", error);
+        setUserRole(null);
+      } else {
+        setUserRole(data?.role ?? null);
+      }
+      setRoleLoading(false);
+    };
+
+    if (user) {
+      fetchUserRole();
+    } else {
+      setRoleLoading(false);
+    }
+  }, [user]);
+
+  // Redirect if not authenticated
   useEffect(() => {
     if (!loading && !user) {
       navigate("/auth");
     }
   }, [user, loading, navigate]);
 
+  // Redirect if not admin or organizer
+  useEffect(() => {
+    if (!loading && !roleLoading && user && userRole) {
+      if (!["admin", "organizer"].includes(userRole)) {
+        toast.error("Você não tem permissão para acessar o painel administrativo.");
+        navigate("/");
+      }
+    } else if (!loading && !roleLoading && user && !userRole) {
+      toast.error("Você não tem permissão para acessar o painel administrativo.");
+      navigate("/");
+    }
+  }, [user, userRole, loading, roleLoading, navigate]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/");
   };
 
-  if (loading) {
+  if (loading || roleLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Carregando...</div>
@@ -70,7 +120,7 @@ const AdminLayout = () => {
     );
   }
 
-  if (!user) {
+  if (!user || !userRole || !["admin", "organizer"].includes(userRole)) {
     return null;
   }
 
