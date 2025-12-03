@@ -36,12 +36,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tables } from "@/integrations/supabase/types";
 import { z } from "zod";
+import { formatCurrencyInput, parseCurrencyBRL } from "@/lib/currency";
 
 const ticketSchema = z.object({
   event_id: z.string().uuid("Evento inválido"),
   name: z.string().min(1, "Nome é obrigatório").max(100, "Nome deve ter no máximo 100 caracteres"),
   description: z.string().max(500, "Descrição deve ter no máximo 500 caracteres").optional().or(z.literal("")),
-  price: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Preço deve ser um número válido maior ou igual a 0"),
+  price: z.string().min(1, "Preço é obrigatório"),
   quantity_available: z.string().refine((val) => !isNaN(parseInt(val)) && parseInt(val) > 0, "Quantidade deve ser um número inteiro maior que 0"),
   max_per_order: z.string().refine((val) => !isNaN(parseInt(val)) && parseInt(val) > 0 && parseInt(val) <= 100, "Máximo por pedido deve estar entre 1 e 100"),
   is_active: z.boolean(),
@@ -107,12 +108,16 @@ const Tickets = () => {
     fetchData();
   }, []);
 
+  const handlePriceChange = (value: string) => {
+    const formatted = formatCurrencyInput(value);
+    setFormData({ ...formData, price: formatted });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate form data with zod
     const schema = editingTicket ? ticketUpdateSchema : ticketSchema;
-    const dataToValidate = editingTicket ? { ...formData, event_id: undefined } : formData;
     const validation = schema.safeParse(editingTicket ? {
       name: formData.name,
       description: formData.description,
@@ -133,13 +138,15 @@ const Tickets = () => {
     }
 
     try {
+      const priceValue = parseCurrencyBRL(formData.price);
+
       if (editingTicket) {
         const { error } = await supabase
           .from("ticket_types")
           .update({
             name: formData.name,
             description: formData.description || null,
-            price: parseFloat(formData.price),
+            price: priceValue,
             quantity_available: parseInt(formData.quantity_available),
             max_per_order: parseInt(formData.max_per_order),
             is_active: formData.is_active,
@@ -155,7 +162,7 @@ const Tickets = () => {
             event_id: formData.event_id,
             name: formData.name,
             description: formData.description || null,
-            price: parseFloat(formData.price),
+            price: priceValue,
             quantity_available: parseInt(formData.quantity_available),
             max_per_order: parseInt(formData.max_per_order),
             is_active: formData.is_active,
@@ -203,11 +210,12 @@ const Tickets = () => {
 
   const handleEdit = (ticket: TicketType) => {
     setEditingTicket(ticket);
+    const priceFormatted = formatCurrencyInput((Number(ticket.price) * 100).toString());
     setFormData({
       event_id: ticket.event_id,
       name: ticket.name,
       description: ticket.description || "",
-      price: ticket.price.toString(),
+      price: priceFormatted,
       quantity_available: ticket.quantity_available.toString(),
       max_per_order: (ticket.max_per_order || 10).toString(),
       is_active: ticket.is_active ?? true,
@@ -254,7 +262,10 @@ const Tickets = () => {
               Novo Ingresso
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent
+            onInteractOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}
+          >
             <DialogHeader>
               <DialogTitle>
                 {editingTicket ? "Editar Ingresso" : "Criar Tipo de Ingresso"}
@@ -303,15 +314,19 @@ const Tickets = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="price">Preço (R$) *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    required
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      R$
+                    </span>
+                    <Input
+                      id="price"
+                      value={formData.price}
+                      onChange={(e) => handlePriceChange(e.target.value)}
+                      placeholder="0,00"
+                      className="pl-10"
+                      required
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="quantity">Quantidade *</Label>
@@ -418,7 +433,7 @@ const Tickets = () => {
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Preço</span>
                         <span className="font-semibold text-primary">
-                          R$ {Number(ticket.price).toFixed(2)}
+                          R$ {Number(ticket.price).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
