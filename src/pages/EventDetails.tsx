@@ -57,6 +57,26 @@ const EventDetails = () => {
 
         if (ticketsError) throw ticketsError;
         setTicketTypes(ticketsData || []);
+
+        // Restore cart from localStorage if returning from login
+        const pendingCart = localStorage.getItem("pendingCart");
+        if (pendingCart) {
+          const parsed = JSON.parse(pendingCart);
+          if (parsed.eventId === id && ticketsData) {
+            const restoredCart: CartItem[] = [];
+            for (const item of parsed.items) {
+              const ticketType = ticketsData.find(t => t.id === item.ticketTypeId);
+              if (ticketType) {
+                restoredCart.push({ ticketType, quantity: item.quantity });
+              }
+            }
+            if (restoredCart.length > 0) {
+              setCart(restoredCart);
+              toast.success("Seu carrinho foi restaurado!");
+            }
+            localStorage.removeItem("pendingCart");
+          }
+        }
       } catch (error) {
         console.error("Error fetching event:", error);
         toast.error("Evento não encontrado");
@@ -123,8 +143,16 @@ const EventDetails = () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
-        toast.error("Faça login para continuar");
-        navigate("/auth");
+        // Save cart to localStorage before redirecting
+        localStorage.setItem("pendingCart", JSON.stringify({
+          eventId: id,
+          items: cart.map(item => ({
+            ticketTypeId: item.ticketType.id,
+            quantity: item.quantity,
+          })),
+        }));
+        toast.info("Faça login para continuar com a compra");
+        navigate("/auth", { state: { from: `/evento/${id}` } });
         return;
       }
 

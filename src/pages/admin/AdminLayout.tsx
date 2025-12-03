@@ -9,7 +9,7 @@ import {
   Ticket,
   ShoppingCart,
   Users,
-  Settings,
+  QrCode,
   LogOut,
   Menu,
   X,
@@ -26,8 +26,8 @@ const menuItems = [
   { icon: Calendar, label: "Eventos", path: "/admin/eventos" },
   { icon: Ticket, label: "Ingressos", path: "/admin/ingressos" },
   { icon: ShoppingCart, label: "Vendas", path: "/admin/vendas" },
+  { icon: QrCode, label: "Check-in", path: "/admin/checkin" },
   { icon: Users, label: "Usuários", path: "/admin/usuarios" },
-  { icon: Settings, label: "Configurações", path: "/admin/configuracoes" },
 ];
 
 const AdminLayout = () => {
