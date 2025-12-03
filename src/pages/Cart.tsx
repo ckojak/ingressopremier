@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft, Lock, CreditCard, Ticket } from "lucide-react";
+import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft, Lock, CreditCard, Ticket, Tag, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +16,7 @@ import { ptBR } from "date-fns/locale";
 
 type TicketType = Tables<"ticket_types">;
 type Event = Tables<"events">;
+type Coupon = Tables<"coupons">;
 
 interface CartItem {
   ticketType: TicketType;
@@ -30,6 +32,12 @@ const Cart = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  
+  // Coupon state
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState("");
 
   useEffect(() => {
     const checkUser = async () => {
@@ -79,6 +87,20 @@ const Cart = () => {
       }
 
       setCartItems(loadedItems);
+      
+      // Load saved coupon if exists
+      if (parsed.couponId) {
+        const { data: coupon } = await supabase
+          .from("coupons")
+          .select("*")
+          .eq("id", parsed.couponId)
+          .eq("is_active", true)
+          .single();
+        
+        if (coupon) {
+          setAppliedCoupon(coupon);
+        }
+      }
     } catch (error) {
       console.error("Error loading cart:", error);
     }
@@ -110,6 +132,7 @@ const Cart = () => {
           ticketTypeId: item.ticketType.id,
           quantity: item.quantity,
         })),
+        couponId: appliedCoupon?.id,
       };
       localStorage.setItem("cart", JSON.stringify(cartData));
 
@@ -126,6 +149,7 @@ const Cart = () => {
           ticketTypeId: item.ticketType.id,
           quantity: item.quantity,
         })),
+        couponId: appliedCoupon?.id,
       };
       localStorage.setItem("cart", JSON.stringify(cartData));
 
@@ -134,13 +158,121 @@ const Cart = () => {
     toast.success("Item removido do carrinho");
   };
 
+  const validateCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponError("Digite um código de cupom");
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponError("");
+
+    try {
+      const { data: coupon, error } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("code", couponCode.trim().toUpperCase())
+        .eq("is_active", true)
+        .single();
+
+      if (error || !coupon) {
+        setCouponError("Cupom inválido ou expirado");
+        setCouponLoading(false);
+        return;
+      }
+
+      // Check validity dates
+      const now = new Date();
+      if (coupon.valid_from && new Date(coupon.valid_from) > now) {
+        setCouponError("Este cupom ainda não está ativo");
+        setCouponLoading(false);
+        return;
+      }
+      if (coupon.valid_until && new Date(coupon.valid_until) < now) {
+        setCouponError("Este cupom expirou");
+        setCouponLoading(false);
+        return;
+      }
+
+      // Check usage limit
+      if (coupon.max_uses && (coupon.used_count || 0) >= coupon.max_uses) {
+        setCouponError("Este cupom atingiu o limite de uso");
+        setCouponLoading(false);
+        return;
+      }
+
+      // Check minimum purchase amount
+      if (coupon.min_purchase_amount && subtotal < Number(coupon.min_purchase_amount)) {
+        setCouponError(`Compra mínima de R$ ${Number(coupon.min_purchase_amount).toFixed(2)}`);
+        setCouponLoading(false);
+        return;
+      }
+
+      // Check if coupon is for specific event
+      if (coupon.event_id) {
+        const eventIds = cartItems.map(item => item.event.id);
+        if (!eventIds.includes(coupon.event_id)) {
+          setCouponError("Este cupom não é válido para os eventos no carrinho");
+          setCouponLoading(false);
+          return;
+        }
+      }
+
+      setAppliedCoupon(coupon);
+      setCouponCode("");
+      toast.success("Cupom aplicado com sucesso!");
+
+      // Save coupon to cart
+      const savedCart = localStorage.getItem("cart");
+      if (savedCart) {
+        const parsed = JSON.parse(savedCart);
+        parsed.couponId = coupon.id;
+        localStorage.setItem("cart", JSON.stringify(parsed));
+      }
+
+    } catch (error) {
+      console.error("Error validating coupon:", error);
+      setCouponError("Erro ao validar cupom");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
+    toast.success("Cupom removido");
+
+    // Remove coupon from cart
+    const savedCart = localStorage.getItem("cart");
+    if (savedCart) {
+      const parsed = JSON.parse(savedCart);
+      delete parsed.couponId;
+      localStorage.setItem("cart", JSON.stringify(parsed));
+    }
+  };
+
   const subtotal = cartItems.reduce(
     (sum, item) => sum + Number(item.ticketType.price) * item.quantity,
     0
   );
-  
-  const serviceFee = subtotal * SERVICE_FEE_PERCENTAGE;
-  const total = subtotal + serviceFee;
+
+  // Calculate discount
+  const calculateDiscount = () => {
+    if (!appliedCoupon) return 0;
+    
+    if (appliedCoupon.discount_type === "percentage") {
+      return subtotal * (Number(appliedCoupon.discount_value) / 100);
+    } else {
+      return Math.min(Number(appliedCoupon.discount_value), subtotal);
+    }
+  };
+
+  const discount = calculateDiscount();
+  const subtotalAfterDiscount = subtotal - discount;
+  const serviceFee = subtotalAfterDiscount * SERVICE_FEE_PERCENTAGE;
+  const total = subtotalAfterDiscount + serviceFee;
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) {
@@ -174,10 +306,31 @@ const Cart = () => {
             unitPrice: Number(item.ticketType.price),
           })),
           serviceFee,
+          couponId: appliedCoupon?.id,
+          discountAmount: discount,
         },
       });
 
       if (error) throw error;
+
+      // Send notification email if coupon was applied
+      if (appliedCoupon && user) {
+        try {
+          await supabase.functions.invoke("send-notification", {
+            body: {
+              type: "coupon_applied",
+              data: {
+                couponCode: appliedCoupon.code,
+                discountAmount: discount,
+                customerEmail: user.email,
+                customerName: user.user_metadata?.full_name || user.email,
+              },
+            },
+          });
+        } catch (notifError) {
+          console.error("Error sending coupon notification:", notifError);
+        }
+      }
 
       if (data?.url) {
         localStorage.removeItem("cart");
@@ -352,6 +505,65 @@ const Cart = () => {
                       </Card>
                     </motion.div>
                   ))}
+
+                  {/* Coupon Section */}
+                  <Card className="bg-card border-border">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Tag className="w-5 h-5 text-primary" />
+                        <h3 className="font-semibold text-foreground">Cupom de Desconto</h3>
+                      </div>
+                      
+                      {appliedCoupon ? (
+                        <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg border border-primary/20">
+                          <div className="flex items-center gap-3">
+                            <Check className="w-5 h-5 text-primary" />
+                            <div>
+                              <p className="font-semibold text-primary">{appliedCoupon.code}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {appliedCoupon.discount_type === "percentage" 
+                                  ? `${appliedCoupon.discount_value}% de desconto`
+                                  : `R$ ${Number(appliedCoupon.discount_value).toFixed(2)} de desconto`}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={removeCoupon}
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Digite o código do cupom"
+                              value={couponCode}
+                              onChange={(e) => {
+                                setCouponCode(e.target.value.toUpperCase());
+                                setCouponError("");
+                              }}
+                              className="flex-1"
+                              onKeyDown={(e) => e.key === "Enter" && validateCoupon()}
+                            />
+                            <Button 
+                              onClick={validateCoupon} 
+                              disabled={couponLoading}
+                              variant="outline"
+                            >
+                              {couponLoading ? "Validando..." : "Aplicar"}
+                            </Button>
+                          </div>
+                          {couponError && (
+                            <p className="text-sm text-destructive">{couponError}</p>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
 
                 {/* Order Summary */}
@@ -381,6 +593,14 @@ const Cart = () => {
                           <span className="text-muted-foreground">Subtotal</span>
                           <span className="text-foreground">R$ {subtotal.toFixed(2)}</span>
                         </div>
+                        
+                        {appliedCoupon && discount > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-primary">Desconto ({appliedCoupon.code})</span>
+                            <span className="text-primary">- R$ {discount.toFixed(2)}</span>
+                          </div>
+                        )}
+                        
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Taxa de serviço (5%)</span>
                           <span className="text-foreground">R$ {serviceFee.toFixed(2)}</span>
