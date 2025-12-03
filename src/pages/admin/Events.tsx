@@ -29,6 +29,22 @@ import { useToast } from "@/hooks/use-toast";
 import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { z } from "zod";
+
+const eventSchema = z.object({
+  title: z.string().min(1, "Título é obrigatório").max(200, "Título deve ter no máximo 200 caracteres"),
+  description: z.string().max(5000, "Descrição deve ter no máximo 5000 caracteres").optional().or(z.literal("")),
+  short_description: z.string().max(300, "Descrição curta deve ter no máximo 300 caracteres").optional().or(z.literal("")),
+  start_date: z.string().min(1, "Data de início é obrigatória"),
+  end_date: z.string().optional().or(z.literal("")),
+  venue_name: z.string().max(200, "Nome do local deve ter no máximo 200 caracteres").optional().or(z.literal("")),
+  venue_address: z.string().max(500, "Endereço deve ter no máximo 500 caracteres").optional().or(z.literal("")),
+  city: z.string().max(100, "Cidade deve ter no máximo 100 caracteres").optional().or(z.literal("")),
+  state: z.string().max(50, "Estado deve ter no máximo 50 caracteres").optional().or(z.literal("")),
+  category: z.string().max(100, "Categoria deve ter no máximo 100 caracteres").optional().or(z.literal("")),
+  image_url: z.string().url("URL da imagem inválida").optional().or(z.literal("")),
+  status: z.enum(["draft", "published", "cancelled", "completed"]),
+});
 
 type Event = Tables<"events">;
 
@@ -97,16 +113,40 @@ const Events = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate form data with zod
+    const validation = eventSchema.safeParse(formData);
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
+      toast({
+        title: "Erro de validação",
+        description: firstError.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
+
+      const validatedData = validation.data;
 
       if (editingEvent) {
         const { error } = await supabase
           .from("events")
           .update({
-            ...formData,
-            end_date: formData.end_date || null,
+            title: validatedData.title,
+            description: validatedData.description || null,
+            short_description: validatedData.short_description || null,
+            start_date: validatedData.start_date,
+            end_date: validatedData.end_date || null,
+            venue_name: validatedData.venue_name || null,
+            venue_address: validatedData.venue_address || null,
+            city: validatedData.city || null,
+            state: validatedData.state || null,
+            category: validatedData.category || null,
+            image_url: validatedData.image_url || null,
+            status: validatedData.status,
           })
           .eq("id", editingEvent.id);
 
@@ -116,9 +156,19 @@ const Events = () => {
         const { error } = await supabase
           .from("events")
           .insert({
-            ...formData,
+            title: validatedData.title,
+            description: validatedData.description || null,
+            short_description: validatedData.short_description || null,
+            start_date: validatedData.start_date,
+            end_date: validatedData.end_date || null,
+            venue_name: validatedData.venue_name || null,
+            venue_address: validatedData.venue_address || null,
+            city: validatedData.city || null,
+            state: validatedData.state || null,
+            category: validatedData.category || null,
+            image_url: validatedData.image_url || null,
+            status: validatedData.status,
             organizer_id: user.id,
-            end_date: formData.end_date || null,
           });
 
         if (error) throw error;

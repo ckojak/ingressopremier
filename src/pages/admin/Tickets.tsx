@@ -35,6 +35,19 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tables } from "@/integrations/supabase/types";
+import { z } from "zod";
+
+const ticketSchema = z.object({
+  event_id: z.string().uuid("Evento inválido"),
+  name: z.string().min(1, "Nome é obrigatório").max(100, "Nome deve ter no máximo 100 caracteres"),
+  description: z.string().max(500, "Descrição deve ter no máximo 500 caracteres").optional().or(z.literal("")),
+  price: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Preço deve ser um número válido maior ou igual a 0"),
+  quantity_available: z.string().refine((val) => !isNaN(parseInt(val)) && parseInt(val) > 0, "Quantidade deve ser um número inteiro maior que 0"),
+  max_per_order: z.string().refine((val) => !isNaN(parseInt(val)) && parseInt(val) > 0 && parseInt(val) <= 100, "Máximo por pedido deve estar entre 1 e 100"),
+  is_active: z.boolean(),
+});
+
+const ticketUpdateSchema = ticketSchema.omit({ event_id: true });
 
 type TicketType = Tables<"ticket_types">;
 type Event = Tables<"events">;
@@ -97,6 +110,28 @@ const Tickets = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate form data with zod
+    const schema = editingTicket ? ticketUpdateSchema : ticketSchema;
+    const dataToValidate = editingTicket ? { ...formData, event_id: undefined } : formData;
+    const validation = schema.safeParse(editingTicket ? {
+      name: formData.name,
+      description: formData.description,
+      price: formData.price,
+      quantity_available: formData.quantity_available,
+      max_per_order: formData.max_per_order,
+      is_active: formData.is_active,
+    } : formData);
+
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
+      toast({
+        title: "Erro de validação",
+        description: firstError.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       if (editingTicket) {
         const { error } = await supabase
