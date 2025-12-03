@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Ticket, Calendar, MapPin, QrCode, Download } from "lucide-react";
+import { Ticket, Calendar, MapPin, QrCode, Download, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import TicketTransfer from "@/components/TicketTransfer";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -47,49 +48,50 @@ const MyTickets = () => {
   const [tickets, setTickets] = useState<TicketWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<TicketWithDetails | null>(null);
+  const [transferTicket, setTransferTicket] = useState<TicketWithDetails | null>(null);
+
+  const fetchTickets = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      navigate("/auth");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("tickets")
+        .select(`
+          id,
+          ticket_code,
+          attendee_name,
+          attendee_email,
+          is_used,
+          used_at,
+          created_at,
+          events (id, title, start_date, venue_name, city, state, image_url),
+          ticket_types (name, price)
+        `)
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      const formattedTickets = (data || []).map(ticket => ({
+        ...ticket,
+        event: ticket.events as TicketWithDetails["event"],
+        ticket_type: ticket.ticket_types as TicketWithDetails["ticket_type"],
+      }));
+
+      setTickets(formattedTickets);
+    } catch (error) {
+      console.error("Error fetching tickets:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchTickets = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        navigate("/auth");
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from("tickets")
-          .select(`
-            id,
-            ticket_code,
-            attendee_name,
-            attendee_email,
-            is_used,
-            used_at,
-            created_at,
-            events (id, title, start_date, venue_name, city, state, image_url),
-            ticket_types (name, price)
-          `)
-          .eq("user_id", session.user.id)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-
-        const formattedTickets = (data || []).map(ticket => ({
-          ...ticket,
-          event: ticket.events as TicketWithDetails["event"],
-          ticket_type: ticket.ticket_types as TicketWithDetails["ticket_type"],
-        }));
-
-        setTickets(formattedTickets);
-      } catch (error) {
-        console.error("Error fetching tickets:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchTickets();
   }, [navigate]);
 
@@ -162,6 +164,20 @@ const MyTickets = () => {
                 <QrCode className="w-4 h-4" />
                 Ver QR Code
               </Button>
+              {!ticket.is_used && ticket.event && new Date(ticket.event.start_date) >= new Date() && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTransferTicket(ticket);
+                  }}
+                >
+                  <Send className="w-4 h-4" />
+                  Transferir
+                </Button>
+              )}
             </div>
           </CardContent>
         </div>
@@ -314,6 +330,18 @@ const MyTickets = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Transfer Dialog */}
+      {transferTicket && (
+        <TicketTransfer
+          ticketId={transferTicket.id}
+          ticketCode={transferTicket.ticket_code}
+          eventTitle={transferTicket.event?.title || ""}
+          open={!!transferTicket}
+          onOpenChange={(open) => !open && setTransferTicket(null)}
+          onSuccess={fetchTickets}
+        />
+      )}
     </div>
   );
 };

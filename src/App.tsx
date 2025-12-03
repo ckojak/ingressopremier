@@ -21,6 +21,8 @@ import Tickets from "./pages/admin/Tickets";
 import Sales from "./pages/admin/Sales";
 import Users from "./pages/admin/Users";
 import CheckIn from "./pages/admin/CheckIn";
+import Coupons from "./pages/admin/Coupons";
+import Reports from "./pages/admin/Reports";
 import Cart from "./pages/Cart";
 import Profile from "./pages/Profile";
 
@@ -65,6 +67,8 @@ const App = () => {
                 <Route path="ingressos" element={<Tickets />} />
                 <Route path="vendas" element={<Sales />} />
                 <Route path="checkin" element={<CheckIn />} />
+                <Route path="cupons" element={<Coupons />} />
+                <Route path="relatorios" element={<Reports />} />
                 <Route path="usuarios" element={<Users />} />
               </Route>
               

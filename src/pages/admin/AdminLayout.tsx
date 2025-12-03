@@ -15,6 +15,8 @@ import {
   X,
   ChevronLeft,
   Crown,
+  Tag,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -40,6 +42,8 @@ const AdminLayout = () => {
       { icon: Calendar, label: "Eventos", path: "/admin/eventos" },
       { icon: Ticket, label: "Ingressos", path: "/admin/ingressos" },
       { icon: ShoppingCart, label: "Vendas", path: "/admin/vendas" },
+      { icon: Tag, label: "Cupons", path: "/admin/cupons" },
+      { icon: BarChart3, label: "Relatórios", path: "/admin/relatorios" },
       { icon: QrCode, label: "Check-in", path: "/admin/checkin" },
     ];
 
