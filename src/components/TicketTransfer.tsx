@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send, X } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,11 +12,14 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface TicketTransferProps {
   ticketId: string;
   ticketCode: string;
   eventTitle: string;
+  eventDate?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
@@ -26,6 +29,7 @@ const TicketTransfer = ({
   ticketId,
   ticketCode,
   eventTitle,
+  eventDate,
   open,
   onOpenChange,
   onSuccess,
@@ -60,6 +64,15 @@ const TicketTransfer = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
+      // Get user profile for sender name
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", user.id)
+        .single();
+
+      const senderName = profile?.full_name || profile?.email || "Um usuário";
+
       // Check if user already has a pending transfer for this ticket
       const { data: existingTransfer } = await supabase
         .from("ticket_transfers")
@@ -74,7 +87,7 @@ const TicketTransfer = ({
 
       // Create transfer request
       const transferCode = generateTransferCode();
-      const { error } = await supabase
+      const { data: transferData, error } = await supabase
         .from("ticket_transfers")
         .insert({
           ticket_id: ticketId,
@@ -82,14 +95,44 @@ const TicketTransfer = ({
           to_user_email: email.toLowerCase(),
           transfer_code: transferCode,
           status: "pending",
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      toast({
-        title: "Transferência iniciada!",
-        description: `Um convite foi enviado para ${email}`,
+      // Format event date
+      const formattedDate = eventDate 
+        ? format(new Date(eventDate), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })
+        : "Data não informada";
+
+      // Send transfer email
+      const { error: emailError } = await supabase.functions.invoke("send-transfer-email", {
+        body: {
+          transferId: transferData.id,
+          recipientEmail: email.toLowerCase(),
+          transferCode,
+          eventTitle,
+          eventDate: formattedDate,
+          ticketCode,
+          senderName,
+          siteUrl: window.location.origin,
+        },
       });
+
+      if (emailError) {
+        console.error("Error sending transfer email:", emailError);
+        // Don't throw - transfer was created, just email failed
+        toast({
+          title: "Transferência criada",
+          description: `Transferência criada, mas houve um problema ao enviar o e-mail. O destinatário pode aceitar pelo site.`,
+        });
+      } else {
+        toast({
+          title: "Transferência iniciada!",
+          description: `Um convite foi enviado para ${email}`,
+        });
+      }
 
       setEmail("");
       onOpenChange(false);

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Ticket, Calendar, MapPin, QrCode, Download, Send } from "lucide-react";
+import { Ticket, Calendar, MapPin, QrCode, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -12,9 +12,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import TicketTransfer from "@/components/TicketTransfer";
+import PendingTransfers from "@/components/PendingTransfers";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -28,6 +35,7 @@ interface TicketWithDetails {
   is_used: boolean;
   used_at: string | null;
   created_at: string | null;
+  wasTransferred: boolean; // Track if ticket was received via transfer
   event: {
     id: string;
     title: string;
@@ -77,10 +85,21 @@ const MyTickets = () => {
 
       if (error) throw error;
 
+      // Check which tickets were received via transfer
+      const ticketIds = (data || []).map(t => t.id);
+      const { data: transfersData } = await supabase
+        .from("ticket_transfers")
+        .select("ticket_id")
+        .in("ticket_id", ticketIds)
+        .eq("status", "accepted");
+
+      const transferredTicketIds = new Set((transfersData || []).map(t => t.ticket_id));
+
       const formattedTickets = (data || []).map(ticket => ({
         ...ticket,
         event: ticket.events as TicketWithDetails["event"],
         ticket_type: ticket.ticket_types as TicketWithDetails["ticket_type"],
+        wasTransferred: transferredTicketIds.has(ticket.id),
       }));
 
       setTickets(formattedTickets);
@@ -134,9 +153,16 @@ const MyTickets = () => {
                   {ticket.ticket_type?.name}
                 </p>
               </div>
-              <Badge variant={ticket.is_used ? "secondary" : "default"}>
-                {ticket.is_used ? "Utilizado" : "Válido"}
-              </Badge>
+              <div className="flex gap-1">
+                {ticket.wasTransferred && (
+                  <Badge variant="outline" className="text-xs">
+                    Recebido
+                  </Badge>
+                )}
+                <Badge variant={ticket.is_used ? "secondary" : "default"}>
+                  {ticket.is_used ? "Utilizado" : "Válido"}
+                </Badge>
+              </div>
             </div>
             <div className="space-y-1 text-sm text-muted-foreground">
               {ticket.event && (
@@ -165,18 +191,41 @@ const MyTickets = () => {
                 Ver QR Code
               </Button>
               {!ticket.is_used && ticket.event && new Date(ticket.event.start_date) >= new Date() && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="gap-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setTransferTicket(ticket);
-                  }}
-                >
-                  <Send className="w-4 h-4" />
-                  Transferir
-                </Button>
+                ticket.wasTransferred ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="gap-1"
+                            disabled
+                          >
+                            <Send className="w-4 h-4" />
+                            Transferir
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Ingressos recebidos por transferência não podem ser transferidos novamente</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTransferTicket(ticket);
+                    }}
+                  >
+                    <Send className="w-4 h-4" />
+                    Transferir
+                  </Button>
+                )
               )}
             </div>
           </CardContent>
@@ -202,6 +251,9 @@ const MyTickets = () => {
               Gerencie seus ingressos comprados
             </p>
           </motion.div>
+
+          {/* Pending Transfers Section */}
+          <PendingTransfers onTransferHandled={fetchTickets} />
 
           {loading ? (
             <div className="space-y-4">
@@ -337,6 +389,7 @@ const MyTickets = () => {
           ticketId={transferTicket.id}
           ticketCode={transferTicket.ticket_code}
           eventTitle={transferTicket.event?.title || ""}
+          eventDate={transferTicket.event?.start_date}
           open={!!transferTicket}
           onOpenChange={(open) => !open && setTransferTicket(null)}
           onSuccess={fetchTickets}
