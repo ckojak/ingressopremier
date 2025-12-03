@@ -73,9 +73,13 @@ const AdminLayout = () => {
   useEffect(() => {
     const fetchUserRole = async () => {
       if (!user) {
+        setUserRole(null);
         setRoleLoading(false);
         return;
       }
+
+      // Set loading true when starting to fetch
+      setRoleLoading(true);
 
       const { data, error } = await supabase
         .from("user_roles")
@@ -92,11 +96,7 @@ const AdminLayout = () => {
       setRoleLoading(false);
     };
 
-    if (user) {
-      fetchUserRole();
-    } else {
-      setRoleLoading(false);
-    }
+    fetchUserRole();
   }, [user]);
 
   useEffect(() => {
