@@ -24,10 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EVENT_CATEGORIES } from "@/lib/constants";
 
 type Event = Tables<"events">;
 
-const categories = ["Todos", "Festival", "Show", "Stand-up", "Teatro", "Esportes", "Workshop", "Conferência", "Eletrônica", "Sertanejo"];
+const categories = ["Todos", ...EVENT_CATEGORIES];
 
 const dateFilters = [
   { label: "Qualquer data", value: "all" },
