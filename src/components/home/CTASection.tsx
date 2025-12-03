@@ -34,15 +34,15 @@ const CTASection = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/cadastro">
+              <Link to="/auth">
                 <Button variant="glass" size="xl" className="bg-white text-primary hover:bg-white/90">
                   Começar agora
                   <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
-              <Link to="/sobre">
+              <Link to="/eventos">
                 <Button variant="glass" size="xl">
-                  Saiba mais
+                  Ver eventos
                 </Button>
               </Link>
             </div>

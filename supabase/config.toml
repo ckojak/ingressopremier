@@ -2,3 +2,6 @@ project_id = "rbkuplzntpayendbfzud"
 
 [functions.create-checkout]
 verify_jwt = false
+
+[functions.send-ticket-email]
+verify_jwt = false
