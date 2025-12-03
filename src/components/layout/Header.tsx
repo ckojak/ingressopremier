@@ -40,8 +40,9 @@ const Header = () => {
 
     // Listen for cart updates
     const updateCartCount = () => {
-      const cart = JSON.parse(localStorage.getItem("cart") || "[]");
-      const count = cart.reduce((acc: number, item: any) => acc + item.quantity, 0);
+      const cartData = JSON.parse(localStorage.getItem("cart") || '{"items":[]}');
+      const items = Array.isArray(cartData) ? cartData : (cartData.items || []);
+      const count = items.reduce((acc: number, item: any) => acc + (item.quantity || 0), 0);
       setCartCount(count);
     };
 
