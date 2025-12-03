@@ -15,6 +15,7 @@ import { Tables } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { NotificationSettings } from "@/components/NotificationSettings";
 
 type Profile = Tables<"profiles">;
 
@@ -176,6 +177,7 @@ const Profile = () => {
               <TabsList className="bg-secondary">
                 <TabsTrigger value="profile">Dados Pessoais</TabsTrigger>
                 <TabsTrigger value="orders">Histórico de Compras</TabsTrigger>
+                <TabsTrigger value="notifications">Notificações</TabsTrigger>
               </TabsList>
 
               <TabsContent value="profile">
@@ -319,6 +321,10 @@ const Profile = () => {
                     )}
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="notifications">
+                <NotificationSettings />
               </TabsContent>
             </Tabs>
           </motion.div>
