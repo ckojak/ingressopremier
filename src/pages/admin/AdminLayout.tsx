@@ -71,15 +71,15 @@ const AdminLayout = () => {
   }, []);
 
   useEffect(() => {
+    // Set loading immediately when user changes
+    setRoleLoading(true);
+    
     const fetchUserRole = async () => {
       if (!user) {
         setUserRole(null);
         setRoleLoading(false);
         return;
       }
-
-      // Set loading true when starting to fetch
-      setRoleLoading(true);
 
       const { data, error } = await supabase
         .from("user_roles")
@@ -100,18 +100,19 @@ const AdminLayout = () => {
   }, [user]);
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate("/auth");
+    // Wait for both loading states to complete
+    if (loading || roleLoading) {
+      return;
     }
-  }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (!loading && !roleLoading && user && userRole) {
-      if (!["admin", "organizer"].includes(userRole)) {
-        toast.error("Você não tem permissão para acessar o painel administrativo.");
-        navigate("/");
-      }
-    } else if (!loading && !roleLoading && user && !userRole) {
+    // If no user, redirect to auth
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    // If user exists but no valid role, redirect with error
+    if (!userRole || !["admin", "organizer"].includes(userRole)) {
       toast.error("Você não tem permissão para acessar o painel administrativo.");
       navigate("/");
     }
