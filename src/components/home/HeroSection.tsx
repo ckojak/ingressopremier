@@ -63,8 +63,8 @@ const HeroSection = () => {
                 className="w-full h-14 pl-12 pr-4 rounded-xl bg-card border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-all"
               />
             </div>
-            <Button variant="hero" size="xl">
-              Explorar eventos
+            <Button variant="hero" size="xl" asChild>
+              <Link to="/eventos">Explorar eventos</Link>
             </Button>
           </motion.div>
 
