@@ -28,8 +28,8 @@ const AdminLayout = () => {
   const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [roleLoading, setRoleLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -54,76 +54,99 @@ const AdminLayout = () => {
     return baseItems;
   };
 
+  // Single effect to handle auth and role checking
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    let isMounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    const initializeAuth = async () => {
+      try {
+        // Get current session
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        if (!isMounted) return;
 
-    return () => subscription.unsubscribe();
-  }, []);
+        if (!currentSession?.user) {
+          setIsInitialized(true);
+          setHasAccess(false);
+          navigate("/auth");
+          return;
+        }
 
-  useEffect(() => {
-    // Set loading immediately when user changes
-    setRoleLoading(true);
-    
-    const fetchUserRole = async () => {
-      if (!user) {
-        setUserRole(null);
-        setRoleLoading(false);
-        return;
+        setSession(currentSession);
+        setUser(currentSession.user);
+
+        // Fetch user role
+        const { data: roleData, error: roleError } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", currentSession.user.id)
+          .maybeSingle();
+
+        if (!isMounted) return;
+
+        console.log("Role data:", roleData, "Error:", roleError);
+
+        if (roleError) {
+          console.error("Error fetching role:", roleError);
+          toast.error("Erro ao verificar permissões.");
+          setHasAccess(false);
+          setIsInitialized(true);
+          navigate("/");
+          return;
+        }
+
+        const role = roleData?.role;
+        setUserRole(role ?? null);
+
+        if (!role || !["admin", "organizer"].includes(role)) {
+          toast.error("Você não tem permissão para acessar o painel administrativo.");
+          setHasAccess(false);
+          setIsInitialized(true);
+          navigate("/");
+          return;
+        }
+
+        setHasAccess(true);
+        setIsInitialized(true);
+      } catch (error) {
+        console.error("Auth initialization error:", error);
+        if (isMounted) {
+          setHasAccess(false);
+          setIsInitialized(true);
+          navigate("/");
+        }
       }
-
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Error fetching user role:", error);
-        setUserRole(null);
-      } else {
-        setUserRole(data?.role ?? null);
-      }
-      setRoleLoading(false);
     };
 
-    fetchUserRole();
-  }, [user]);
+    initializeAuth();
 
-  useEffect(() => {
-    // Wait for both loading states to complete
-    if (loading || roleLoading) {
-      return;
-    }
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, newSession) => {
+        if (!isMounted) return;
+        
+        if (event === "SIGNED_OUT") {
+          setUser(null);
+          setSession(null);
+          setUserRole(null);
+          setHasAccess(false);
+          navigate("/");
+        }
+      }
+    );
 
-    // If no user, redirect to auth
-    if (!user) {
-      navigate("/auth");
-      return;
-    }
-
-    // If user exists but no valid role, redirect with error
-    if (!userRole || !["admin", "organizer"].includes(userRole)) {
-      toast.error("Você não tem permissão para acessar o painel administrativo.");
-      navigate("/");
-    }
-  }, [user, userRole, loading, roleLoading, navigate]);
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/");
   };
 
-  if (loading || roleLoading) {
+  if (!isInitialized) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Carregando...</div>
@@ -131,7 +154,7 @@ const AdminLayout = () => {
     );
   }
 
-  if (!user || !userRole || !["admin", "organizer"].includes(userRole)) {
+  if (!hasAccess || !user || !userRole) {
     return null;
   }
 
