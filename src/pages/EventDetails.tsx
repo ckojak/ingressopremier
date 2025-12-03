@@ -131,6 +131,37 @@ const EventDetails = () => {
 
   const totalTickets = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  const handleAddToCart = () => {
+    if (cart.length === 0) {
+      toast.error("Adicione ingressos ao carrinho");
+      return;
+    }
+
+    // Get existing cart from localStorage
+    const existingCart = localStorage.getItem("cart");
+    let cartData = existingCart ? JSON.parse(existingCart) : { items: [] };
+
+    // Add or update items
+    cart.forEach(item => {
+      const existingIndex = cartData.items.findIndex(
+        (i: any) => i.ticketTypeId === item.ticketType.id
+      );
+
+      if (existingIndex >= 0) {
+        cartData.items[existingIndex].quantity += item.quantity;
+      } else {
+        cartData.items.push({
+          ticketTypeId: item.ticketType.id,
+          quantity: item.quantity,
+        });
+      }
+    });
+
+    localStorage.setItem("cart", JSON.stringify(cartData));
+    toast.success(`${totalTickets} ingresso(s) adicionado(s) ao carrinho!`);
+    setCart([]); // Clear selection after adding
+  };
+
   const handleCheckout = async () => {
     if (cart.length === 0) {
       toast.error("Adicione ingressos ao carrinho");
@@ -406,15 +437,26 @@ const EventDetails = () => {
                           </span>
                         </div>
 
-                        <Button
-                          className="w-full gap-2"
-                          size="lg"
-                          onClick={handleCheckout}
-                          disabled={processing}
-                        >
-                          <ShoppingCart className="w-5 h-5" />
-                          {processing ? "Processando..." : `Comprar ${totalTickets} ingresso${totalTickets > 1 ? 's' : ''}`}
-                        </Button>
+                        <div className="space-y-2">
+                          <Button
+                            className="w-full gap-2"
+                            variant="outline"
+                            size="lg"
+                            onClick={handleAddToCart}
+                          >
+                            <ShoppingCart className="w-5 h-5" />
+                            Adicionar ao carrinho
+                          </Button>
+                          
+                          <Button
+                            className="w-full gap-2"
+                            size="lg"
+                            onClick={handleCheckout}
+                            disabled={processing}
+                          >
+                            {processing ? "Processando..." : `Comprar agora`}
+                          </Button>
+                        </div>
                       </>
                     )}
                   </CardContent>

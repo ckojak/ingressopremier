@@ -57,7 +57,7 @@ const PromoBanner = () => {
               <Button
                 asChild
                 size="lg"
-                className="bg-white text-primary hover:bg-white/90 shadow-xl group"
+                className="bg-background text-foreground hover:bg-background/90 shadow-xl group font-semibold"
               >
                 <Link to="/auth">
                   Criar conta grátis
