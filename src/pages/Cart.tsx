@@ -43,10 +43,7 @@ const Cart = () => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
-      
-      if (session?.user) {
-        loadCart();
-      }
+      loadCart(); // Load cart for all users
       setLoading(false);
     };
 
@@ -54,9 +51,6 @@ const Cart = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user || null);
-      if (session?.user) {
-        loadCart();
-      }
     });
 
     return () => subscription.unsubscribe();
@@ -135,6 +129,7 @@ const Cart = () => {
         couponId: appliedCoupon?.id,
       };
       localStorage.setItem("cart", JSON.stringify(cartData));
+      window.dispatchEvent(new Event("cartUpdated"));
 
       return updated;
     });
@@ -152,6 +147,7 @@ const Cart = () => {
         couponId: appliedCoupon?.id,
       };
       localStorage.setItem("cart", JSON.stringify(cartData));
+      window.dispatchEvent(new Event("cartUpdated"));
 
       return updated;
     });
@@ -280,6 +276,13 @@ const Cart = () => {
       return;
     }
 
+    // Require login for checkout
+    if (!user) {
+      toast.info("Faça login para finalizar a compra");
+      navigate("/auth");
+      return;
+    }
+
     setProcessing(true);
 
     try {
@@ -356,39 +359,6 @@ const Cart = () => {
             </div>
           </div>
         </main>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="pt-24 pb-16">
-          <div className="container mx-auto px-4">
-            <div className="max-w-md mx-auto text-center py-16">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-6"
-              >
-                <div className="w-24 h-24 mx-auto rounded-full bg-secondary flex items-center justify-center">
-                  <ShoppingCart className="w-12 h-12 text-muted-foreground" />
-                </div>
-                <h1 className="text-2xl font-bold text-foreground">
-                  Faça login para ver seu carrinho
-                </h1>
-                <p className="text-muted-foreground">
-                  Você precisa estar logado para adicionar e visualizar itens no carrinho.
-                </p>
-                <Button asChild size="lg">
-                  <Link to="/auth">Entrar ou Cadastrar</Link>
-                </Button>
-              </motion.div>
-            </div>
-          </div>
-        </main>
-        <Footer />
       </div>
     );
   }

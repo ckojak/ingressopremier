@@ -158,6 +158,7 @@ const EventDetails = () => {
     });
 
     localStorage.setItem("cart", JSON.stringify(cartData));
+    window.dispatchEvent(new Event("cartUpdated"));
     toast.success(`${totalTickets} ingresso(s) adicionado(s) ao carrinho!`);
     setCart([]); // Clear selection after adding
   };
