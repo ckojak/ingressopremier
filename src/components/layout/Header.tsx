@@ -14,6 +14,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
+const categories = [
+  { name: "Shows", path: "/eventos?categoria=show" },
+  { name: "Festivais", path: "/eventos?categoria=festival" },
+  { name: "Teatro", path: "/eventos?categoria=teatro" },
+  { name: "Esportes", path: "/eventos?categoria=esportes" },
+];
+
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
@@ -38,7 +45,6 @@ const Header = () => {
       }
     });
 
-    // Listen for cart updates
     const updateCartCount = () => {
       const cartData = JSON.parse(localStorage.getItem("cart") || '{"items":[]}');
       const items = Array.isArray(cartData) ? cartData : (cartData.items || []);
@@ -75,59 +81,58 @@ const Header = () => {
   const isAdmin = userRole === "admin" || userRole === "organizer";
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 glass">
+    <header className="sticky top-0 z-50 bg-card/95 backdrop-blur-md border-b border-border">
       <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16 md:h-20">
+        <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
+            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center">
               <Ticket className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold text-foreground">
-              Event<span className="text-gradient">ix</span>
+              Event<span className="text-primary">ix</span>
             </span>
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-8">
-            <Link to="/eventos" className="text-muted-foreground hover:text-foreground transition-colors">
-              Eventos
-            </Link>
-            {user && (
-              <Link to="/meus-ingressos" className="text-muted-foreground hover:text-foreground transition-colors">
-                Meus Ingressos
+          <nav className="hidden md:flex items-center gap-6">
+            {categories.map((cat) => (
+              <Link
+                key={cat.name}
+                to={cat.path}
+                className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+              >
+                {cat.name}
               </Link>
-            )}
-            {isAdmin && (
-              <Link to="/admin" className="text-muted-foreground hover:text-foreground transition-colors">
-                Painel Admin
-              </Link>
-            )}
+            ))}
           </nav>
 
           {/* Desktop Actions */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2">
             <Link to="/eventos">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
                 <Search className="w-5 h-5" />
               </Button>
             </Link>
-            <Link to="/carrinho" className="relative">
-              <Button variant="ghost" size="icon">
-                <ShoppingCart className="w-5 h-5" />
-                {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
-                    {cartCount}
-                  </span>
-                )}
-              </Button>
-            </Link>
+            
+            {user && (
+              <Link to="/carrinho" className="relative">
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                  <ShoppingCart className="w-5 h-5" />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
+                      {cartCount}
+                    </span>
+                  )}
+                </Button>
+              </Link>
+            )}
+
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <User className="w-4 h-4" />
-                    {user.user_metadata?.full_name || user.email?.split("@")[0]}
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                    <User className="w-5 h-5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
@@ -159,29 +164,26 @@ const Header = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <>
-                <Link to="/auth">
-                  <Button variant="outline">Entrar</Button>
-                </Link>
-                <Link to="/auth">
-                  <Button>Criar conta</Button>
-                </Link>
-              </>
+              <Link to="/auth">
+                <Button size="sm">Entrar</Button>
+              </Link>
             )}
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex items-center gap-2 md:hidden">
-            <Link to="/carrinho" className="relative">
-              <Button variant="ghost" size="icon">
-                <ShoppingCart className="w-5 h-5" />
-                {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
-                    {cartCount}
-                  </span>
-                )}
-              </Button>
-            </Link>
+            {user && (
+              <Link to="/carrinho" className="relative">
+                <Button variant="ghost" size="icon">
+                  <ShoppingCart className="w-5 h-5" />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
+                      {cartCount}
+                    </span>
+                  )}
+                </Button>
+              </Link>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -200,16 +202,19 @@ const Header = () => {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden glass border-t border-border"
+            className="md:hidden bg-card border-t border-border"
           >
             <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
-              <Link
-                to="/eventos"
-                className="text-muted-foreground hover:text-foreground transition-colors py-2"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Eventos
-              </Link>
+              {categories.map((cat) => (
+                <Link
+                  key={cat.name}
+                  to={cat.path}
+                  className="text-muted-foreground hover:text-foreground transition-colors py-2"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {cat.name}
+                </Link>
+              ))}
               {user && (
                 <>
                   <Link
@@ -244,14 +249,9 @@ const Header = () => {
                     Sair
                   </Button>
                 ) : (
-                  <>
-                    <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                      <Button variant="outline" className="w-full">Entrar</Button>
-                    </Link>
-                    <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                      <Button className="w-full">Criar conta</Button>
-                    </Link>
-                  </>
+                  <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+                    <Button className="w-full">Entrar</Button>
+                  </Link>
                 )}
               </div>
             </div>
