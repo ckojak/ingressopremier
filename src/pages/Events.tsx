@@ -5,22 +5,47 @@ import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, Calendar, MapPin, Users, Ticket } from "lucide-react";
+import { Calendar as CalendarIcon, MapPin, Ticket, Search, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay, addDays, addWeeks, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Event = Tables<"events">;
 
-const categories = ["Todos", "Festival", "Show", "Stand-up", "Teatro", "Esportes", "Workshop", "Conferência"];
+const categories = ["Todos", "Festival", "Show", "Stand-up", "Teatro", "Esportes", "Workshop", "Conferência", "Eletrônica", "Sertanejo"];
+
+const dateFilters = [
+  { label: "Qualquer data", value: "all" },
+  { label: "Hoje", value: "today" },
+  { label: "Esta semana", value: "week" },
+  { label: "Este mês", value: "month" },
+  { label: "Escolher data", value: "custom" },
+];
 
 const Events = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todos");
+  const [selectedDateFilter, setSelectedDateFilter] = useState("all");
+  const [customDate, setCustomDate] = useState<Date | undefined>();
+  const [selectedCity, setSelectedCity] = useState("all");
+  const [cities, setCities] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -34,6 +59,10 @@ const Events = () => {
 
         if (error) throw error;
         setEvents(data || []);
+
+        // Extract unique cities
+        const uniqueCities = [...new Set(data?.map(e => e.city).filter(Boolean))] as string[];
+        setCities(uniqueCities.sort());
       } catch (error) {
         console.error("Error fetching events:", error);
       } finally {
@@ -44,13 +73,59 @@ const Events = () => {
     fetchEvents();
   }, []);
 
+  const getDateRange = () => {
+    const now = new Date();
+    switch (selectedDateFilter) {
+      case "today":
+        return { start: startOfDay(now), end: endOfDay(now) };
+      case "week":
+        return { start: startOfDay(now), end: endOfDay(addWeeks(now, 1)) };
+      case "month":
+        return { start: startOfDay(now), end: endOfDay(addMonths(now, 1)) };
+      case "custom":
+        if (customDate) {
+          return { start: startOfDay(customDate), end: endOfDay(customDate) };
+        }
+        return null;
+      default:
+        return null;
+    }
+  };
+
   const filteredEvents = events.filter((event) => {
-    const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    // Search filter
+    const matchesSearch = 
+      event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.venue_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      event.venue_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.short_description?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Category filter
     const matchesCategory = selectedCategory === "Todos" || event.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    
+    // Date filter
+    const dateRange = getDateRange();
+    let matchesDate = true;
+    if (dateRange) {
+      const eventDate = new Date(event.start_date);
+      matchesDate = eventDate >= dateRange.start && eventDate <= dateRange.end;
+    }
+
+    // City filter
+    const matchesCity = selectedCity === "all" || event.city === selectedCity;
+    
+    return matchesSearch && matchesCategory && matchesDate && matchesCity;
   });
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedCategory("Todos");
+    setSelectedDateFilter("all");
+    setCustomDate(undefined);
+    setSelectedCity("all");
+  };
+
+  const hasActiveFilters = searchTerm || selectedCategory !== "Todos" || selectedDateFilter !== "all" || selectedCity !== "all";
 
   return (
     <div className="min-h-screen bg-background">
@@ -79,52 +154,94 @@ const Events = () => {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="gradient-card rounded-2xl p-6 mb-8"
           >
-            <div className="flex flex-col md:flex-row gap-4">
-              {/* Search */}
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar eventos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-12 h-12 bg-background border-border"
-                />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Search */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar eventos, artistas, locais..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-12 h-12 bg-background border-border"
+                  />
+                </div>
+
+                {/* Date Filter */}
+                <Select value={selectedDateFilter} onValueChange={setSelectedDateFilter}>
+                  <SelectTrigger className="h-12 w-full md:w-48">
+                    <CalendarIcon className="w-4 h-4 mr-2" />
+                    <SelectValue placeholder="Data" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dateFilters.map((filter) => (
+                      <SelectItem key={filter.value} value={filter.value}>
+                        {filter.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Custom Date Picker */}
+                {selectedDateFilter === "custom" && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-12 w-full md:w-48">
+                        {customDate ? format(customDate, "dd/MM/yyyy") : "Selecionar data"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={customDate}
+                        onSelect={setCustomDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )}
+
+                {/* City Filter */}
+                <Select value={selectedCity} onValueChange={setSelectedCity}>
+                  <SelectTrigger className="h-12 w-full md:w-48">
+                    <MapPin className="w-4 h-4 mr-2" />
+                    <SelectValue placeholder="Cidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as cidades</SelectItem>
+                    {cities.map((city) => (
+                      <SelectItem key={city} value={city}>
+                        {city}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Clear Filters */}
+                {hasActiveFilters && (
+                  <Button variant="outline" className="h-12" onClick={clearFilters}>
+                    <X className="w-4 h-4 mr-2" />
+                    Limpar
+                  </Button>
+                )}
               </div>
 
-              {/* Date Filter */}
-              <Button variant="outline" className="h-12">
-                <Calendar className="w-5 h-5 mr-2" />
-                Qualquer data
-              </Button>
-
-              {/* Location Filter */}
-              <Button variant="outline" className="h-12">
-                <MapPin className="w-5 h-5 mr-2" />
-                Qualquer local
-              </Button>
-
-              {/* More Filters */}
-              <Button variant="outline" className="h-12">
-                <Filter className="w-5 h-5 mr-2" />
-                Filtros
-              </Button>
-            </div>
-
-            {/* Category Pills */}
-            <div className="flex flex-wrap gap-2 mt-4">
-              {categories.map((category) => (
-                <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                    selectedCategory === category
-                      ? "gradient-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
+              {/* Category Pills */}
+              <div className="flex flex-wrap gap-2">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      selectedCategory === category
+                        ? "gradient-primary text-primary-foreground"
+                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
             </div>
           </motion.div>
 
@@ -153,7 +270,7 @@ const Events = () => {
                   key={event.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1, duration: 0.5 }}
+                  transition={{ delay: index * 0.05, duration: 0.5 }}
                 >
                   <Link to={`/evento/${event.id}`} className="group block">
                     <div className="gradient-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-500 hover:-translate-y-2">
@@ -186,7 +303,7 @@ const Events = () => {
 
                         <div className="space-y-2 mb-4">
                           <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                            <Calendar className="w-4 h-4 text-primary" />
+                            <CalendarIcon className="w-4 h-4 text-primary" />
                             <span>
                               {format(new Date(event.start_date), "dd MMM yyyy • HH:mm", { locale: ptBR })}
                             </span>
@@ -228,6 +345,11 @@ const Events = () => {
               <p className="text-muted-foreground text-sm mt-2">
                 Tente ajustar os filtros ou volte mais tarde.
               </p>
+              {hasActiveFilters && (
+                <Button variant="outline" className="mt-4" onClick={clearFilters}>
+                  Limpar filtros
+                </Button>
+              )}
             </div>
           )}
         </div>

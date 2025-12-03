@@ -14,21 +14,13 @@ import {
   Menu,
   X,
   ChevronLeft,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
-
-const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
-  { icon: Calendar, label: "Eventos", path: "/admin/eventos" },
-  { icon: Ticket, label: "Ingressos", path: "/admin/ingressos" },
-  { icon: ShoppingCart, label: "Vendas", path: "/admin/vendas" },
-  { icon: QrCode, label: "Check-in", path: "/admin/checkin" },
-  { icon: Users, label: "Usuários", path: "/admin/usuarios" },
-];
 
 const AdminLayout = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -40,6 +32,27 @@ const AdminLayout = () => {
   const [roleLoading, setRoleLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Menu items based on role
+  const getMenuItems = () => {
+    const baseItems = [
+      { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
+      { icon: Calendar, label: "Eventos", path: "/admin/eventos" },
+      { icon: Ticket, label: "Ingressos", path: "/admin/ingressos" },
+      { icon: ShoppingCart, label: "Vendas", path: "/admin/vendas" },
+      { icon: QrCode, label: "Check-in", path: "/admin/checkin" },
+    ];
+
+    if (userRole === "admin") {
+      return [
+        { icon: Crown, label: "Dashboard Admin", path: "/admin/super" },
+        ...baseItems,
+        { icon: Users, label: "Usuários", path: "/admin/usuarios" },
+      ];
+    }
+
+    return baseItems;
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -57,7 +70,6 @@ const AdminLayout = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch user role after authentication
   useEffect(() => {
     const fetchUserRole = async () => {
       if (!user) {
@@ -87,14 +99,12 @@ const AdminLayout = () => {
     }
   }, [user]);
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!loading && !user) {
       navigate("/auth");
     }
   }, [user, loading, navigate]);
 
-  // Redirect if not admin or organizer
   useEffect(() => {
     if (!loading && !roleLoading && user && userRole) {
       if (!["admin", "organizer"].includes(userRole)) {
@@ -123,6 +133,8 @@ const AdminLayout = () => {
   if (!user || !userRole || !["admin", "organizer"].includes(userRole)) {
     return null;
   }
+
+  const menuItems = getMenuItems();
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -153,6 +165,20 @@ const AdminLayout = () => {
             <ChevronLeft className={cn("w-5 h-5 transition-transform", !sidebarOpen && "rotate-180")} />
           </Button>
         </div>
+
+        {/* Role Badge */}
+        {sidebarOpen && (
+          <div className="px-4 py-2 border-b border-sidebar-border">
+            <span className={cn(
+              "text-xs font-medium px-2 py-1 rounded-full",
+              userRole === "admin" 
+                ? "bg-yellow-500/20 text-yellow-400" 
+                : "bg-primary/20 text-primary"
+            )}>
+              {userRole === "admin" ? "Administrador" : "Organizador"}
+            </span>
+          </div>
+        )}
 
         <nav className="flex-1 p-4 space-y-2">
           {menuItems.map((item) => {

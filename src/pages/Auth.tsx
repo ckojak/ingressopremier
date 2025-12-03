@@ -27,7 +27,6 @@ const Auth = () => {
   const from = (location.state as any)?.from || "/";
 
   useEffect(() => {
-    // Simulate loading for visual effect
     const timer = setTimeout(() => {
       setIsPageLoading(false);
     }, 1500);
@@ -38,7 +37,6 @@ const Auth = () => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        // Check user role and redirect accordingly
         setTimeout(async () => {
           const { data: roleData } = await supabase
             .from("user_roles")
@@ -46,10 +44,11 @@ const Auth = () => {
             .eq("user_id", session.user.id)
             .single();
 
-          if (roleData?.role === "admin" || roleData?.role === "organizer") {
+          if (roleData?.role === "admin") {
+            navigate("/admin");
+          } else if (roleData?.role === "organizer") {
             navigate("/admin");
           } else {
-            // If there's a redirect URL, go there, otherwise go home
             navigate(from);
           }
         }, 0);
@@ -64,7 +63,9 @@ const Auth = () => {
           .eq("user_id", session.user.id)
           .single();
 
-        if (roleData?.role === "admin" || roleData?.role === "organizer") {
+        if (roleData?.role === "admin") {
+          navigate("/admin");
+        } else if (roleData?.role === "organizer") {
           navigate("/admin");
         } else {
           navigate(from);
@@ -92,6 +93,7 @@ const Auth = () => {
           description: "Bem-vindo de volta.",
         });
       } else {
+        // Sign up
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -107,15 +109,24 @@ const Auth = () => {
 
         // If organizer, update role after signup
         if (userType === "organizer" && data.user) {
-          await supabase
+          // Wait a moment for the trigger to create the default user role
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          const { error: updateError } = await supabase
             .from("user_roles")
             .update({ role: "organizer" })
             .eq("user_id", data.user.id);
+          
+          if (updateError) {
+            console.error("Error updating role:", updateError);
+          }
         }
 
         toast({
           title: "Cadastro realizado!",
-          description: "Verifique seu email para confirmar a conta.",
+          description: userType === "organizer" 
+            ? "Sua conta de organizador foi criada. Verifique seu email."
+            : "Verifique seu email para confirmar a conta.",
         });
       }
     } catch (error: any) {
@@ -135,7 +146,6 @@ const Auth = () => {
     }
   };
 
-  // Loading screen
   if (isPageLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -172,7 +182,6 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
-      {/* Background effects */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[150px]" />
         <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-accent/10 rounded-full blur-[120px]" />

@@ -15,11 +15,14 @@ import MyTickets from "./pages/MyTickets";
 import NotFound from "./pages/NotFound";
 import AdminLayout from "./pages/admin/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
+import SuperAdminDashboard from "./pages/admin/SuperAdminDashboard";
 import AdminEvents from "./pages/admin/Events";
 import Tickets from "./pages/admin/Tickets";
 import Sales from "./pages/admin/Sales";
 import Users from "./pages/admin/Users";
 import CheckIn from "./pages/admin/CheckIn";
+import Cart from "./pages/Cart";
+import Profile from "./pages/Profile";
 
 const queryClient = new QueryClient();
 
@@ -51,15 +54,18 @@ const App = () => {
               <Route path="/auth" element={<Auth />} />
               <Route path="/pagamento-sucesso" element={<PaymentSuccess />} />
               <Route path="/meus-ingressos" element={<MyTickets />} />
+              <Route path="/carrinho" element={<Cart />} />
+              <Route path="/perfil" element={<Profile />} />
               
               {/* Admin Routes */}
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<Dashboard />} />
+                <Route path="super" element={<SuperAdminDashboard />} />
                 <Route path="eventos" element={<AdminEvents />} />
                 <Route path="ingressos" element={<Tickets />} />
                 <Route path="vendas" element={<Sales />} />
-                <Route path="usuarios" element={<Users />} />
                 <Route path="checkin" element={<CheckIn />} />
+                <Route path="usuarios" element={<Users />} />
               </Route>
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
