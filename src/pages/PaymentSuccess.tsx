@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle, Ticket, Home, ArrowRight } from "lucide-react";
@@ -13,43 +13,141 @@ const PaymentSuccess = () => {
   const orderId = searchParams.get("order_id");
   const [orderDetails, setOrderDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const processedRef = useRef(false);
 
   useEffect(() => {
-    const fetchOrderDetails = async () => {
-      if (!orderId) {
+    const processOrder = async () => {
+      if (!orderId || processedRef.current) {
         setLoading(false);
         return;
       }
 
+      processedRef.current = true;
+
       try {
+        // Check if order is already paid
+        const { data: existingOrder } = await supabase
+          .from("orders")
+          .select("status")
+          .eq("id", orderId)
+          .single();
+
+        if (existingOrder?.status === "paid") {
+          // Order already processed, just fetch details
+          const { data: order } = await supabase
+            .from("orders")
+            .select(`
+              *,
+              events (title, start_date, venue_name, city, state),
+              order_items (quantity, unit_price, ticket_types (name))
+            `)
+            .eq("id", orderId)
+            .single();
+          setOrderDetails(order);
+          setLoading(false);
+          return;
+        }
+
+        // Get session for user info
+        const { data: { session } } = await supabase.auth.getSession();
+
+        // Fetch full order details
         const { data: order, error } = await supabase
           .from("orders")
           .select(`
             *,
-            events (title, start_date, venue_name, city, state),
-            order_items (quantity, unit_price, ticket_types (name))
+            events (id, title, start_date, venue_name, city, state),
+            order_items (id, quantity, unit_price, ticket_type_id, ticket_types (name))
           `)
           .eq("id", orderId)
           .single();
 
-        if (!error && order) {
-          setOrderDetails(order);
+        if (error || !order) {
+          throw new Error("Order not found");
+        }
 
-          // Update order status to paid
-          await supabase
-            .from("orders")
-            .update({ status: "paid" })
-            .eq("id", orderId);
+        setOrderDetails(order);
+
+        // Update order status to paid
+        await supabase
+          .from("orders")
+          .update({ status: "paid" })
+          .eq("id", orderId);
+
+        // Generate tickets for each order item
+        const ticketsToCreate: any[] = [];
+        
+        for (const item of order.order_items || []) {
+          for (let i = 0; i < item.quantity; i++) {
+            // Generate unique ticket code
+            const ticketCode = generateTicketCode();
+            
+            ticketsToCreate.push({
+              ticket_code: ticketCode,
+              order_item_id: item.id,
+              ticket_type_id: item.ticket_type_id,
+              event_id: order.events?.id,
+              user_id: session?.user?.id || null,
+              attendee_email: order.customer_email,
+              attendee_name: order.customer_name,
+              is_used: false,
+            });
+          }
+        }
+
+        if (ticketsToCreate.length > 0) {
+          const { error: ticketError } = await supabase
+            .from("tickets")
+            .insert(ticketsToCreate);
+
+          if (ticketError) {
+            console.error("Error creating tickets:", ticketError);
+          }
+
+          // Update quantity_sold on ticket_types
+          for (const item of order.order_items || []) {
+            const { data: ticketType } = await supabase
+              .from("ticket_types")
+              .select("quantity_sold")
+              .eq("id", item.ticket_type_id)
+              .single();
+
+            if (ticketType) {
+              await supabase
+                .from("ticket_types")
+                .update({ quantity_sold: (ticketType.quantity_sold || 0) + item.quantity })
+                .eq("id", item.ticket_type_id);
+            }
+          }
+        }
+
+        // Send confirmation email
+        try {
+          await supabase.functions.invoke("send-ticket-email", {
+            body: { orderId },
+          });
+        } catch (emailError) {
+          console.error("Email sending failed:", emailError);
         }
       } catch (error) {
-        console.error("Error fetching order:", error);
+        console.error("Error processing order:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchOrderDetails();
+    processOrder();
   }, [orderId]);
+
+  // Generate a unique ticket code
+  const generateTicketCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 12; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -124,7 +222,7 @@ const PaymentSuccess = () => {
 
                   <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
                     <p>
-                      Um email de confirmação será enviado para{" "}
+                      Um email de confirmação foi enviado para{" "}
                       <span className="text-foreground font-medium">
                         {orderDetails.customer_email}
                       </span>{" "}
@@ -144,10 +242,10 @@ const PaymentSuccess = () => {
             )}
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Link to="/">
+              <Link to="/meus-ingressos">
                 <Button variant="outline" className="gap-2 w-full sm:w-auto">
-                  <Home className="w-4 h-4" />
-                  Voltar ao início
+                  <Ticket className="w-4 h-4" />
+                  Ver meus ingressos
                 </Button>
               </Link>
               <Link to="/eventos">

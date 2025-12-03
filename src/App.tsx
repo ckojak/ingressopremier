@@ -18,6 +18,7 @@ import Dashboard from "./pages/admin/Dashboard";
 import AdminEvents from "./pages/admin/Events";
 import Tickets from "./pages/admin/Tickets";
 import Sales from "./pages/admin/Sales";
+import Users from "./pages/admin/Users";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +57,7 @@ const App = () => {
                 <Route path="eventos" element={<AdminEvents />} />
                 <Route path="ingressos" element={<Tickets />} />
                 <Route path="vendas" element={<Sales />} />
+                <Route path="usuarios" element={<Users />} />
               </Route>
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
