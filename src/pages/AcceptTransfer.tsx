@@ -153,6 +153,26 @@ const AcceptTransfer = () => {
 
       if (updateTicketError) throw updateTicketError;
 
+      // Send notification email
+      try {
+        await supabase.functions.invoke("send-notification", {
+          body: {
+            type: "transfer_accepted",
+            data: {
+              transferId: transfer.id,
+              ticketCode: transfer.ticket.ticket_code,
+              eventTitle: transfer.ticket.event.title,
+              eventDate: format(new Date(transfer.ticket.event.start_date), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR }),
+              recipientEmail: session.user.email,
+              recipientName: session.user.user_metadata?.full_name || session.user.email,
+              senderName: transfer.from_user_email,
+            },
+          },
+        });
+      } catch (notifError) {
+        console.error("Error sending notification:", notifError);
+      }
+
       toast({
         title: "Transferência aceita!",
         description: "O ingresso agora está na sua conta.",
