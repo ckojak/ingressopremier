@@ -11,8 +11,12 @@ import { ptBR } from "date-fns/locale";
 
 type Event = Tables<"events">;
 
+interface EventWithPrice extends Event {
+  min_price?: number;
+}
+
 const FeaturedEvents = () => {
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<EventWithPrice[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,8 +33,10 @@ const FeaturedEvents = () => {
 
         if (error) throw error;
         
+        let eventsData = data || [];
+        
         // If no featured events, get recent published events
-        if (!data || data.length === 0) {
+        if (eventsData.length === 0) {
           const { data: recentData } = await supabase
             .from("events")
             .select("*")
@@ -38,9 +44,33 @@ const FeaturedEvents = () => {
             .gte("start_date", new Date().toISOString())
             .order("start_date", { ascending: true })
             .limit(6);
-          setEvents(recentData || []);
+          eventsData = recentData || [];
+        }
+
+        // Fetch minimum prices for each event
+        if (eventsData.length > 0) {
+          const eventIds = eventsData.map(e => e.id);
+          const { data: ticketPrices } = await supabase
+            .from("ticket_types")
+            .select("event_id, price")
+            .in("event_id", eventIds)
+            .eq("is_active", true);
+
+          const minPriceByEvent: Record<string, number> = {};
+          ticketPrices?.forEach(ticket => {
+            const price = Number(ticket.price);
+            if (!minPriceByEvent[ticket.event_id] || price < minPriceByEvent[ticket.event_id]) {
+              minPriceByEvent[ticket.event_id] = price;
+            }
+          });
+
+          const eventsWithPrices = eventsData.map(event => ({
+            ...event,
+            min_price: minPriceByEvent[event.id],
+          }));
+          setEvents(eventsWithPrices);
         } else {
-          setEvents(data);
+          setEvents([]);
         }
       } catch (error) {
         console.error("Error fetching featured events:", error);
@@ -188,7 +218,11 @@ const FeaturedEvents = () => {
                     <div className="flex items-center justify-between pt-4 border-t border-border">
                       <div>
                         <span className="text-xs text-muted-foreground">A partir de</span>
-                        <p className="text-lg font-bold text-gradient">Ver ingressos</p>
+                        <p className="text-lg font-bold text-primary">
+                          {event.min_price !== undefined 
+                            ? `R$ ${event.min_price.toFixed(2)}`
+                            : "Ver ingressos"}
+                        </p>
                       </div>
                       <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <span className="text-primary-foreground text-lg">→</span>
