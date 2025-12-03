@@ -30,6 +30,7 @@ import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { z } from "zod";
+import ImageUpload from "@/components/ImageUpload";
 
 const eventSchema = z.object({
   title: z.string().min(1, "Título é obrigatório").max(200, "Título deve ter no máximo 200 caracteres"),
@@ -367,13 +368,11 @@ const Events = () => {
                     placeholder="Ex: Show, Festival, Teatro"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="image_url">URL da Imagem</Label>
-                  <Input
-                    id="image_url"
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Imagem do Evento</Label>
+                  <ImageUpload
                     value={formData.image_url}
-                    onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                    placeholder="https://..."
+                    onChange={(url) => setFormData({ ...formData, image_url: url })}
                   />
                 </div>
               </div>
