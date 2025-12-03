@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import Header from "@/components/layout/Header";
@@ -123,7 +124,7 @@ const EventDetails = () => {
     return cart.find(item => item.ticketType.id === ticketTypeId)?.quantity || 0;
   };
 
-  const SERVICE_FEE_PERCENTAGE = 0.05;
+  const SERVICE_FEE_PERCENTAGE = 0.05; // 5% taxa de serviço
 
   const subtotal = cart.reduce(
     (sum, item) => sum + Number(item.ticketType.price) * item.quantity,
@@ -141,9 +142,11 @@ const EventDetails = () => {
       return;
     }
 
+    // Get existing cart from localStorage
     const existingCart = localStorage.getItem("cart");
     let cartData = existingCart ? JSON.parse(existingCart) : { items: [] };
 
+    // Add or update items
     cart.forEach(item => {
       const existingIndex = cartData.items.findIndex(
         (i: any) => i.ticketTypeId === item.ticketType.id
@@ -162,7 +165,7 @@ const EventDetails = () => {
     localStorage.setItem("cart", JSON.stringify(cartData));
     window.dispatchEvent(new Event("cartUpdated"));
     toast.success(`${totalTickets} ingresso(s) adicionado(s) ao carrinho!`);
-    setCart([]);
+    setCart([]); // Clear selection after adding
   };
 
   const handleCheckout = async () => {
@@ -177,6 +180,7 @@ const EventDetails = () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
+        // Save cart to localStorage before redirecting
         localStorage.setItem("pendingCart", JSON.stringify({
           eventId: id,
           items: cart.map(item => ({
@@ -189,6 +193,7 @@ const EventDetails = () => {
         return;
       }
 
+      // Create checkout with Stripe
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: {
           eventId: id,
@@ -218,11 +223,11 @@ const EventDetails = () => {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <main>
-          <div className="animate-pulse">
-            <div className="h-[60vh] bg-muted" />
-            <div className="container mx-auto px-4 py-8">
-              <div className="h-8 bg-muted rounded w-1/2 mb-4" />
+        <main className="pt-24 pb-16">
+          <div className="container mx-auto px-4">
+            <div className="animate-pulse space-y-8">
+              <div className="h-64 bg-muted rounded-2xl" />
+              <div className="h-8 bg-muted rounded w-1/2" />
               <div className="h-4 bg-muted rounded w-1/3" />
             </div>
           </div>
@@ -238,69 +243,55 @@ const EventDetails = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
-      {/* Hero Section with Event Image */}
-      <section className="relative min-h-[60vh] flex items-end">
-        {/* Background Image */}
-        <div className="absolute inset-0">
-          {event.image_url ? (
-            <img
-              src={event.image_url}
-              alt={event.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-primary/30 to-accent/30" />
-          )}
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/20" />
-        </div>
+      <main className="pt-24 pb-16">
+        <div className="container mx-auto px-4">
+          <Button
+            variant="ghost"
+            onClick={() => navigate(-1)}
+            className="mb-6 gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Voltar
+          </Button>
 
-        {/* Back Button */}
-        <Button
-          variant="ghost"
-          onClick={() => navigate(-1)}
-          className="absolute top-20 left-4 md:left-8 gap-2 text-foreground hover:bg-background/20 z-10"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar
-        </Button>
-
-        {/* Content Container */}
-        <div className="relative z-10 w-full pb-8">
-          <div className="container mx-auto px-4">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-end">
-              {/* Event Info - Left Side */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Event Details */}
+            <div className="lg:col-span-2 space-y-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="lg:col-span-2"
               >
-                {event.category && (
-                  <Badge className="mb-4 bg-primary/90 text-primary-foreground border-0 px-3 py-1">
-                    {event.category}
-                  </Badge>
-                )}
+                {/* Event Image */}
+                <div className="relative aspect-video rounded-2xl overflow-hidden mb-6">
+                  {event.image_url ? (
+                    <img
+                      src={event.image_url}
+                      alt={event.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                      <Ticket className="w-24 h-24 text-muted-foreground/50" />
+                    </div>
+                  )}
+                  {event.category && (
+                    <Badge className="absolute top-4 left-4 bg-primary text-primary-foreground">
+                      {event.category}
+                    </Badge>
+                  )}
+                </div>
 
-                <h1 className="text-3xl md:text-5xl font-bold text-foreground mb-6 leading-tight">
+                {/* Event Info */}
+                <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
                   {event.title}
                 </h1>
 
-                <div className="flex flex-wrap items-center gap-6 text-foreground/80">
-                  {event.city && (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-5 h-5 text-primary" />
-                      <span>
-                        {event.venue_name ? `${event.venue_name} - ` : ""}
-                        {event.city}, {event.state}
-                      </span>
-                    </div>
-                  )}
+                <div className="flex flex-wrap gap-4 text-muted-foreground mb-6">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-5 h-5 text-primary" />
-                    <span className="capitalize">
-                      {format(new Date(event.start_date), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                    <span>
+                      {format(new Date(event.start_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -309,218 +300,192 @@ const EventDetails = () => {
                       {format(new Date(event.start_date), "HH:mm", { locale: ptBR })}
                     </span>
                   </div>
+                  {event.city && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-5 h-5 text-primary" />
+                      <span>
+                        {event.venue_name && `${event.venue_name}, `}
+                        {event.city}, {event.state}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              </motion.div>
 
-              {/* Tickets Section - Right Side (visible on desktop) */}
+                {event.short_description && (
+                  <p className="text-lg text-muted-foreground mb-4">
+                    {event.short_description}
+                  </p>
+                )}
+
+                {event.description && (
+                  <div className="prose prose-invert max-w-none">
+                    <h2 className="text-xl font-semibold text-foreground mb-2">Sobre o evento</h2>
+                    <p className="text-muted-foreground whitespace-pre-wrap">
+                      {event.description}
+                    </p>
+                  </div>
+                )}
+
+                {event.venue_address && (
+                  <div className="mt-6">
+                    <h2 className="text-xl font-semibold text-foreground mb-2">Local</h2>
+                    <p className="text-muted-foreground">
+                      {event.venue_name && <span className="font-medium">{event.venue_name}</span>}
+                      <br />
+                      {event.venue_address}
+                      <br />
+                      {event.city}, {event.state}
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Ticket Selection & Cart */}
+            <div className="space-y-6">
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
-                className="hidden lg:block"
               >
-                <h2 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <Ticket className="w-5 h-5 text-primary" />
-                  Ingressos
-                </h2>
-              </motion.div>
-            </div>
-          </div>
-        </div>
-      </section>
+                <Card className="bg-card border-border sticky top-24">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Ticket className="w-5 h-5 text-primary" />
+                      Ingressos
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {ticketTypes.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-4">
+                        Ingressos não disponíveis no momento
+                      </p>
+                    ) : (
+                      ticketTypes.map(ticket => {
+                        const available = ticket.quantity_available - (ticket.quantity_sold || 0);
+                        const quantity = getCartQuantity(ticket.id);
 
-      {/* Main Content */}
-      <main className="pb-16">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column - About Event */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* About Section */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-                className="bg-card/50 border border-border rounded-xl p-6"
-              >
-                <h2 className="text-xl font-semibold text-foreground mb-4">Sobre o evento</h2>
-                <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                  {event.description || event.short_description || "Mais informações em breve."}
-                </p>
-              </motion.div>
-
-              {/* Location Section */}
-              {event.venue_address && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.4 }}
-                  className="bg-card/50 border border-border rounded-xl p-6"
-                >
-                  <h2 className="text-xl font-semibold text-foreground mb-4">Local</h2>
-                  <div className="flex items-start gap-3">
-                    <MapPin className="w-5 h-5 text-primary mt-1" />
-                    <div className="text-muted-foreground">
-                      {event.venue_name && (
-                        <p className="font-medium text-foreground">{event.venue_name}</p>
-                      )}
-                      <p>{event.venue_address}</p>
-                      <p>{event.city}, {event.state}</p>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-
-            {/* Right Column - Tickets */}
-            <div className="space-y-4">
-              {/* Mobile Tickets Header */}
-              <h2 className="text-xl font-semibold text-foreground lg:hidden flex items-center gap-2">
-                <Ticket className="w-5 h-5 text-primary" />
-                Ingressos
-              </h2>
-
-              {ticketTypes.length === 0 ? (
-                <div className="bg-card/50 border border-border rounded-xl p-6 text-center">
-                  <p className="text-muted-foreground">
-                    Ingressos não disponíveis no momento
-                  </p>
-                </div>
-              ) : (
-                ticketTypes.map((ticket, index) => {
-                  const available = ticket.quantity_available - (ticket.quantity_sold || 0);
-                  const quantity = getCartQuantity(ticket.id);
-
-                  return (
-                    <motion.div
-                      key={ticket.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.3 + index * 0.1 }}
-                      className="bg-card/50 border border-border rounded-xl p-5 space-y-4"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="space-y-1">
-                          <h3 className="font-semibold text-foreground text-lg">{ticket.name}</h3>
-                          {ticket.description && (
-                            <p className="text-sm text-muted-foreground">{ticket.description}</p>
-                          )}
-                        </div>
-                        <span className="text-xl font-bold text-primary whitespace-nowrap ml-4">
-                          R$ {Number(ticket.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-
-                      {available > 0 ? (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-9 w-9 rounded-lg border-border"
-                              onClick={() => updateCart(ticket, -1)}
-                              disabled={quantity === 0}
-                            >
-                              <Minus className="w-4 h-4" />
-                            </Button>
-                            <span className="w-8 text-center font-semibold text-foreground text-lg">
-                              {quantity}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-9 w-9 rounded-lg border-border"
-                              onClick={() => updateCart(ticket, 1)}
-                              disabled={quantity >= Math.min(available, ticket.max_per_order || 10)}
-                            >
-                              <Plus className="w-4 h-4" />
-                            </Button>
-                          </div>
-
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className="gap-2 px-4"
-                            onClick={() => {
-                              if (quantity === 0) {
-                                updateCart(ticket, 1);
-                              }
-                              handleAddToCart();
-                            }}
-                            disabled={quantity === 0 && cart.every(c => c.ticketType.id !== ticket.id)}
+                        return (
+                          <div
+                            key={ticket.id}
+                            className="p-4 rounded-lg bg-secondary/50 space-y-3"
                           >
-                            <ShoppingCart className="w-4 h-4" />
-                            Adicionar
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h3 className="font-semibold text-foreground">{ticket.name}</h3>
+                                {ticket.description && (
+                                  <p className="text-sm text-muted-foreground">{ticket.description}</p>
+                                )}
+                              </div>
+                              <span className="text-lg font-bold text-primary">
+                                R$ {Number(ticket.price).toFixed(2)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">
+                                {available > 0 ? `${available} disponíveis` : "Esgotado"}
+                              </span>
+                              
+                              {available > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => updateCart(ticket, -1)}
+                                    disabled={quantity === 0}
+                                  >
+                                    <Minus className="w-4 h-4" />
+                                  </Button>
+                                  <span className="w-8 text-center font-medium text-foreground">
+                                    {quantity}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => updateCart(ticket, 1)}
+                                    disabled={quantity >= Math.min(available, ticket.max_per_order || 10)}
+                                  >
+                                    <Plus className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+
+                    {cart.length > 0 && (
+                      <>
+                        <Separator />
+                        
+                        <div className="space-y-2">
+                          {cart.map(item => (
+                            <div key={item.ticketType.id} className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                {item.quantity}x {item.ticketType.name}
+                              </span>
+                              <span className="text-foreground">
+                                R$ {(Number(item.ticketType.price) * item.quantity).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Subtotal</span>
+                            <span className="text-foreground">R$ {subtotal.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Taxa de serviço (5%)</span>
+                            <span className="text-foreground">R$ {serviceFee.toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        <Separator />
+
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-foreground">Total</span>
+                          <span className="text-xl font-bold text-primary">
+                            R$ {totalAmount.toFixed(2)}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Button
+                            className="w-full gap-2"
+                            variant="outline"
+                            size="lg"
+                            onClick={handleAddToCart}
+                          >
+                            <ShoppingCart className="w-5 h-5" />
+                            Adicionar ao carrinho
+                          </Button>
+                          
+                          <Button
+                            className="w-full gap-2"
+                            size="lg"
+                            onClick={handleCheckout}
+                            disabled={processing}
+                          >
+                            {processing ? "Processando..." : `Comprar agora`}
                           </Button>
                         </div>
-                      ) : (
-                        <Badge variant="secondary" className="w-fit">
-                          Esgotado
-                        </Badge>
-                      )}
-                    </motion.div>
-                  );
-                })
-              )}
-
-              {/* Cart Summary */}
-              {cart.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-card border border-border rounded-xl p-5 space-y-4 sticky top-24"
-                >
-                  <h3 className="font-semibold text-foreground">Resumo</h3>
-                  
-                  <div className="space-y-2">
-                    {cart.map(item => (
-                      <div key={item.ticketType.id} className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          {item.quantity}x {item.ticketType.name}
-                        </span>
-                        <span className="text-foreground">
-                          R$ {(Number(item.ticketType.price) * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <Separator className="bg-border" />
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Subtotal</span>
-                      <span className="text-foreground">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Taxa de serviço (5%)</span>
-                      <span className="text-foreground">R$ {serviceFee.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-
-                  <Separator className="bg-border" />
-
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-foreground">Total</span>
-                    <span className="text-xl font-bold text-primary">
-                      R$ {totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-
-                  <Button
-                    className="w-full gap-2"
-                    size="lg"
-                    onClick={handleCheckout}
-                    disabled={processing}
-                  >
-                    {processing ? "Processando..." : "Comprar agora"}
-                  </Button>
-                </motion.div>
-              )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
             </div>
           </div>
         </div>
       </main>
-
       <Footer />
     </div>
   );

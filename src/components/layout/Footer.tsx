@@ -1,25 +1,25 @@
 import { Link } from "react-router-dom";
-import { Ticket, Instagram, Facebook, Twitter, Youtube, Linkedin } from "lucide-react";
+import { Ticket, Instagram, Facebook, Twitter, Mail, Linkedin, Youtube } from "lucide-react";
 
 const Footer = () => {
   return (
-    <footer className="bg-card border-t border-border mt-16">
+    <footer className="bg-card border-t border-border">
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           {/* Brand */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
                 <Ticket className="w-5 h-5 text-primary-foreground" />
               </div>
               <span className="text-xl font-bold text-foreground">
-                Event<span className="text-primary">ix</span>
+                Event<span className="text-gradient">ix</span>
               </span>
             </Link>
             <p className="text-muted-foreground text-sm mb-4 max-w-xs">
               A melhor plataforma para descobrir e comprar ingressos para os melhores eventos do Brasil.
             </p>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <a 
                 href="https://instagram.com" 
                 target="_blank" 
@@ -55,6 +55,15 @@ const Footer = () => {
                 aria-label="YouTube"
               >
                 <Youtube className="w-4 h-4" />
+              </a>
+              <a 
+                href="https://linkedin.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors"
+                aria-label="LinkedIn"
+              >
+                <Linkedin className="w-4 h-4" />
               </a>
             </div>
           </div>
@@ -103,8 +112,9 @@ const Footer = () => {
               <li>
                 <a 
                   href="mailto:contato@eventix.com.br" 
-                  className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+                  className="text-muted-foreground hover:text-foreground text-sm transition-colors flex items-center gap-2"
                 >
+                  <Mail className="w-4 h-4" />
                   contato@eventix.com.br
                 </a>
               </li>
