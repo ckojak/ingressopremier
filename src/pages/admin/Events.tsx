@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Search, Edit, Trash2, Eye, Calendar, MapPin } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Calendar, MapPin, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,6 +22,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +38,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { z } from "zod";
 import ImageUpload from "@/components/ImageUpload";
+import { useIBGEStates, useIBGECities } from "@/hooks/useIBGE";
 
 const eventSchema = z.object({
   title: z.string().min(1, "Título é obrigatório").max(200, "Título deve ter no máximo 200 caracteres"),
@@ -63,6 +71,19 @@ const statusLabels: Record<string, string> = {
   completed: "Concluído",
 };
 
+const categories = [
+  "Festival",
+  "Show",
+  "Stand-up",
+  "Teatro",
+  "Esportes",
+  "Workshop",
+  "Conferência",
+  "Eletrônica",
+  "Sertanejo",
+  "Outros",
+];
+
 const Events = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +107,9 @@ const Events = () => {
     image_url: "",
     status: "draft" as "draft" | "published" | "cancelled" | "completed",
   });
+
+  const { states, loading: statesLoading } = useIBGEStates();
+  const { cities, loading: citiesLoading } = useIBGECities(formData.state);
 
   const fetchEvents = async () => {
     try {
@@ -114,7 +138,6 @@ const Events = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate form data with zod
     const validation = eventSchema.safeParse(formData);
     if (!validation.success) {
       const firstError = validation.error.errors[0];
@@ -212,6 +235,25 @@ const Events = () => {
     }
   };
 
+  const handlePublish = async (eventId: string) => {
+    try {
+      const { error } = await supabase
+        .from("events")
+        .update({ status: "published" })
+        .eq("id", eventId);
+
+      if (error) throw error;
+      toast({ title: "Evento publicado com sucesso!" });
+      fetchEvents();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao publicar",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleEdit = (event: Event) => {
     setEditingEvent(event);
     setFormData({
@@ -274,7 +316,11 @@ const Events = () => {
               Novo Evento
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent 
+            className="max-w-2xl max-h-[90vh] overflow-y-auto"
+            onInteractOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}
+          >
             <DialogHeader>
               <DialogTitle>
                 {editingEvent ? "Editar Evento" : "Criar Novo Evento"}
@@ -316,6 +362,7 @@ const Events = () => {
                     value={formData.start_date}
                     onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                     required
+                    className="[color-scheme:dark]"
                   />
                 </div>
                 <div className="space-y-2">
@@ -325,6 +372,7 @@ const Events = () => {
                     type="datetime-local"
                     value={formData.end_date}
                     onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                    className="[color-scheme:dark]"
                   />
                 </div>
                 <div className="space-y-2">
@@ -344,29 +392,65 @@ const Events = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="city">Cidade</Label>
-                  <Input
-                    id="city"
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  />
+                  <Label htmlFor="state">Estado</Label>
+                  <Select
+                    value={formData.state}
+                    onValueChange={(value) => setFormData({ ...formData, state: value, city: "" })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={statesLoading ? "Carregando..." : "Selecione o estado"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {states.map((state) => (
+                        <SelectItem key={state.sigla} value={state.sigla}>
+                          {state.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="state">Estado</Label>
-                  <Input
-                    id="state"
-                    value={formData.state}
-                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  />
+                  <Label htmlFor="city">Cidade</Label>
+                  <Select
+                    value={formData.city}
+                    onValueChange={(value) => setFormData({ ...formData, city: value })}
+                    disabled={!formData.state}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={
+                        !formData.state 
+                          ? "Selecione um estado primeiro" 
+                          : citiesLoading 
+                            ? "Carregando..." 
+                            : "Selecione a cidade"
+                      } />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cities.map((city) => (
+                        <SelectItem key={city.id} value={city.nome}>
+                          {city.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="category">Categoria</Label>
-                  <Input
-                    id="category"
+                  <Select
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    placeholder="Ex: Show, Festival, Teatro"
-                  />
+                    onValueChange={(value) => setFormData({ ...formData, category: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Imagem do Evento</Label>
@@ -451,6 +535,17 @@ const Events = () => {
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      {event.status === "draft" && (
+                        <Button 
+                          variant="default" 
+                          size="sm" 
+                          onClick={() => handlePublish(event.id)}
+                          className="gap-1"
+                        >
+                          <Send className="w-4 h-4" />
+                          Publicar
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(event)}>
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -477,7 +572,7 @@ const Events = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir evento?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. Todos os ingressos e vendas associados serão perdidos.
+              Esta ação não pode ser desfeita. Todos os ingressos associados também serão removidos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
