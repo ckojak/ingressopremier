@@ -17,6 +17,8 @@ import {
   Crown,
   Tag,
   BarChart3,
+  Gift,
+  UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -44,7 +46,9 @@ const AdminLayout = () => {
       { icon: ShoppingCart, label: "Vendas", path: "/admin/vendas" },
       { icon: Tag, label: "Cupons", path: "/admin/cupons" },
       { icon: BarChart3, label: "Relatórios", path: "/admin/relatorios" },
+      { icon: Gift, label: "Cortesias", path: "/admin/cortesias" },
       { icon: QrCode, label: "Check-in", path: "/admin/checkin" },
+      { icon: UserCheck, label: "Equipe Check-in", path: "/admin/equipe" },
     ];
 
     if (userRole === "admin") {

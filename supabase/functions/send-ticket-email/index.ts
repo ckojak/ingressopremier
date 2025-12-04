@@ -15,7 +15,17 @@ const logStep = (step: string, details?: any) => {
 };
 
 interface TicketEmailRequest {
-  orderId: string;
+  orderId?: string;
+  type?: "purchase" | "complimentary";
+  recipientEmail?: string;
+  recipientName?: string;
+  eventTitle?: string;
+  eventDate?: string;
+  venueName?: string;
+  ticketTypeName?: string;
+  ticketCodes?: string[];
+  quantity?: number;
+  siteUrl?: string;
 }
 
 serve(async (req) => {
@@ -33,9 +43,113 @@ serve(async (req) => {
       auth: { persistSession: false }
     });
 
-    const { orderId }: TicketEmailRequest = await req.json();
+    const requestBody: TicketEmailRequest = await req.json();
+    logStep("Request received", { type: requestBody.type });
+
+    // Handle complimentary tickets
+    if (requestBody.type === "complimentary") {
+      const { recipientEmail, recipientName, eventTitle, eventDate, venueName, ticketTypeName, ticketCodes, quantity, siteUrl } = requestBody;
+      
+      if (!recipientEmail || !ticketCodes?.length) {
+        throw new Error("Missing required fields for complimentary ticket email");
+      }
+
+      // Generate ticket codes HTML for complimentary
+      const ticketCodesHtml = ticketCodes.map(code => `
+        <div style="background-color: #27272a; padding: 20px; border-radius: 12px; margin: 12px 0; text-align: center; border: 1px solid #3f3f46;">
+          <p style="margin: 0 0 8px 0; color: #a1a1aa; font-size: 14px;">${ticketTypeName || 'Ingresso Cortesia'}</p>
+          <p style="margin: 0; font-family: 'Courier New', monospace; font-size: 20px; font-weight: bold; color: #06b6d4; letter-spacing: 2px;">
+            ${code}
+          </p>
+        </div>
+      `).join("");
+
+      const emailResponse = await resend.emails.send({
+        from: "Eventix <onboarding@resend.dev>",
+        to: [recipientEmail],
+        subject: `🎁 Você recebeu ${quantity || 1} ingresso${(quantity || 1) > 1 ? 's' : ''} cortesia para ${eventTitle}`,
+        html: `
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #0a0a0a; -webkit-font-smoothing: antialiased;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+              <div style="background: linear-gradient(135deg, #06b6d4, #0891b2); padding: 2px; border-radius: 16px;">
+                <div style="background-color: #18181b; border-radius: 14px; padding: 40px;">
+                  
+                  <!-- Logo -->
+                  <div style="text-align: center; margin-bottom: 32px;">
+                    <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Eventix</h1>
+                    <p style="color: #52525b; font-size: 12px; margin: 8px 0 0 0; text-transform: uppercase; letter-spacing: 2px;">Ingresso Cortesia</p>
+                  </div>
+
+                  <!-- Gift Icon -->
+                  <div style="text-align: center; margin-bottom: 32px;">
+                    <div style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(168, 85, 247, 0.1)); border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 20px; line-height: 80px;">
+                      <span style="font-size: 40px;">🎁</span>
+                    </div>
+                    <h2 style="color: #a855f7; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+                      Você foi convidado!
+                    </h2>
+                    <p style="color: #a1a1aa; font-size: 16px; margin: 0;">
+                      Olá ${recipientName || 'Convidado'}! Você recebeu um ingresso cortesia.
+                    </p>
+                  </div>
+
+                  <!-- Event Details Card -->
+                  <div style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(8, 145, 178, 0.1)); border-radius: 12px; padding: 24px; margin-bottom: 24px; border: 1px solid rgba(6, 182, 212, 0.3);">
+                    <h3 style="color: #ffffff; font-size: 20px; margin: 0 0 16px 0; font-weight: 600;">${eventTitle}</h3>
+                    <div style="color: #d4d4d8; font-size: 15px; line-height: 1.8;">
+                      <p style="margin: 0 0 8px 0;">📅 ${eventDate}</p>
+                      ${venueName ? `<p style="margin: 0;">📍 ${venueName}</p>` : ""}
+                    </div>
+                  </div>
+
+                  <!-- Ticket Codes -->
+                  <div style="margin-bottom: 24px;">
+                    <h3 style="color: #ffffff; font-size: 16px; margin: 0 0 16px 0; font-weight: 600;">🎫 Seu${ticketCodes.length > 1 ? 's' : ''} código${ticketCodes.length > 1 ? 's' : ''} de ingresso:</h3>
+                    ${ticketCodesHtml}
+                    <p style="color: #71717a; font-size: 13px; margin: 16px 0 0 0; text-align: center;">
+                      Apresente este${ticketCodes.length > 1 ? 's' : ''} código${ticketCodes.length > 1 ? 's' : ''} ou o QR Code na entrada do evento
+                    </p>
+                  </div>
+
+                  <!-- Info -->
+                  <div style="background-color: #27272a; border-radius: 12px; padding: 20px; margin-top: 24px;">
+                    <p style="color: #a1a1aa; font-size: 14px; margin: 0 0 8px 0; font-weight: 600;">💡 Informação importante</p>
+                    <p style="color: #71717a; font-size: 13px; margin: 0; line-height: 1.6;">
+                      Este é um ingresso cortesia. Basta apresentá-lo na entrada do evento para acessar.
+                    </p>
+                  </div>
+                  
+                  <!-- Footer -->
+                  <div style="margin-top: 32px; text-align: center;">
+                    <p style="color: #52525b; font-size: 12px; margin: 0;">
+                      © ${new Date().getFullYear()} Eventix. Todos os direitos reservados.
+                    </p>
+                  </div>
+                  
+                </div>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+      });
+
+      logStep("Complimentary email sent", { emailResponse });
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // Standard purchase email flow
+    const { orderId } = requestBody;
     if (!orderId) throw new Error("Order ID is required");
-    logStep("Order ID received", { orderId });
 
     // Fetch order with details
     const { data: order, error: orderError } = await supabaseClient

@@ -437,6 +437,46 @@ const Auth = () => {
               )}
             </AnimatePresence>
 
+            {isLogin && (
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!email) {
+                      toast({
+                        title: "Informe seu email",
+                        description: "Digite seu email para recuperar a senha.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    setLoading(true);
+                    try {
+                      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                        redirectTo: `${window.location.origin}/auth`,
+                      });
+                      if (error) throw error;
+                      toast({
+                        title: "Email enviado!",
+                        description: "Verifique sua caixa de entrada para redefinir sua senha.",
+                      });
+                    } catch (error: any) {
+                      toast({
+                        title: "Erro",
+                        description: error.message,
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="text-sm text-primary hover:underline"
+                >
+                  Esqueci minha senha
+                </button>
+              </div>
+            )}
+
             <Button 
               type="submit" 
               className="w-full h-12 text-base font-semibold" 

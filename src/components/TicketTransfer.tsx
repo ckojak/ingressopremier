@@ -59,6 +59,22 @@ const TicketTransfer = ({
       return;
     }
 
+    // Check if event is within 2 hours
+    if (eventDate) {
+      const eventTime = new Date(eventDate).getTime();
+      const now = Date.now();
+      const twoHoursInMs = 2 * 60 * 60 * 1000;
+      
+      if (eventTime - now < twoHoursInMs) {
+        toast({
+          title: "Transferência não permitida",
+          description: "Não é possível transferir ingressos com menos de 2 horas para o evento.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -100,6 +116,12 @@ const TicketTransfer = ({
         .single();
 
       if (error) throw error;
+
+      // Update ticket transfer_status to pending
+      await supabase
+        .from("tickets")
+        .update({ transfer_status: "pending" })
+        .eq("id", ticketId);
 
       // Format event date
       const formattedDate = eventDate 
