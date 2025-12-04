@@ -201,6 +201,7 @@ serve(async (req) => {
       customer_email: customerId ? undefined : user.email,
       line_items: lineItems,
       mode: "payment",
+      payment_method_types: ["card", "pix"],
       success_url: `${origin}/pagamento-sucesso?order_id=${order.id}`,
       cancel_url: `${origin}/evento/${eventId}`,
       metadata: {

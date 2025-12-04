@@ -35,7 +35,8 @@ interface TicketWithDetails {
   is_used: boolean;
   used_at: string | null;
   created_at: string | null;
-  wasTransferred: boolean; // Track if ticket was received via transfer
+  wasTransferred: boolean;
+  transfer_status: string;
   event: {
     id: string;
     title: string;
@@ -77,6 +78,7 @@ const MyTickets = () => {
           is_used,
           used_at,
           created_at,
+          transfer_status,
           events (id, title, start_date, venue_name, city, state, image_url),
           ticket_types (name, price)
         `)
@@ -100,6 +102,7 @@ const MyTickets = () => {
         event: ticket.events as TicketWithDetails["event"],
         ticket_type: ticket.ticket_types as TicketWithDetails["ticket_type"],
         wasTransferred: transferredTicketIds.has(ticket.id),
+        transfer_status: ticket.transfer_status || "none",
       }));
 
       setTickets(formattedTickets);
@@ -159,6 +162,11 @@ const MyTickets = () => {
                     Recebido
                   </Badge>
                 )}
+                {ticket.transfer_status === "pending" && (
+                  <Badge variant="secondary" className="text-xs bg-yellow-500/20 text-yellow-500">
+                    Transferência Pendente
+                  </Badge>
+                )}
                 <Badge variant={ticket.is_used ? "secondary" : "default"}>
                   {ticket.is_used ? "Utilizado" : "Válido"}
                 </Badge>
@@ -186,11 +194,11 @@ const MyTickets = () => {
               )}
             </div>
             <div className="mt-3 flex items-center gap-2">
-              <Button variant="outline" size="sm" className="gap-1">
+              <Button variant="outline" size="sm" className="gap-1" disabled={ticket.transfer_status === "pending"}>
                 <QrCode className="w-4 h-4" />
                 Ver QR Code
               </Button>
-              {!ticket.is_used && ticket.event && new Date(ticket.event.start_date) >= new Date() && (
+              {!ticket.is_used && ticket.event && new Date(ticket.event.start_date) >= new Date() && ticket.transfer_status !== "pending" && (
                 ticket.wasTransferred ? (
                   <TooltipProvider>
                     <Tooltip>

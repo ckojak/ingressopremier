@@ -122,12 +122,13 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
 
       if (transferError) throw transferError;
 
-      // Transfer ticket ownership
+      // Transfer ticket ownership and update transfer_status
       const { error: ticketError } = await supabase
         .from("tickets")
         .update({
           user_id: user.id,
           attendee_email: user.email,
+          transfer_status: "completed",
         })
         .eq("id", transfer.ticket?.id);
 
@@ -191,12 +192,19 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
 
       if (error) throw error;
 
+      // Reset ticket transfer_status back to none
+      await supabase
+        .from("tickets")
+        .update({ transfer_status: "none" })
+        .eq("id", transfer.ticket?.id);
+
       toast({
         title: "Transferência recusada",
-        description: "A transferência foi recusada.",
+        description: "A transferência foi recusada. O ingresso voltou para o proprietário original.",
       });
 
       fetchPendingTransfers();
+      onTransferHandled();
     } catch (error: any) {
       toast({
         title: "Erro",

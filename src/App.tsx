@@ -38,6 +38,11 @@ const Users = lazy(() => import("./pages/admin/Users"));
 const CheckIn = lazy(() => import("./pages/admin/CheckIn"));
 const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Reports = lazy(() => import("./pages/admin/Reports"));
+const StaffManagement = lazy(() => import("./pages/admin/StaffManagement"));
+const Complimentary = lazy(() => import("./pages/admin/Complimentary"));
+
+// Public staff check-in page
+const StaffCheckin = lazy(() => import("./pages/StaffCheckin"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -98,6 +103,9 @@ const App = () => {
                   {/* Ticket Transfer */}
                   <Route path="/aceitar-transferencia" element={<AcceptTransfer />} />
                   
+                  {/* Staff Check-in (public) */}
+                  <Route path="/staff-checkin/:accessCode" element={<StaffCheckin />} />
+                  
                   {/* Admin Routes */}
                   <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<Dashboard />} />
@@ -109,6 +117,8 @@ const App = () => {
                     <Route path="cupons" element={<Coupons />} />
                     <Route path="relatorios" element={<Reports />} />
                     <Route path="usuarios" element={<Users />} />
+                    <Route path="equipe" element={<StaffManagement />} />
+                    <Route path="cortesias" element={<Complimentary />} />
                   </Route>
                   
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

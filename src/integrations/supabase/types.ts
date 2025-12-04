@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      checkin_staff: {
+        Row: {
+          access_code: string
+          created_at: string | null
+          created_by: string
+          email: string
+          event_id: string
+          id: string
+          is_active: boolean | null
+          last_access_at: string | null
+          name: string | null
+          user_id: string | null
+        }
+        Insert: {
+          access_code: string
+          created_at?: string | null
+          created_by: string
+          email: string
+          event_id: string
+          id?: string
+          is_active?: boolean | null
+          last_access_at?: string | null
+          name?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          access_code?: string
+          created_at?: string | null
+          created_by?: string
+          email?: string
+          event_id?: string
+          id?: string
+          is_active?: boolean | null
+          last_access_at?: string | null
+          name?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkin_staff_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupons: {
         Row: {
           code: string
@@ -379,6 +426,7 @@ export type Database = {
           order_item_id: string
           ticket_code: string
           ticket_type_id: string | null
+          transfer_status: string | null
           used_at: string | null
           user_id: string | null
         }
@@ -392,6 +440,7 @@ export type Database = {
           order_item_id: string
           ticket_code: string
           ticket_type_id?: string | null
+          transfer_status?: string | null
           used_at?: string | null
           user_id?: string | null
         }
@@ -405,6 +454,7 @@ export type Database = {
           order_item_id?: string
           ticket_code?: string
           ticket_type_id?: string | null
+          transfer_status?: string | null
           used_at?: string | null
           user_id?: string | null
         }
