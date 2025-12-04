@@ -24,7 +24,7 @@ interface CheckoutRequest {
   serviceFee?: number;
 }
 
-const SERVICE_FEE_PERCENTAGE = 0.05; // 5% taxa de serviço
+const SERVICE_FEE_PERCENTAGE = 0.08; // 8% taxa de serviço
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -132,7 +132,7 @@ serve(async (req) => {
         currency: "brl",
         product_data: {
           name: "Taxa de Serviço",
-          description: "Taxa administrativa (5%)",
+          description: "Taxa administrativa (8%)",
         },
         unit_amount: Math.round(serviceFee * 100),
       },
