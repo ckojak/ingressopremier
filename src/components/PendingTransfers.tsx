@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 interface PendingTransfer {
   id: string;
@@ -42,6 +43,7 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
   const { toast } = useToast();
+  const { sendLocalNotification, isSubscribed } = usePushNotifications();
 
   const fetchPendingTransfers = async () => {
     try {
@@ -93,6 +95,16 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
       );
 
       setTransfers(transfersWithSender);
+      
+      // Send local push notification for new pending transfers
+      if (transfersWithSender.length > 0 && isSubscribed) {
+        const latestTransfer = transfersWithSender[0];
+        sendLocalNotification(
+          "🎟️ Você recebeu um ingresso!",
+          `${latestTransfer.sender?.full_name || "Alguém"} está transferindo um ingresso para ${latestTransfer.ticket?.event?.title || "um evento"}`,
+          `/meus-ingressos`
+        );
+      }
     } catch (error) {
       console.error("Error fetching pending transfers:", error);
     } finally {

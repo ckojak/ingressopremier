@@ -3,11 +3,12 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Ticket, Mail, Lock, User, ArrowLeft, Building2, Users, Check, X, Eye, EyeOff } from "lucide-react";
+import { Ticket, Mail, Lock, User, ArrowLeft, Building2, Users, Check, X, Eye, EyeOff, Phone, CreditCard } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { Separator } from "@/components/ui/separator";
 
 type UserType = "client" | "organizer";
 
@@ -19,12 +20,60 @@ interface PasswordStrength {
   hasSpecial: boolean;
 }
 
+// CPF mask function
+const formatCPF = (value: string): string => {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+
+// Phone mask function
+const formatPhone = (value: string): string => {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
+// CPF validation function
+const isValidCPF = (cpf: string): boolean => {
+  const digits = cpf.replace(/\D/g, "");
+  if (digits.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(digits)) return false;
+  
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(digits.charAt(i)) * (10 - i);
+  }
+  let rev = 11 - (sum % 11);
+  if (rev === 10 || rev === 11) rev = 0;
+  if (rev !== parseInt(digits.charAt(9))) return false;
+  
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += parseInt(digits.charAt(i)) * (11 - i);
+  }
+  rev = 11 - (sum % 11);
+  if (rev === 10 || rev === 11) rev = 0;
+  return rev === parseInt(digits.charAt(10));
+};
+
+// Phone validation function
+const isValidPhone = (phone: string): boolean => {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length === 10 || digits.length === 11;
+};
+
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [phone, setPhone] = useState("");
   const [userType, setUserType] = useState<UserType>("client");
   const [loading, setLoading] = useState(false);
   const [isPageLoading, setIsPageLoading] = useState(true);
@@ -51,6 +100,12 @@ const Auth = () => {
   }, [passwordStrength]);
 
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
+
+  // Additional validation for client signup
+  const isClientFieldsValid = useMemo(() => {
+    if (userType !== "client" || isLogin) return true;
+    return isValidCPF(cpf) && isValidPhone(phone);
+  }, [userType, isLogin, cpf, phone]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -102,11 +157,59 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate, from]);
 
+  const handleOAuthSignIn = async (provider: 'google' | 'apple') => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth`,
+        },
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation for signup
     if (!isLogin) {
+      if (!fullName.trim()) {
+        toast({
+          title: "Nome obrigatório",
+          description: "Por favor, insira seu nome completo.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (userType === "client") {
+        if (!isValidCPF(cpf)) {
+          toast({
+            title: "CPF inválido",
+            description: "Por favor, insira um CPF válido.",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!isValidPhone(phone)) {
+          toast({
+            title: "Telefone inválido",
+            description: "Por favor, insira um telefone válido.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       if (!isPasswordStrong) {
         toast({
           title: "Senha fraca",
@@ -150,6 +253,8 @@ const Auth = () => {
             data: {
               full_name: fullName,
               user_type: userType,
+              cpf: userType === "client" ? cpf.replace(/\D/g, "") : null,
+              phone: userType === "client" ? phone.replace(/\D/g, "") : null,
             },
           },
         });
@@ -165,6 +270,8 @@ const Auth = () => {
         setPassword("");
         setConfirmPassword("");
         setFullName("");
+        setCpf("");
+        setPhone("");
         setUserType("client");
         setIsLogin(true);
       }
@@ -257,11 +364,61 @@ const Auth = () => {
           <h1 className="text-2xl font-bold text-foreground text-center mb-2">
             {isLogin ? "Bem-vindo de volta!" : "Crie sua conta"}
           </h1>
-          <p className="text-muted-foreground text-center mb-8">
+          <p className="text-muted-foreground text-center mb-6">
             {isLogin
               ? "Entre com suas credenciais para continuar"
               : "Preencha os dados para se cadastrar"}
           </p>
+
+          {/* OAuth Buttons */}
+          <div className="space-y-3 mb-6">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-12 gap-3"
+              onClick={() => handleOAuthSignIn('google')}
+              disabled={loading}
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path
+                  fill="currentColor"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
+              </svg>
+              Continuar com Google
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-12 gap-3"
+              onClick={() => handleOAuthSignIn('apple')}
+              disabled={loading}
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+              </svg>
+              Continuar com Apple
+            </Button>
+          </div>
+
+          <div className="relative mb-6">
+            <Separator />
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-4 text-xs text-muted-foreground">
+              ou continue com email
+            </span>
+          </div>
 
           <AnimatePresence mode="wait">
             {!isLogin && (
@@ -311,27 +468,94 @@ const Auth = () => {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="space-y-2"
+                  className="space-y-4"
                 >
-                  <Label htmlFor="fullName">Nome completo</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      id="fullName"
-                      type="text"
-                      placeholder="Seu nome completo"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="pl-10 h-12 bg-secondary/50 border-border"
-                      required={!isLogin}
-                    />
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Nome completo *</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <Input
+                        id="fullName"
+                        type="text"
+                        placeholder="Seu nome completo"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        className="pl-10 h-12 bg-secondary/50 border-border"
+                        required={!isLogin}
+                      />
+                    </div>
                   </div>
+
+                  {/* CPF and Phone fields - only for client type */}
+                  {userType === "client" && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="cpf">CPF *</Label>
+                        <div className="relative">
+                          <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                          <Input
+                            id="cpf"
+                            type="text"
+                            placeholder="000.000.000-00"
+                            value={cpf}
+                            onChange={(e) => setCpf(formatCPF(e.target.value))}
+                            className={`pl-10 h-12 bg-secondary/50 border-border ${
+                              cpf.length > 0 && !isValidCPF(cpf) ? "border-red-500" : ""
+                            } ${cpf.length > 0 && isValidCPF(cpf) ? "border-green-500" : ""}`}
+                            required={userType === "client" && !isLogin}
+                          />
+                        </div>
+                        {cpf.length > 0 && !isValidCPF(cpf) && (
+                          <p className="text-xs text-red-500 flex items-center gap-1">
+                            <X className="w-3 h-3" />
+                            CPF inválido
+                          </p>
+                        )}
+                        {cpf.length > 0 && isValidCPF(cpf) && (
+                          <p className="text-xs text-green-500 flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            CPF válido
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Telefone *</Label>
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                          <Input
+                            id="phone"
+                            type="tel"
+                            placeholder="(00) 00000-0000"
+                            value={phone}
+                            onChange={(e) => setPhone(formatPhone(e.target.value))}
+                            className={`pl-10 h-12 bg-secondary/50 border-border ${
+                              phone.length > 0 && !isValidPhone(phone) ? "border-red-500" : ""
+                            } ${phone.length > 0 && isValidPhone(phone) ? "border-green-500" : ""}`}
+                            required={userType === "client" && !isLogin}
+                          />
+                        </div>
+                        {phone.length > 0 && !isValidPhone(phone) && (
+                          <p className="text-xs text-red-500 flex items-center gap-1">
+                            <X className="w-3 h-3" />
+                            Telefone inválido
+                          </p>
+                        )}
+                        {phone.length > 0 && isValidPhone(phone) && (
+                          <p className="text-xs text-green-500 flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            Telefone válido
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Email *</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
@@ -347,7 +571,7 @@ const Auth = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <Label htmlFor="password">Senha *</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
@@ -399,7 +623,7 @@ const Auth = () => {
                   exit={{ opacity: 0, y: -10 }}
                   className="space-y-2"
                 >
-                  <Label htmlFor="confirmPassword">Confirmar senha</Label>
+                  <Label htmlFor="confirmPassword">Confirmar senha *</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input
@@ -480,7 +704,7 @@ const Auth = () => {
             <Button 
               type="submit" 
               className="w-full h-12 text-base font-semibold" 
-              disabled={loading || (!isLogin && (!isPasswordStrong || !passwordsMatch))}
+              disabled={loading || (!isLogin && (!isPasswordStrong || !passwordsMatch || !isClientFieldsValid))}
             >
               {loading ? (
                 <motion.div
@@ -504,6 +728,8 @@ const Auth = () => {
                 setUserType("client");
                 setPassword("");
                 setConfirmPassword("");
+                setCpf("");
+                setPhone("");
               }}
               className="text-sm text-muted-foreground hover:text-primary transition-colors"
             >

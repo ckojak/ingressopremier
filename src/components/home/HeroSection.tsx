@@ -66,6 +66,9 @@ const HeroSection = () => {
             <Button variant="hero" size="xl" asChild>
               <Link to="/eventos">Explorar eventos</Link>
             </Button>
+            <Button variant="outline" size="xl" asChild className="border-primary/50 hover:bg-primary/10">
+              <Link to="/auth">Entre ou cadastre-se</Link>
+            </Button>
           </motion.div>
 
           <motion.div

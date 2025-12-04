@@ -28,6 +28,11 @@ import { EVENT_CATEGORIES } from "@/lib/constants";
 
 type Event = Tables<"events">;
 
+interface EventWithPrice extends Event {
+  min_price?: number;
+  total_available?: number;
+}
+
 const categories = ["Todos", ...EVENT_CATEGORIES];
 
 const dateFilters = [
@@ -39,7 +44,7 @@ const dateFilters = [
 ];
 
 const Events = () => {
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<EventWithPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todos");
@@ -59,11 +64,45 @@ const Events = () => {
           .order("start_date", { ascending: true });
 
         if (error) throw error;
-        setEvents(data || []);
+        
+        const eventsData = data || [];
 
         // Extract unique cities
-        const uniqueCities = [...new Set(data?.map(e => e.city).filter(Boolean))] as string[];
+        const uniqueCities = [...new Set(eventsData.map(e => e.city).filter(Boolean))] as string[];
         setCities(uniqueCities.sort());
+
+        // Fetch ticket prices and availability for each event
+        if (eventsData.length > 0) {
+          const eventIds = eventsData.map(e => e.id);
+          const { data: ticketData } = await supabase
+            .from("ticket_types")
+            .select("event_id, price, quantity_available, quantity_sold")
+            .in("event_id", eventIds)
+            .eq("is_active", true);
+
+          const priceAndAvailabilityByEvent: Record<string, { minPrice: number; totalAvailable: number }> = {};
+          ticketData?.forEach(ticket => {
+            const price = Number(ticket.price);
+            const available = ticket.quantity_available - (ticket.quantity_sold || 0);
+            if (!priceAndAvailabilityByEvent[ticket.event_id]) {
+              priceAndAvailabilityByEvent[ticket.event_id] = { minPrice: price, totalAvailable: available };
+            } else {
+              if (price < priceAndAvailabilityByEvent[ticket.event_id].minPrice) {
+                priceAndAvailabilityByEvent[ticket.event_id].minPrice = price;
+              }
+              priceAndAvailabilityByEvent[ticket.event_id].totalAvailable += available;
+            }
+          });
+
+          const eventsWithPrices = eventsData.map(event => ({
+            ...event,
+            min_price: priceAndAvailabilityByEvent[event.id]?.minPrice,
+            total_available: priceAndAvailabilityByEvent[event.id]?.totalAvailable ?? 0,
+          }));
+          setEvents(eventsWithPrices);
+        } else {
+          setEvents([]);
+        }
       } catch (error) {
         console.error("Error fetching events:", error);
       } finally {
@@ -323,7 +362,15 @@ const Events = () => {
                         <div className="flex items-center justify-between pt-4 border-t border-border">
                           <div>
                             <span className="text-xs text-muted-foreground">A partir de</span>
-                            <p className="text-lg font-bold text-gradient">Ver ingressos</p>
+                            <p className="text-lg font-bold text-primary">
+                              {event.total_available === 0 ? (
+                                <span className="text-destructive">Esgotado</span>
+                              ) : event.min_price !== undefined ? (
+                                `R$ ${event.min_price.toFixed(2).replace(".", ",")}`
+                              ) : (
+                                "Ver ingressos"
+                              )}
+                            </p>
                           </div>
                           <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <span className="text-primary-foreground text-lg">→</span>

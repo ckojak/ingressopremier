@@ -159,14 +159,9 @@ const Header = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <>
-                <Link to="/auth">
-                  <Button variant="outline">Entrar</Button>
-                </Link>
-                <Link to="/auth">
-                  <Button>Criar conta</Button>
-                </Link>
-              </>
+              <Link to="/auth">
+                <Button>Entre ou cadastre-se</Button>
+              </Link>
             )}
           </div>
 
@@ -244,14 +239,9 @@ const Header = () => {
                     Sair
                   </Button>
                 ) : (
-                  <>
-                    <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                      <Button variant="outline" className="w-full">Entrar</Button>
-                    </Link>
-                    <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                      <Button className="w-full">Criar conta</Button>
-                    </Link>
-                  </>
+                  <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+                    <Button className="w-full">Entre ou cadastre-se</Button>
+                  </Link>
                 )}
               </div>
             </div>

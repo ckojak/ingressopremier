@@ -124,7 +124,7 @@ const EventDetails = () => {
     return cart.find(item => item.ticketType.id === ticketTypeId)?.quantity || 0;
   };
 
-  const SERVICE_FEE_PERCENTAGE = 0.05; // 5% taxa de serviço
+  const SERVICE_FEE_PERCENTAGE = 0.08; // 8% taxa de serviço
 
   const subtotal = cart.reduce(
     (sum, item) => sum + Number(item.ticketType.price) * item.quantity,
@@ -383,34 +383,39 @@ const EventDetails = () => {
                             </div>
 
                             <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">
-                                {available > 0 ? `${available} disponíveis` : "Esgotado"}
-                              </span>
-                              
-                              {available > 0 && (
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => updateCart(ticket, -1)}
-                                    disabled={quantity === 0}
-                                  >
-                                    <Minus className="w-4 h-4" />
-                                  </Button>
-                                  <span className="w-8 text-center font-medium text-foreground">
-                                    {quantity}
+                              {available > 0 ? (
+                                <>
+                                  <span className="text-sm text-muted-foreground">
+                                    {available} disponíveis
                                   </span>
-                                  <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => updateCart(ticket, 1)}
-                                    disabled={quantity >= Math.min(available, ticket.max_per_order || 10)}
-                                  >
-                                    <Plus className="w-4 h-4" />
-                                  </Button>
-                                </div>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => updateCart(ticket, -1)}
+                                      disabled={quantity === 0}
+                                    >
+                                      <Minus className="w-4 h-4" />
+                                    </Button>
+                                    <span className="w-8 text-center font-medium text-foreground">
+                                      {quantity}
+                                    </span>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => updateCart(ticket, 1)}
+                                      disabled={quantity >= Math.min(available, ticket.max_per_order || 10)}
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </>
+                              ) : (
+                                <Badge variant="destructive" className="w-full justify-center py-2">
+                                  Esgotado
+                                </Badge>
                               )}
                             </div>
                           </div>
@@ -442,8 +447,8 @@ const EventDetails = () => {
                             <span className="text-muted-foreground">Subtotal</span>
                             <span className="text-foreground">R$ {subtotal.toFixed(2)}</span>
                           </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Taxa de serviço (5%)</span>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Taxa de serviço (8%)</span>
                             <span className="text-foreground">R$ {serviceFee.toFixed(2)}</span>
                           </div>
                         </div>
