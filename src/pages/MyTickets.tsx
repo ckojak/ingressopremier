@@ -349,7 +349,7 @@ const MyTickets = () => {
 
               <div className="flex justify-center p-6 bg-white rounded-xl">
                 <QRCodeSVG
-                  value={`EVENTIX-${selectedTicket.ticket_code}`}
+                  value={`PREMIERPASS-${selectedTicket.ticket_code}`}
                   size={200}
                   level="H"
                   includeMargin

@@ -8,6 +8,7 @@ import CategoriesSection from "@/components/home/CategoriesSection";
 import OrganizersSection from "@/components/home/OrganizersSection";
 import StatsSection from "@/components/home/StatsSection";
 import CTASection from "@/components/home/CTASection";
+import TrustSection from "@/components/home/TrustSection";
 
 const Index = () => {
   return (
@@ -16,11 +17,12 @@ const Index = () => {
       <Header />
       <main>
         <HeroSection />
-        <PromoBanner />
         <FeaturedEvents />
+        <TrustSection />
         <CategoriesSection />
         <OrganizersSection />
         <StatsSection />
+        <PromoBanner />
         <CTASection />
       </main>
       <Footer />

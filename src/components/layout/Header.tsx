@@ -84,7 +84,7 @@ const Header = () => {
               <Ticket className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold text-foreground">
-              Event<span className="text-gradient">ix</span>
+              Premier<span className="text-gradient">Pass</span>
             </span>
           </Link>
 

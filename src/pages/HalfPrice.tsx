@@ -38,7 +38,7 @@ const HalfPrice = () => {
       <SEO
         title="Lei da Meia-Entrada"
         description="Saiba quem tem direito à meia-entrada e quais documentos são necessários."
-        url="https://eventix.com.br/meia-entrada"
+        url="https://premierpass.com.br/meia-entrada"
       />
       <Header />
       <main className="pt-24 pb-16">
@@ -123,7 +123,7 @@ const HalfPrice = () => {
             transition={{ duration: 0.6, delay: 0.4 }}
             className="gradient-card rounded-2xl p-8"
           >
-            <h2 className="text-2xl font-bold text-foreground mb-4">Como funciona na Eventix?</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-4">Como funciona na Premier Pass?</h2>
             <ol className="space-y-4">
               <li className="flex gap-4">
                 <span className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold flex-shrink-0">1</span>

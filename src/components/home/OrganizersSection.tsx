@@ -64,7 +64,7 @@ const OrganizersSection = () => {
               Principais <span className="text-gradient">Organizadores</span>
             </h2>
             <p className="text-muted-foreground">
-              Casas e produtores que confiam na Eventix
+              Casas e produtores que confiam na Premier Pass
             </p>
           </div>
           <div className="hidden md:flex gap-2">

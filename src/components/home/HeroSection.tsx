@@ -1,19 +1,28 @@
 import { Button } from "@/components/ui/button";
-import { Search, Sparkles } from "lucide-react";
+import { Search, Sparkles, Shield, Star, Headphones } from "lucide-react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import FloatingParticles from "@/components/FloatingParticles";
+
+const trustBadges = [
+  { icon: Shield, label: "Pagamento 100% Seguro" },
+  { icon: Star, label: "Ingressos Verificados" },
+  { icon: Headphones, label: "Suporte 24/7" },
+];
 
 const HeroSection = () => {
   return (
-    <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden gradient-hero">
-      {/* Background Effects */}
-      <div className="absolute inset-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-[128px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-[128px]" />
+    <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
+      {/* Floating Particles */}
+      <FloatingParticles count={30} />
+
+      {/* Central Glow Effect */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="w-[600px] h-[600px] bg-gradient-radial from-primary/15 via-accent/10 to-transparent rounded-full blur-3xl" />
       </div>
 
       {/* Grid Pattern */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:64px_64px]" />
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
@@ -24,7 +33,7 @@ const HeroSection = () => {
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8">
               <Sparkles className="w-4 h-4 text-primary" />
-              <span className="text-sm text-muted-foreground">Mais de 10.000 eventos disponíveis</span>
+              <span className="text-sm text-muted-foreground">🔥 Eventos em Alta</span>
             </div>
           </motion.div>
 
@@ -34,9 +43,8 @@ const HeroSection = () => {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-foreground mb-6 leading-tight"
           >
-            Descubra eventos
-            <br />
-            <span className="text-gradient">incríveis</span> perto de você
+            Eventos{" "}
+            <span className="text-gradient">Imperdíveis</span>
           </motion.h1>
 
           <motion.p
@@ -45,8 +53,7 @@ const HeroSection = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto"
           >
-            Shows, festivais, teatro, esportes e muito mais. 
-            Encontre os melhores eventos e garanta seu ingresso com segurança.
+            Os shows e festivais mais aguardados do Brasil. Garanta seu ingresso com segurança e os melhores preços.
           </motion.p>
 
           <motion.div
@@ -64,27 +71,25 @@ const HeroSection = () => {
               />
             </div>
             <Button variant="hero" size="xl" asChild>
-              <Link to="/eventos">Explorar eventos</Link>
-            </Button>
-            <Button variant="outline" size="xl" asChild className="border-primary/50 hover:bg-primary/10">
-              <Link to="/auth">Entre ou cadastre-se</Link>
+              <Link to="/eventos">Ver Todos os Eventos</Link>
             </Button>
           </motion.div>
 
+          {/* Trust Badges */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
-            className="flex flex-wrap gap-3 justify-center"
+            className="flex flex-wrap gap-6 justify-center"
           >
-            {["Shows", "Festivais", "Teatro", "Esportes", "Stand-up", "Workshops"].map((category) => (
-              <Link
-                key={category}
-                to={`/eventos?categoria=${category.toLowerCase()}`}
-                className="px-4 py-2 rounded-full glass text-sm text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all"
+            {trustBadges.map((badge, index) => (
+              <div
+                key={badge.label}
+                className="flex items-center gap-2 text-muted-foreground"
               >
-                {category}
-              </Link>
+                <badge.icon className="w-5 h-5 text-primary" />
+                <span className="text-sm">{badge.label}</span>
+              </div>
             ))}
           </motion.div>
         </div>
