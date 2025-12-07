@@ -56,7 +56,7 @@ const handler = async (req: Request): Promise<Response> => {
                 
                 <!-- Logo -->
                 <div style="text-align: center; margin-bottom: 32px;">
-                  <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Eventix</h1>
+                  <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Premier<span style="color: #ec4899;">Pass</span></h1>
                 </div>
 
                 <!-- Header -->
@@ -89,7 +89,7 @@ const handler = async (req: Request): Promise<Response> => {
                 </p>
                 
                 <p style="color: #52525b; font-size: 12px; text-align: center; margin-top: 32px;">
-                  © ${new Date().getFullYear()} Eventix. Todos os direitos reservados.
+                  © ${new Date().getFullYear()} PremierPass. Todos os direitos reservados.
                 </p>
               </div>
             </div>
@@ -114,7 +114,7 @@ const handler = async (req: Request): Promise<Response> => {
                 
                 <!-- Logo -->
                 <div style="text-align: center; margin-bottom: 32px;">
-                  <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Eventix</h1>
+                  <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Premier<span style="color: #ec4899;">Pass</span></h1>
                 </div>
 
                 <!-- Header -->
@@ -140,7 +140,7 @@ const handler = async (req: Request): Promise<Response> => {
                 </p>
                 
                 <p style="color: #52525b; font-size: 12px; text-align: center; margin-top: 32px;">
-                  © ${new Date().getFullYear()} Eventix. Todos os direitos reservados.
+                  © ${new Date().getFullYear()} PremierPass. Todos os direitos reservados.
                 </p>
               </div>
             </div>
@@ -165,7 +165,7 @@ const handler = async (req: Request): Promise<Response> => {
                 
                 <!-- Logo -->
                 <div style="text-align: center; margin-bottom: 32px;">
-                  <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Eventix</h1>
+                  <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Premier<span style="color: #ec4899;">Pass</span></h1>
                 </div>
 
                 <!-- Header -->
@@ -194,11 +194,11 @@ const handler = async (req: Request): Promise<Response> => {
                 </div>
                 
                 <p style="color: #a1a1aa; font-size: 14px; line-height: 1.6; margin: 24px 0; text-align: center;">
-                  Continue aproveitando os melhores eventos com a Eventix! 🎉
+                  Continue aproveitando os melhores eventos com a PremierPass! 🎉
                 </p>
                 
                 <p style="color: #52525b; font-size: 12px; text-align: center; margin-top: 32px;">
-                  © ${new Date().getFullYear()} Eventix. Todos os direitos reservados.
+                  © ${new Date().getFullYear()} PremierPass. Todos os direitos reservados.
                 </p>
               </div>
             </div>
@@ -220,7 +220,7 @@ const handler = async (req: Request): Promise<Response> => {
         "Authorization": `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: "Eventix <onboarding@resend.dev>",
+        from: "PremierPass <onboarding@resend.dev>",
         to: [toEmail],
         subject: emailSubject,
         html: emailHtml,

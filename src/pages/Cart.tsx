@@ -24,7 +24,7 @@ interface CartItem {
   quantity: number;
 }
 
-const SERVICE_FEE_PERCENTAGE = 0.05; // 5% taxa de serviço
+const SERVICE_FEE_PERCENTAGE = 0.08; // 8% taxa de serviço
 
 const Cart = () => {
   const navigate = useNavigate();
@@ -300,17 +300,14 @@ const Cart = () => {
       const firstEventId = Object.keys(eventGroups)[0];
       const items = eventGroups[firstEventId];
 
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
+      const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
         body: {
-          eventId: firstEventId,
+          event_id: firstEventId,
           items: items.map(item => ({
-            ticketTypeId: item.ticketType.id,
+            ticket_type_id: item.ticketType.id,
             quantity: item.quantity,
-            unitPrice: Number(item.ticketType.price),
+            unit_price: Number(item.ticketType.price),
           })),
-          serviceFee,
-          couponId: appliedCoupon?.id,
-          discountAmount: discount,
         },
       });
 
@@ -335,9 +332,9 @@ const Cart = () => {
         }
       }
 
-      if (data?.url) {
+      if (data?.checkout_url) {
         localStorage.removeItem("cart");
-        window.location.href = data.url;
+        window.location.href = data.checkout_url;
       }
     } catch (error: any) {
       console.error("Checkout error:", error);
