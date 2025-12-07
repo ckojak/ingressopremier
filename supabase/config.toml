@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.send-notification]
 verify_jwt = false
+
+[functions.create-mercadopago-checkout]
+verify_jwt = false
+
+[functions.mercadopago-webhook]
+verify_jwt = false
