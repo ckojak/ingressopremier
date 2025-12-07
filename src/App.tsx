@@ -17,6 +17,7 @@ import NotFound from "./pages/NotFound";
 
 // Lazy load non-critical pages for better performance
 const PaymentSuccess = lazy(() => import("./pages/PaymentSuccess"));
+const PaymentSuccessMercadoPago = lazy(() => import("./pages/PaymentSuccessMercadoPago"));
 const MyTickets = lazy(() => import("./pages/MyTickets"));
 const Cart = lazy(() => import("./pages/Cart"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -88,7 +89,7 @@ const App = () => {
                   <Route path="/eventos" element={<Events />} />
                   <Route path="/evento/:id" element={<EventDetails />} />
                   <Route path="/auth" element={<Auth />} />
-                  <Route path="/pagamento-sucesso" element={<PaymentSuccess />} />
+                  <Route path="/pagamento-sucesso" element={<PaymentSuccessMercadoPago />} />
                   <Route path="/meus-ingressos" element={<MyTickets />} />
                   <Route path="/carrinho" element={<Cart />} />
                   <Route path="/perfil" element={<Profile />} />

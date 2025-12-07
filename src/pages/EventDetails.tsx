@@ -193,23 +193,22 @@ const EventDetails = () => {
         return;
       }
 
-      // Create checkout with Stripe
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
+      // Create checkout with Mercado Pago
+      const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
         body: {
-          eventId: id,
+          event_id: id,
           items: cart.map(item => ({
-            ticketTypeId: item.ticketType.id,
+            ticket_type_id: item.ticketType.id,
             quantity: item.quantity,
-            unitPrice: Number(item.ticketType.price),
+            unit_price: Number(item.ticketType.price),
           })),
-          serviceFee,
         },
       });
 
       if (error) throw error;
 
-      if (data?.url) {
-        window.location.href = data.url;
+      if (data?.checkout_url) {
+        window.location.href = data.checkout_url;
       }
     } catch (error: any) {
       console.error("Checkout error:", error);
