@@ -57,7 +57,7 @@ const handler = async (req: Request): Promise<Response> => {
             <div style="background-color: #1a1a1a; border-radius: 14px; padding: 40px;">
               <!-- Logo -->
               <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #06b6d4; font-size: 32px; font-weight: bold; margin: 0;">Eventix</h1>
+                <h1 style="color: #06b6d4; font-size: 32px; font-weight: bold; margin: 0;">Premier<span style="color: #ec4899;">Pass</span></h1>
               </div>
 
               <h2 style="color: #ffffff; font-size: 24px; margin: 0 0 20px 0; text-align: center;">
@@ -100,7 +100,7 @@ const handler = async (req: Request): Promise<Response> => {
               </div>
               
               <p style="color: #52525b; font-size: 12px; text-align: center; margin-top: 30px;">
-                © ${new Date().getFullYear()} Eventix. Todos os direitos reservados.
+                © ${new Date().getFullYear()} PremierPass. Todos os direitos reservados.
               </p>
             </div>
           </div>
@@ -117,7 +117,7 @@ const handler = async (req: Request): Promise<Response> => {
         "Authorization": `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: "Eventix <onboarding@resend.dev>",
+        from: "PremierPass <onboarding@resend.dev>",
         to: [recipientEmail],
         subject: `🎟️ ${senderName} está transferindo um ingresso para você!`,
         html: emailHtml,
