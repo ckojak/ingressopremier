@@ -193,8 +193,8 @@ const EventDetails = () => {
         return;
       }
 
-      // Create checkout with Stripe (PIX habilitado)
-      const { data, error } = await supabase.functions.invoke("create-stripe-checkout", {
+      // Create checkout with Mercado Pago
+      const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
         body: {
           event_id: id,
           items: cart.map(item => ({
