@@ -13,11 +13,11 @@ const Footer = () => {
                 <Ticket className="w-5 h-5 text-primary-foreground" />
               </div>
               <span className="text-xl font-bold text-foreground">
-                Event<span className="text-gradient">ix</span>
+                Premier<span className="text-gradient">Pass</span>
               </span>
             </Link>
             <p className="text-muted-foreground text-sm mb-4 max-w-xs">
-              A melhor plataforma para descobrir e comprar ingressos para os melhores eventos do Brasil.
+              Sua entrada para experiências únicas. A melhor plataforma para descobrir e comprar ingressos para os melhores eventos do Brasil.
             </p>
             <div className="flex gap-3">
               <a 
@@ -106,16 +106,16 @@ const Footer = () => {
               </li>
               <li>
                 <Link to="/suporte" className="text-muted-foreground hover:text-foreground text-sm transition-colors">
-                  Fale com a Eventix
+                  Fale com a Premier Pass
                 </Link>
               </li>
               <li>
                 <a 
-                  href="mailto:contato@eventix.com.br" 
+                  href="mailto:contato@premierpass.com.br" 
                   className="text-muted-foreground hover:text-foreground text-sm transition-colors flex items-center gap-2"
                 >
                   <Mail className="w-4 h-4" />
-                  contato@eventix.com.br
+                  contato@premierpass.com.br
                 </a>
               </li>
             </ul>
@@ -147,7 +147,7 @@ const Footer = () => {
         <div className="border-t border-border mt-8 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-muted-foreground text-sm">
-              © {new Date().getFullYear()} Eventix. Todos os direitos reservados.
+              © {new Date().getFullYear()} Premier Pass. Todos os direitos reservados.
             </p>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span>CNPJ: 00.000.000/0001-00</span>

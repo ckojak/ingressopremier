@@ -185,7 +185,7 @@ const SuperAdminDashboard = () => {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Dashboard Administrativo</h1>
         <p className="text-muted-foreground mt-1">
-          Visão geral completa da plataforma Eventix
+          Visão geral completa da plataforma Premier Pass
         </p>
       </div>
 

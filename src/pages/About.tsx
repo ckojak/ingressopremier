@@ -39,8 +39,8 @@ const About = () => {
     <div className="min-h-screen bg-background">
       <SEO
         title="Sobre Nós"
-        description="Conheça a Eventix, a plataforma que conecta você aos melhores eventos do Brasil."
-        url="https://eventix.com.br/sobre"
+        description="Conheça a Premier Pass, a plataforma que conecta você aos melhores eventos do Brasil."
+        url="https://premierpass.com.br/sobre"
       />
       <Header />
       <main className="pt-24 pb-16">
@@ -56,7 +56,7 @@ const About = () => {
               <Ticket className="w-10 h-10 text-primary-foreground" />
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-              Sobre a <span className="text-gradient">Eventix</span>
+              Sobre a <span className="text-gradient">Premier Pass</span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
               Somos uma plataforma brasileira de venda de ingressos que nasceu com a missão de 

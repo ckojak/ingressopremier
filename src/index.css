@@ -6,58 +6,58 @@
 
 @layer base {
   :root {
-    --background: 220 20% 6%;
+    --background: 220 25% 5%;
     --foreground: 0 0% 98%;
 
-    --card: 220 18% 10%;
+    --card: 220 22% 8%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 220 18% 10%;
+    --popover: 220 22% 8%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 190 90% 50%;
-    --primary-foreground: 220 20% 6%;
+    --primary: 185 85% 55%;
+    --primary-foreground: 220 25% 5%;
 
-    --secondary: 220 15% 15%;
+    --secondary: 220 18% 12%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 220 15% 20%;
-    --muted-foreground: 220 10% 60%;
+    --muted: 220 15% 18%;
+    --muted-foreground: 220 10% 55%;
 
-    --accent: 330 85% 60%;
+    --accent: 320 80% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 15% 18%;
-    --input: 220 15% 18%;
-    --ring: 190 90% 50%;
+    --border: 220 15% 15%;
+    --input: 220 15% 15%;
+    --ring: 185 85% 55%;
 
     --radius: 0.75rem;
 
-    /* Custom tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(190, 90%, 50%) 0%, hsl(200, 85%, 45%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(330, 85%, 60%) 0%, hsl(350, 80%, 55%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(220, 20%, 6%) 0%, hsl(220, 18%, 10%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(220, 18%, 12%) 0%, hsl(220, 18%, 8%) 100%);
-    --shadow-glow: 0 0 60px hsl(190, 90%, 50%, 0.15);
-    --shadow-accent: 0 0 40px hsl(330, 85%, 60%, 0.2);
-    --shadow-card: 0 8px 32px hsl(220, 20%, 0%, 0.3);
-    --shadow-card-hover: 0 16px 48px hsl(220, 20%, 0%, 0.4);
+    /* Custom tokens - Premier Pass style */
+    --gradient-primary: linear-gradient(135deg, hsl(185, 85%, 55%) 0%, hsl(320, 80%, 55%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(320, 80%, 55%) 0%, hsl(280, 75%, 50%) 100%);
+    --gradient-hero: radial-gradient(ellipse at center, hsl(220, 22%, 12%) 0%, hsl(220, 25%, 5%) 70%);
+    --gradient-card: linear-gradient(145deg, hsl(220, 22%, 10%) 0%, hsl(220, 22%, 6%) 100%);
+    --shadow-glow: 0 0 80px hsl(185, 85%, 55%, 0.2);
+    --shadow-accent: 0 0 60px hsl(320, 80%, 55%, 0.25);
+    --shadow-card: 0 8px 32px hsl(220, 25%, 0%, 0.4);
+    --shadow-card-hover: 0 16px 48px hsl(220, 25%, 0%, 0.5);
 
-    --sidebar-background: 220 18% 8%;
+    --sidebar-background: 220 22% 6%;
     --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 190 90% 50%;
-    --sidebar-primary-foreground: 220 20% 6%;
-    --sidebar-accent: 220 15% 15%;
+    --sidebar-primary: 185 85% 55%;
+    --sidebar-primary-foreground: 220 25% 5%;
+    --sidebar-accent: 220 18% 12%;
     --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 220 15% 18%;
-    --sidebar-ring: 190 90% 50%;
+    --sidebar-border: 220 15% 15%;
+    --sidebar-ring: 185 85% 55%;
   }
 
   .dark {
-    --background: 220 20% 6%;
+    --background: 220 25% 5%;
     --foreground: 0 0% 98%;
   }
 }
@@ -172,6 +172,30 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .animate-gradient {
   animation: gradient 3s ease infinite;
+}
+
+/* Floating particles animation */
+@keyframes float-particle {
+  0%, 100% { 
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translateY(-20px) translateX(10px) scale(1.1);
+    opacity: 0.6;
+  }
+  50% { 
+    transform: translateY(-10px) translateX(-5px) scale(0.9);
+    opacity: 0.4;
+  }
+  75% {
+    transform: translateY(-30px) translateX(15px) scale(1.05);
+    opacity: 0.5;
+  }
+}
+
+.animate-float-particle {
+  animation: float-particle 8s ease-in-out infinite;
 }
 
 /* Hide scrollbar for carousel */

@@ -91,8 +91,8 @@ const Support = () => {
     <div className="min-h-screen bg-background">
       <SEO
         title="Suporte"
-        description="Central de ajuda e suporte da Eventix. Tire suas dúvidas sobre compra de ingressos."
-        url="https://eventix.com.br/suporte"
+        description="Central de ajuda e suporte da Premier Pass. Tire suas dúvidas sobre compra de ingressos."
+        url="https://premierpass.com.br/suporte"
       />
       <Header />
       <main className="pt-24 pb-16">
@@ -124,7 +124,7 @@ const Support = () => {
                   <Mail className="w-6 h-6 text-primary-foreground" />
                 </div>
                 <h3 className="font-semibold text-foreground mb-2">E-mail</h3>
-                <p className="text-muted-foreground text-sm">suporte@eventix.com.br</p>
+                <p className="text-muted-foreground text-sm">suporte@premierpass.com.br</p>
               </CardContent>
             </Card>
             <Card className="bg-card border-border text-center">

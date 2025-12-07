@@ -8,8 +8,8 @@ const Privacy = () => {
     <div className="min-h-screen bg-background">
       <SEO
         title="Política de Privacidade"
-        description="Saiba como a Eventix protege seus dados pessoais e sua privacidade."
-        url="https://eventix.com.br/privacidade"
+        description="Saiba como a Premier Pass protege seus dados pessoais e sua privacidade."
+        url="https://premierpass.com.br/privacidade"
       />
       <Header />
       <main className="pt-24 pb-16">
@@ -90,8 +90,8 @@ const Privacy = () => {
                 <h2 className="text-2xl font-semibold text-foreground mb-4">8. Contato do DPO</h2>
                 <p className="text-muted-foreground leading-relaxed">
                   Para questões relacionadas à privacidade, contate nosso Encarregado de Proteção de Dados:
-                  <a href="mailto:dpo@eventix.com.br" className="text-primary hover:underline ml-1">
-                    dpo@eventix.com.br
+                  <a href="mailto:dpo@premierpass.com.br" className="text-primary hover:underline ml-1">
+                    dpo@premierpass.com.br
                   </a>
                 </p>
               </section>
