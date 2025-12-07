@@ -17,7 +17,15 @@ interface CheckoutRequest {
   items: CheckoutItem[];
 }
 
-const logStep = (step: string, details?: any) => {
+interface TicketType {
+  id: string;
+  name: string;
+  description: string | null;
+  quantity_available: number;
+  quantity_sold: number;
+}
+
+const logStep = (step: string, details?: unknown) => {
   const detailsStr = details ? `: ${JSON.stringify(details)}` : '';
   console.log(`[MERCADOPAGO-CHECKOUT] ${step}${detailsStr}`);
 };
@@ -35,9 +43,16 @@ serve(async (req) => {
 
     logStep('Iniciando checkout Mercado Pago');
 
-    const supabaseClient = createClient(
+    // Cliente para autenticação (usando anon key)
+    const supabaseAuth = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    // Cliente para operações de banco (usando service role para bypass RLS)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
     const authHeader = req.headers.get('Authorization');
@@ -46,7 +61,7 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token);
     
     if (userError || !user) {
       logStep('Erro de autenticação', userError);
@@ -63,7 +78,7 @@ serve(async (req) => {
     }
 
     // Buscar detalhes do evento
-    const { data: event, error: eventError } = await supabaseClient
+    const { data: event, error: eventError } = await supabaseAdmin
       .from('events')
       .select('*')
       .eq('id', event_id)
@@ -78,7 +93,7 @@ serve(async (req) => {
 
     // Buscar tipos de ingresso
     const ticketTypeIds = items.map(item => item.ticket_type_id);
-    const { data: ticketTypes, error: ticketTypesError } = await supabaseClient
+    const { data: ticketTypes, error: ticketTypesError } = await supabaseAdmin
       .from('ticket_types')
       .select('*')
       .in('id', ticketTypeIds);
@@ -90,11 +105,11 @@ serve(async (req) => {
 
     // Verificar disponibilidade
     for (const item of items) {
-      const ticketType = ticketTypes.find(tt => tt.id === item.ticket_type_id);
+      const ticketType = ticketTypes.find((tt: TicketType) => tt.id === item.ticket_type_id);
       if (!ticketType) {
         throw new Error(`Tipo de ingresso ${item.ticket_type_id} não encontrado`);
       }
-      const available = ticketType.quantity - (ticketType.quantity_sold || 0);
+      const available = ticketType.quantity_available - (ticketType.quantity_sold || 0);
       if (item.quantity > available) {
         throw new Error(`Quantidade insuficiente para ${ticketType.name}. Disponível: ${available}`);
       }
@@ -102,10 +117,17 @@ serve(async (req) => {
 
     // Calcular totais
     let subtotal = 0;
-    const mpItems = [];
+    const mpItems: {
+      id: string;
+      title: string;
+      description: string;
+      quantity: number;
+      currency_id: string;
+      unit_price: number;
+    }[] = [];
 
     for (const item of items) {
-      const ticketType = ticketTypes.find(tt => tt.id === item.ticket_type_id);
+      const ticketType = ticketTypes.find((tt: TicketType) => tt.id === item.ticket_type_id);
       if (!ticketType) continue;
 
       const itemTotal = item.unit_price * item.quantity;
@@ -147,8 +169,8 @@ serve(async (req) => {
 
     logStep('Totais calculados', { subtotal, serviceFee, platformFee, totalAmount });
 
-    // Criar pedido pendente no Supabase
-    const { data: order, error: orderError } = await supabaseClient
+    // Criar pedido pendente no Supabase (usando admin client para bypass RLS)
+    const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
       .insert({
         user_id: user.id,
@@ -169,17 +191,16 @@ serve(async (req) => {
 
     // Criar itens do pedido
     const orderItems = items.map(item => {
-      const ticketType = ticketTypes.find(tt => tt.id === item.ticket_type_id);
+      const ticketType = ticketTypes.find((tt: TicketType) => tt.id === item.ticket_type_id);
       return {
         order_id: order.id,
         ticket_type_id: item.ticket_type_id,
         quantity: item.quantity,
-        unit_price: item.unit_price,
-        ticket_type_name: ticketType?.name || 'Ingresso'
+        unit_price: item.unit_price
       };
     });
 
-    const { error: orderItemsError } = await supabaseClient
+    const { error: orderItemsError } = await supabaseAdmin
       .from('order_items')
       .insert(orderItems);
 
@@ -191,7 +212,7 @@ serve(async (req) => {
     logStep('Itens do pedido criados');
 
     // Buscar perfil do usuário
-    const { data: profile } = await supabaseClient
+    const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('full_name, email, cpf, phone')
       .eq('id', user.id)
@@ -247,7 +268,7 @@ serve(async (req) => {
     logStep('Preferência criada', { id: preference.id, init_point: preference.init_point });
 
     // Atualizar pedido com ID da preferência
-    await supabaseClient
+    await supabaseAdmin
       .from('orders')
       .update({ payment_intent_id: preference.id })
       .eq('id', order.id);
