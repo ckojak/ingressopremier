@@ -149,8 +149,12 @@ const Footer = () => {
             <p className="text-muted-foreground text-sm">
               © {new Date().getFullYear()} Premier Pass. Todos os direitos reservados.
             </p>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>CNPJ: 00.000.000/0001-00</span>
+            <div className="flex flex-col md:flex-row items-center gap-2 md:gap-4 text-sm text-muted-foreground">
+              <span>CNPJ: 51.963.177/0001-24</span>
+              <span className="hidden md:inline">|</span>
+              <a href="tel:+5521979934676" className="hover:text-foreground transition-colors">
+                (21) 97993-4676
+              </a>
               <span className="hidden md:inline">|</span>
               <span>Rio de Janeiro, RJ - Brasil</span>
             </div>
