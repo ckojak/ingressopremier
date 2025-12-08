@@ -193,22 +193,44 @@ const EventDetails = () => {
         return;
       }
 
-      // Create checkout with Mercado Pago
-      const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
-        body: {
-          event_id: id,
-          items: cart.map(item => ({
-            ticket_type_id: item.ticketType.id,
-            quantity: item.quantity,
-            unit_price: Number(item.ticketType.price),
-          })),
-        },
+      const checkoutPayload = {
+        event_id: id,
+        items: cart.map(item => ({
+          ticket_type_id: item.ticketType.id,
+          quantity: item.quantity,
+          unit_price: Number(item.ticketType.price),
+        })),
+      };
+
+      // Try Mercado Pago first
+      console.log("[Checkout] Tentando Mercado Pago...");
+      const { data: mpData, error: mpError } = await supabase.functions.invoke("create-mercadopago-checkout", {
+        body: checkoutPayload,
       });
 
-      if (error) throw error;
+      // Check if Mercado Pago succeeded
+      if (!mpError && mpData?.checkout_url) {
+        console.log("[Checkout] Mercado Pago sucesso, redirecionando...");
+        window.location.href = mpData.checkout_url;
+        return;
+      }
 
-      if (data?.checkout_url) {
-        window.location.href = data.checkout_url;
+      // Mercado Pago failed, try Stripe as fallback
+      console.log("[Checkout] Mercado Pago falhou, tentando Stripe...", mpError);
+      toast.info("Processando pagamento alternativo...");
+
+      const { data: stripeData, error: stripeError } = await supabase.functions.invoke("create-stripe-checkout", {
+        body: checkoutPayload,
+      });
+
+      if (stripeError) {
+        console.error("[Checkout] Stripe também falhou:", stripeError);
+        throw new Error("Não foi possível processar o pagamento. Tente novamente.");
+      }
+
+      if (stripeData?.checkout_url) {
+        console.log("[Checkout] Stripe sucesso, redirecionando...");
+        window.location.href = stripeData.checkout_url;
       }
     } catch (error: any) {
       console.error("Checkout error:", error);
