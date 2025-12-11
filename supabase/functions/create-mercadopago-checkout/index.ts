@@ -285,15 +285,34 @@ serve(async (req) => {
 
     const preference = await mpResponse.json();
     
-    // Usar isSandbox já definido no início
-    const checkoutUrl = isSandbox ? preference.sandbox_init_point : preference.init_point;
+    // IMPORTANTE: O campo live_mode vem da resposta da API do Mercado Pago
+    // Ele indica se a preferência foi criada em modo produção ou sandbox
+    // Isso é determinado pelo ACCESS_TOKEN usado, não pela nossa detecção
+    const mpLiveMode = preference.live_mode;
     
-    logStep('Preferência criada', { 
-      id: preference.id, 
-      isSandbox,
-      checkout_url: checkoutUrl,
+    // Usar sandbox_init_point se NÃO estiver em live_mode (conforme API do MP)
+    const checkoutUrl = mpLiveMode === false ? preference.sandbox_init_point : preference.init_point;
+    
+    logStep('🔍 DIAGNÓSTICO COMPLETO DO MERCADO PAGO', { 
+      preference_id: preference.id,
+      
+      // O que a API do Mercado Pago diz sobre o modo
+      mp_live_mode: mpLiveMode,
+      mp_live_mode_type: typeof mpLiveMode,
+      
+      // Nossa detecção baseada no prefixo do token
+      token_starts_with_TEST: isSandbox,
+      token_first_15_chars: tokenPrefix + '...',
+      
+      // URLs retornadas pela API
       init_point: preference.init_point,
-      sandbox_init_point: preference.sandbox_init_point
+      sandbox_init_point: preference.sandbox_init_point,
+      
+      // URL que vamos usar
+      url_escolhida: checkoutUrl,
+      
+      // Diagnóstico
+      PROBLEMA: mpLiveMode === true && isSandbox ? '⚠️ TOKEN PARECE SER TEST- MAS API RETORNOU LIVE_MODE=TRUE - VERIFIQUE SE O TOKEN É REALMENTE DE SANDBOX!' : 'OK'
     });
 
     // Atualizar pedido com ID da preferência
@@ -308,7 +327,9 @@ serve(async (req) => {
         sandbox_url: preference.sandbox_init_point,
         order_id: order.id,
         preference_id: preference.id,
-        is_sandbox: isSandbox
+        is_sandbox: !mpLiveMode, // Usar o que a API do MP retorna
+        mp_live_mode: mpLiveMode, // Retornar para debug
+        token_detected_as_test: isSandbox // Nossa detecção baseada no prefixo
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
