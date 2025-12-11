@@ -67,15 +67,16 @@ const Header = () => {
   };
 
   const handleLogout = async () => {
-    // Usar scope: 'local' para evitar erro quando sessão já expirou no servidor
-    const { error } = await supabase.auth.signOut({ scope: 'local' });
-    
-    // Limpar estado local independente do resultado
+    // Limpar estado local ANTES de fazer signOut
     setUser(null);
     setUserRole(null);
     
-    if (error) {
-      console.warn("Logout warning:", error.message);
+    try {
+      // Tentar signOut global primeiro, se falhar usa local
+      await supabase.auth.signOut({ scope: 'global' });
+    } catch {
+      // Se global falhar (sessão expirada), fazer local
+      await supabase.auth.signOut({ scope: 'local' });
     }
     
     toast.success("Você saiu da sua conta");
