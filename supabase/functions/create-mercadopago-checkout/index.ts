@@ -161,7 +161,7 @@ serve(async (req) => {
     mpItems.push({
       id: 'platform-fee',
       title: 'Taxa da Plataforma (5%)',
-      description: 'Taxa da plataforma PremierPass',
+      description: 'Taxa da plataforma Quintal Barra',
       quantity: 1,
       currency_id: 'BRL',
       unit_price: platformFee
@@ -218,7 +218,7 @@ serve(async (req) => {
       .eq('id', user.id)
       .single();
 
-    const origin = req.headers.get('origin') || 'https://premierpass.com.br';
+    const origin = req.headers.get('origin') || 'https://quintalbarra.com.br';
 
     // Criar preferência no Mercado Pago
     const preferenceData = {
@@ -239,9 +239,12 @@ serve(async (req) => {
       auto_return: 'approved',
       external_reference: order.id,
       notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago-webhook`,
-      statement_descriptor: 'PREMIERPASS',
+      statement_descriptor: 'QUINTALBARRA',
       payment_methods: {
-        excluded_payment_types: [],
+        excluded_payment_types: [
+          { id: 'ticket' }
+        ],
+        excluded_payment_methods: [],
         installments: 12,
         default_installments: 1
       }

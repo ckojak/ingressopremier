@@ -59,10 +59,10 @@ const LoadingScreen = ({ onLoadingComplete }: LoadingScreenProps) => {
         {/* Brand name */}
         <div className="text-center">
           <h1 className="text-4xl font-bold text-foreground">
-            Premier <span className="text-gradient">Pass</span>
+            Quintal <span className="text-gradient">Barra</span>
           </h1>
           <p className="text-muted-foreground text-sm mt-2 uppercase tracking-widest">
-            Sua entrada para experiências únicas
+            Seu point na Barra
           </p>
         </div>
 
@@ -89,7 +89,7 @@ const LoadingScreen = ({ onLoadingComplete }: LoadingScreenProps) => {
       {/* Footer */}
       <div className="absolute bottom-8 text-center">
         <p className="text-muted-foreground/50 text-xs">
-          ©{new Date().getFullYear()} Premier Pass • Todos os direitos reservados
+          ©{new Date().getFullYear()} Quintal Barra • Todos os direitos reservados
         </p>
       </div>
     </motion.div>
