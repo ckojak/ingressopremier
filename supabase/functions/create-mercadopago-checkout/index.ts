@@ -242,7 +242,7 @@ serve(async (req) => {
       },
       back_urls: {
         success: `${origin}/checkout/status?order_id=${order.id}&status=success`,
-        failure: `${origin}/checkout/status?order_id=${order.id}&status=failure`,
+        failure: `${origin}/evento/${event_id}`,
         pending: `${origin}/checkout/status?order_id=${order.id}&status=pending`
       },
       auto_return: 'approved',

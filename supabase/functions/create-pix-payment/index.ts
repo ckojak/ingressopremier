@@ -137,9 +137,7 @@ serve(async (req) => {
         user_id: user.id,
         event_id: event_id,
         status: 'pending',
-        total_amount: totalAmount,
-        service_fee: serviceFee,
-        payment_method: 'pix'
+        total_amount: totalAmount
       })
       .select()
       .single();
