@@ -67,7 +67,14 @@ const Header = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      toast.error("Erro ao sair da conta");
+      return;
+    }
+    // Forçar limpeza do estado local
+    setUser(null);
+    setUserRole(null);
     toast.success("Você saiu da sua conta");
     navigate("/");
   };
