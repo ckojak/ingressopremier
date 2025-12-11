@@ -106,9 +106,18 @@ const Auth = () => {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
+      // Ignorar evento de SIGNED_OUT para não interferir
+      if (event === 'SIGNED_OUT') {
+        return;
+      }
+      
+      if (session?.user && isMounted) {
         setTimeout(async () => {
+          if (!isMounted) return;
+          
           const { data: roleData } = await supabase
             .from("user_roles")
             .select("role")
@@ -124,8 +133,9 @@ const Auth = () => {
       }
     });
 
+    // Verificar sessão existente apenas no mount inicial
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
+      if (session?.user && isMounted) {
         const { data: roleData } = await supabase
           .from("user_roles")
           .select("role")
@@ -140,7 +150,10 @@ const Auth = () => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [navigate, from]);
 
   const handleGoogleSignIn = async () => {
