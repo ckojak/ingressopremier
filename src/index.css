@@ -2,63 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 220 25% 5%;
-    --foreground: 0 0% 98%;
+    --background: 25 15% 8%;
+    --foreground: 35 20% 95%;
 
-    --card: 220 22% 8%;
-    --card-foreground: 0 0% 98%;
+    --card: 25 12% 12%;
+    --card-foreground: 35 20% 95%;
 
-    --popover: 220 22% 8%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 25 12% 12%;
+    --popover-foreground: 35 20% 95%;
 
-    --primary: 185 85% 55%;
-    --primary-foreground: 220 25% 5%;
+    --primary: 35 55% 55%;
+    --primary-foreground: 25 15% 8%;
 
-    --secondary: 220 18% 12%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 25 10% 18%;
+    --secondary-foreground: 35 20% 95%;
 
-    --muted: 220 15% 18%;
-    --muted-foreground: 220 10% 55%;
+    --muted: 25 8% 22%;
+    --muted-foreground: 35 15% 55%;
 
-    --accent: 320 80% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 35 65% 45%;
+    --accent-foreground: 35 20% 95%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 15% 15%;
-    --input: 220 15% 15%;
-    --ring: 185 85% 55%;
+    --border: 25 10% 18%;
+    --input: 25 10% 18%;
+    --ring: 35 55% 55%;
 
     --radius: 0.75rem;
 
-    /* Custom tokens - Premier Pass style */
-    --gradient-primary: linear-gradient(135deg, hsl(185, 85%, 55%) 0%, hsl(320, 80%, 55%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(320, 80%, 55%) 0%, hsl(280, 75%, 50%) 100%);
-    --gradient-hero: radial-gradient(ellipse at center, hsl(220, 22%, 12%) 0%, hsl(220, 25%, 5%) 70%);
-    --gradient-card: linear-gradient(145deg, hsl(220, 22%, 10%) 0%, hsl(220, 22%, 6%) 100%);
-    --shadow-glow: 0 0 80px hsl(185, 85%, 55%, 0.2);
-    --shadow-accent: 0 0 60px hsl(320, 80%, 55%, 0.25);
-    --shadow-card: 0 8px 32px hsl(220, 25%, 0%, 0.4);
-    --shadow-card-hover: 0 16px 48px hsl(220, 25%, 0%, 0.5);
+    /* Custom tokens - Quintal Barra style */
+    --gradient-primary: linear-gradient(135deg, hsl(35, 55%, 55%) 0%, hsl(35, 65%, 45%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(35, 65%, 45%) 0%, hsl(25, 50%, 35%) 100%);
+    --gradient-hero: radial-gradient(ellipse at center, hsl(25, 12%, 15%) 0%, hsl(25, 15%, 8%) 70%);
+    --gradient-card: linear-gradient(145deg, hsl(25, 12%, 14%) 0%, hsl(25, 12%, 10%) 100%);
+    --shadow-glow: 0 0 80px hsl(35, 55%, 55%, 0.15);
+    --shadow-accent: 0 0 60px hsl(35, 65%, 45%, 0.2);
+    --shadow-card: 0 8px 32px hsl(25, 15%, 0%, 0.5);
+    --shadow-card-hover: 0 16px 48px hsl(25, 15%, 0%, 0.6);
 
-    --sidebar-background: 220 22% 6%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 185 85% 55%;
-    --sidebar-primary-foreground: 220 25% 5%;
-    --sidebar-accent: 220 18% 12%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 220 15% 15%;
-    --sidebar-ring: 185 85% 55%;
+    --sidebar-background: 25 12% 10%;
+    --sidebar-foreground: 35 20% 95%;
+    --sidebar-primary: 35 55% 55%;
+    --sidebar-primary-foreground: 25 15% 8%;
+    --sidebar-accent: 25 10% 18%;
+    --sidebar-accent-foreground: 35 20% 95%;
+    --sidebar-border: 25 10% 18%;
+    --sidebar-ring: 35 55% 55%;
   }
 
   .dark {
-    --background: 220 25% 5%;
-    --foreground: 0 0% 98%;
+    --background: 25 15% 8%;
+    --foreground: 35 20% 95%;
   }
 }
 
@@ -73,8 +73,8 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Outfit', sans-serif;
-    @apply font-bold tracking-tight;
+    font-family: 'Cormorant Garamond', serif;
+    @apply font-semibold tracking-wide;
   }
 }
 
@@ -127,6 +127,10 @@
 
   .glass {
     @apply bg-card/80 backdrop-blur-xl border border-border/50;
+  }
+
+  .font-display {
+    font-family: 'Cormorant Garamond', serif;
   }
 }
 
