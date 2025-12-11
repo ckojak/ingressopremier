@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft, Lock, CreditCard, Ticket, Tag, X, Check } from "lucide-react";
+import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft, Lock, CreditCard, Ticket, Tag, X, Check, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -31,6 +31,7 @@ const Cart = () => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [processingPix, setProcessingPix] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   
   // Coupon state
@@ -344,6 +345,64 @@ const Cart = () => {
     }
   };
 
+  const handlePixCheckout = async () => {
+    if (cartItems.length === 0) {
+      toast.error("Seu carrinho está vazio");
+      return;
+    }
+
+    if (!user) {
+      toast.info("Faça login para finalizar a compra");
+      navigate("/auth");
+      return;
+    }
+
+    setProcessingPix(true);
+
+    try {
+      // Group items by event
+      const eventGroups = cartItems.reduce((acc, item) => {
+        const eventId = item.event.id;
+        if (!acc[eventId]) {
+          acc[eventId] = [];
+        }
+        acc[eventId].push(item);
+        return acc;
+      }, {} as Record<string, CartItem[]>);
+
+      const firstEventId = Object.keys(eventGroups)[0];
+      const items = eventGroups[firstEventId];
+
+      const { data, error } = await supabase.functions.invoke("create-pix-payment", {
+        body: {
+          event_id: firstEventId,
+          items: items.map(item => ({
+            ticket_type_id: item.ticketType.id,
+            quantity: item.quantity,
+          })),
+        },
+      });
+
+      if (error) {
+        console.error("PIX checkout error:", error);
+        throw new Error("Não foi possível gerar o PIX. Tente novamente.");
+      }
+
+      if (data?.success) {
+        sessionStorage.setItem('pix_checkout_data', JSON.stringify(data));
+        localStorage.removeItem("cart");
+        navigate(`/checkout/pix?order_id=${data.order_id}`);
+      } else {
+        throw new Error(data?.error || "Erro ao gerar pagamento PIX");
+      }
+    } catch (error: any) {
+      console.error("PIX checkout error:", error);
+      toast.error(error.message || "Erro ao processar pagamento PIX");
+    } finally {
+      setProcessingPix(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -569,7 +628,7 @@ const Cart = () => {
                         )}
                         
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Taxa de serviço (5%)</span>
+                          <span className="text-muted-foreground">Taxa de serviço (8%)</span>
                           <span className="text-foreground">R$ {serviceFee.toFixed(2)}</span>
                         </div>
                       </div>
@@ -583,15 +642,28 @@ const Cart = () => {
                         </span>
                       </div>
 
-                      <Button
-                        className="w-full gap-2"
-                        size="lg"
-                        onClick={handleCheckout}
-                        disabled={processing}
-                      >
-                        <CreditCard className="w-5 h-5" />
-                        {processing ? "Processando..." : "Finalizar Compra"}
-                      </Button>
+                      <div className="space-y-2">
+                        <Button
+                          className="w-full gap-2"
+                          size="lg"
+                          onClick={handlePixCheckout}
+                          disabled={processing || processingPix}
+                          variant="secondary"
+                        >
+                          <QrCode className="w-5 h-5" />
+                          {processingPix ? "Gerando PIX..." : "Pagar com PIX"}
+                        </Button>
+
+                        <Button
+                          className="w-full gap-2"
+                          size="lg"
+                          onClick={handleCheckout}
+                          disabled={processing || processingPix}
+                        >
+                          <CreditCard className="w-5 h-5" />
+                          {processing ? "Processando..." : "Pagar com Cartão"}
+                        </Button>
+                      </div>
 
                       <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                         <Lock className="w-3 h-3" />
