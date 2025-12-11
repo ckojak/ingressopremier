@@ -250,11 +250,13 @@ serve(async (req) => {
       statement_descriptor: 'QUINTALBARRA',
       payment_methods: {
         excluded_payment_types: [
-          { id: 'ticket' }
+          { id: 'ticket' } // Exclui boleto, mantém PIX (bank_transfer) e cartões
         ],
         installments: 12,
         default_installments: 1
-      }
+      },
+      // Configuração específica para PIX - validade de 30 minutos
+      date_of_expiration: new Date(Date.now() + 30 * 60 * 1000).toISOString()
     };
 
     logStep('Criando preferência no Mercado Pago', { 
