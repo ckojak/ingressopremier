@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Search, Menu, X, Ticket, User, LogOut, LayoutDashboard, ShoppingCart, UserCircle } from "lucide-react";
+import { Menu, X, Ticket, User, LogOut, LayoutDashboard, ShoppingCart, UserCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import quintalLogo from "@/assets/quintal-logo.png";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -38,7 +39,6 @@ const Header = () => {
       }
     });
 
-    // Listen for cart updates
     const updateCartCount = () => {
       const cartData = JSON.parse(localStorage.getItem("cart") || '{"items":[]}');
       const items = Array.isArray(cartData) ? cartData : (cartData.items || []);
@@ -75,45 +75,47 @@ const Header = () => {
   const isAdmin = userRole === "admin" || userRole === "organizer";
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 glass">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/30">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
-              <Ticket className="w-5 h-5 text-primary-foreground" />
+          <Link to="/" className="flex items-center gap-3">
+            <img 
+              src={quintalLogo} 
+              alt="Quintal Barra" 
+              className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover"
+            />
+            <div className="hidden sm:block">
+              <span className="text-xl md:text-2xl font-display font-semibold text-foreground tracking-wider">
+                QUINTAL
+              </span>
+              <span className="block text-[10px] md:text-xs tracking-[0.3em] text-primary uppercase">
+                Gastro Music Bar
+              </span>
             </div>
-            <span className="text-xl font-bold text-foreground">
-              Premier<span className="text-gradient">Pass</span>
-            </span>
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
-            <Link to="/eventos" className="text-muted-foreground hover:text-foreground transition-colors">
-              Eventos
+            <Link to="/eventos" className="text-muted-foreground hover:text-primary transition-colors text-sm tracking-wide uppercase">
+              Programação
             </Link>
             {user && (
-              <Link to="/meus-ingressos" className="text-muted-foreground hover:text-foreground transition-colors">
+              <Link to="/meus-ingressos" className="text-muted-foreground hover:text-primary transition-colors text-sm tracking-wide uppercase">
                 Meus Ingressos
               </Link>
             )}
             {isAdmin && (
-              <Link to="/admin" className="text-muted-foreground hover:text-foreground transition-colors">
-                Painel Admin
+              <Link to="/admin" className="text-muted-foreground hover:text-primary transition-colors text-sm tracking-wide uppercase">
+                Admin
               </Link>
             )}
           </nav>
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-3">
-            <Link to="/eventos">
-              <Button variant="ghost" size="icon">
-                <Search className="w-5 h-5" />
-              </Button>
-            </Link>
             <Link to="/carrinho" className="relative">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="text-foreground hover:text-primary">
                 <ShoppingCart className="w-5 h-5" />
                 {cartCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
@@ -125,7 +127,7 @@ const Header = () => {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2">
+                  <Button variant="outline" className="gap-2 border-primary/30 hover:border-primary">
                     <User className="w-4 h-4" />
                     {user.user_metadata?.full_name || user.email?.split("@")[0]}
                   </Button>
@@ -160,7 +162,9 @@ const Header = () => {
               </DropdownMenu>
             ) : (
               <Link to="/auth">
-                <Button>Entre ou cadastre-se</Button>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                  Entrar
+                </Button>
               </Link>
             )}
           </div>
@@ -195,28 +199,28 @@ const Header = () => {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden glass border-t border-border"
+            className="md:hidden bg-card border-t border-border"
           >
             <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
               <Link
                 to="/eventos"
-                className="text-muted-foreground hover:text-foreground transition-colors py-2"
+                className="text-muted-foreground hover:text-primary transition-colors py-2 text-sm tracking-wide uppercase"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Eventos
+                Programação
               </Link>
               {user && (
                 <>
                   <Link
                     to="/perfil"
-                    className="text-muted-foreground hover:text-foreground transition-colors py-2"
+                    className="text-muted-foreground hover:text-primary transition-colors py-2 text-sm tracking-wide uppercase"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Meu Perfil
                   </Link>
                   <Link
                     to="/meus-ingressos"
-                    className="text-muted-foreground hover:text-foreground transition-colors py-2"
+                    className="text-muted-foreground hover:text-primary transition-colors py-2 text-sm tracking-wide uppercase"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Meus Ingressos
@@ -226,21 +230,21 @@ const Header = () => {
               {isAdmin && (
                 <Link
                   to="/admin"
-                  className="text-muted-foreground hover:text-foreground transition-colors py-2"
+                  className="text-muted-foreground hover:text-primary transition-colors py-2 text-sm tracking-wide uppercase"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Painel Admin
+                  Admin
                 </Link>
               )}
               <div className="flex flex-col gap-2 pt-4 border-t border-border">
                 {user ? (
-                  <Button variant="outline" className="w-full" onClick={() => { handleLogout(); setIsMenuOpen(false); }}>
+                  <Button variant="outline" className="w-full border-primary/30" onClick={() => { handleLogout(); setIsMenuOpen(false); }}>
                     <LogOut className="w-4 h-4 mr-2" />
                     Sair
                   </Button>
                 ) : (
                   <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                    <Button className="w-full">Entre ou cadastre-se</Button>
+                    <Button className="w-full bg-primary text-primary-foreground">Entrar</Button>
                   </Link>
                 )}
               </div>
