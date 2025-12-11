@@ -276,7 +276,18 @@ serve(async (req) => {
     }
 
     const preference = await mpResponse.json();
-    logStep('Preferência criada', { id: preference.id, init_point: preference.init_point });
+    
+    // Detectar se estamos em modo sandbox (credenciais TEST-)
+    const isSandbox = mercadopagoAccessToken.startsWith('TEST-');
+    const checkoutUrl = isSandbox ? preference.sandbox_init_point : preference.init_point;
+    
+    logStep('Preferência criada', { 
+      id: preference.id, 
+      isSandbox,
+      checkout_url: checkoutUrl,
+      init_point: preference.init_point,
+      sandbox_init_point: preference.sandbox_init_point
+    });
 
     // Atualizar pedido com ID da preferência
     await supabaseAdmin
@@ -286,10 +297,11 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        checkout_url: preference.init_point,
+        checkout_url: checkoutUrl,
         sandbox_url: preference.sandbox_init_point,
         order_id: order.id,
-        preference_id: preference.id
+        preference_id: preference.id,
+        is_sandbox: isSandbox
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
