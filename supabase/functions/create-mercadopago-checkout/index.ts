@@ -242,9 +242,13 @@ serve(async (req) => {
       statement_descriptor: 'QUINTALBARRA',
       payment_methods: {
         excluded_payment_types: [
-          { id: 'ticket' }
+          { id: 'ticket' },
+          { id: 'atm' }
         ],
-        excluded_payment_methods: [],
+        excluded_payment_methods: [
+          { id: 'bolbradesco' },
+          { id: 'pec' }
+        ],
         installments: 12,
         default_installments: 1
       }
