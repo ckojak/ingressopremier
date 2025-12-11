@@ -53,6 +53,8 @@ const eventSchema = z.object({
   state: z.string().max(50, "Estado deve ter no máximo 50 caracteres").optional().or(z.literal("")),
   category: z.string().max(100, "Categoria deve ter no máximo 100 caracteres").optional().or(z.literal("")),
   image_url: z.string().url("URL da imagem inválida").optional().or(z.literal("")),
+  website: z.string().url("URL do site inválida").optional().or(z.literal("")),
+  contact: z.string().max(200, "Contato deve ter no máximo 200 caracteres").optional().or(z.literal("")),
   status: z.enum(["draft", "published", "cancelled", "completed"]),
 });
 
@@ -93,6 +95,8 @@ const Events = () => {
     state: "",
     category: "",
     image_url: "",
+    website: "",
+    contact: "",
     status: "draft" as "draft" | "published" | "cancelled" | "completed",
   });
 
@@ -158,6 +162,8 @@ const Events = () => {
             state: validatedData.state || null,
             category: validatedData.category || null,
             image_url: validatedData.image_url || null,
+            website: validatedData.website || null,
+            contact: validatedData.contact || null,
             status: validatedData.status,
           })
           .eq("id", editingEvent.id);
@@ -179,6 +185,8 @@ const Events = () => {
             state: validatedData.state || null,
             category: validatedData.category || null,
             image_url: validatedData.image_url || null,
+            website: validatedData.website || null,
+            contact: validatedData.contact || null,
             status: validatedData.status,
             organizer_id: user.id,
           });
@@ -256,6 +264,8 @@ const Events = () => {
       state: event.state || "",
       category: event.category || "",
       image_url: event.image_url || "",
+      website: (event as any).website || "",
+      contact: (event as any).contact || "",
       status: event.status || "draft",
     });
     setDialogOpen(true);
@@ -274,6 +284,8 @@ const Events = () => {
       state: "",
       category: "",
       image_url: "",
+      website: "",
+      contact: "",
       status: "draft",
     });
   };
@@ -439,6 +451,25 @@ const Events = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="website">Site do Evento</Label>
+                  <Input
+                    id="website"
+                    type="url"
+                    placeholder="https://www.exemplo.com.br"
+                    value={formData.website}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="contact">Contato do Responsável</Label>
+                  <Input
+                    id="contact"
+                    placeholder="(00) 00000-0000 ou email@exemplo.com"
+                    value={formData.contact}
+                    onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Imagem do Evento</Label>
