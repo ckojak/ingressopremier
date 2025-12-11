@@ -227,6 +227,7 @@ serve(async (req) => {
       .single();
 
     const origin = req.headers.get('origin') || 'https://quintalbarra.com.br';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 
     // Criar preferência no Mercado Pago
     const preferenceData = {
@@ -240,13 +241,13 @@ serve(async (req) => {
         } : undefined
       },
       back_urls: {
-        success: `${origin}/pagamento-sucesso?order_id=${order.id}`,
-        failure: `${origin}/evento/${event_id}?payment=failed`,
-        pending: `${origin}/pagamento-pendente?order_id=${order.id}`
+        success: `${origin}/checkout/status?order_id=${order.id}&status=success`,
+        failure: `${origin}/checkout/status?order_id=${order.id}&status=failure`,
+        pending: `${origin}/checkout/status?order_id=${order.id}&status=pending`
       },
       auto_return: 'approved',
       external_reference: order.id,
-      notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago-webhook`,
+      notification_url: `${supabaseUrl}/functions/v1/mercadopago-webhook`,
       statement_descriptor: 'QUINTALBARRA',
       payment_methods: {
         excluded_payment_types: [

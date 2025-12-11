@@ -37,6 +37,7 @@ interface TicketWithDetails {
   created_at: string | null;
   wasTransferred: boolean;
   transfer_status: string;
+  order_status: 'pending' | 'paid' | 'cancelled' | 'failed';
   event: {
     id: string;
     title: string;
@@ -79,6 +80,9 @@ const MyTickets = () => {
           used_at,
           created_at,
           transfer_status,
+          order_items!inner(
+            orders!inner(status)
+          ),
           events (id, title, start_date, venue_name, city, state, image_url),
           ticket_types (name, price)
         `)
@@ -97,13 +101,20 @@ const MyTickets = () => {
 
       const transferredTicketIds = new Set((transfersData || []).map(t => t.ticket_id));
 
-      const formattedTickets = (data || []).map(ticket => ({
-        ...ticket,
-        event: ticket.events as TicketWithDetails["event"],
-        ticket_type: ticket.ticket_types as TicketWithDetails["ticket_type"],
-        wasTransferred: transferredTicketIds.has(ticket.id),
-        transfer_status: ticket.transfer_status || "none",
-      }));
+      const formattedTickets = (data || []).map(ticket => {
+        // Extract order status from nested structure - order_items is a single object, not array
+        const orderItem = ticket.order_items as unknown as { orders: { status: string } } | null;
+        const orderStatus = orderItem?.orders?.status || 'paid';
+        
+        return {
+          ...ticket,
+          event: ticket.events as TicketWithDetails["event"],
+          ticket_type: ticket.ticket_types as TicketWithDetails["ticket_type"],
+          wasTransferred: transferredTicketIds.has(ticket.id),
+          transfer_status: ticket.transfer_status || "none",
+          order_status: orderStatus as TicketWithDetails['order_status'],
+        };
+      });
 
       setTickets(formattedTickets);
     } catch (error) {
@@ -156,7 +167,7 @@ const MyTickets = () => {
                   {ticket.ticket_type?.name}
                 </p>
               </div>
-              <div className="flex gap-1">
+              <div className="flex gap-1 flex-wrap">
                 {ticket.wasTransferred && (
                   <Badge variant="outline" className="text-xs">
                     Recebido
@@ -167,9 +178,22 @@ const MyTickets = () => {
                     Transferência Pendente
                   </Badge>
                 )}
-                <Badge variant={ticket.is_used ? "secondary" : "default"}>
-                  {ticket.is_used ? "Utilizado" : "Válido"}
-                </Badge>
+                {/* Order Status Badges */}
+                {ticket.order_status === 'pending' && (
+                  <Badge className="text-xs bg-yellow-500/20 text-yellow-600 border-yellow-500/30">
+                    Pagamento Pendente
+                  </Badge>
+                )}
+                {ticket.order_status === 'cancelled' || ticket.order_status === 'failed' ? (
+                  <Badge className="text-xs bg-red-500/20 text-red-600 border-red-500/30">
+                    Pagamento Recusado
+                  </Badge>
+                ) : null}
+                {ticket.order_status === 'paid' && (
+                  <Badge variant={ticket.is_used ? "secondary" : "default"} className={ticket.is_used ? "" : "bg-green-500/20 text-green-600 border-green-500/30"}>
+                    {ticket.is_used ? "Utilizado" : "Aprovado"}
+                  </Badge>
+                )}
               </div>
             </div>
             <div className="space-y-1 text-sm text-muted-foreground">
