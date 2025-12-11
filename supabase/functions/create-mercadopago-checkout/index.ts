@@ -254,7 +254,10 @@ serve(async (req) => {
       }
     };
 
-    logStep('Criando preferência no Mercado Pago', { external_reference: order.id });
+    logStep('Criando preferência no Mercado Pago', { 
+      external_reference: order.id,
+      payment_methods: preferenceData.payment_methods 
+    });
 
     const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
