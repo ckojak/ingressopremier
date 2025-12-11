@@ -169,13 +169,18 @@ serve(async (req) => {
       unit_price: item.unit_price
     }));
 
-    const { error: itemsError } = await supabase
+    console.log("Creating order items:", JSON.stringify(orderItemsToInsert));
+
+    const { data: createdItems, error: itemsError } = await supabase
       .from('order_items')
-      .insert(orderItemsToInsert);
+      .insert(orderItemsToInsert)
+      .select();
 
     if (itemsError) {
-      console.error("Order items error:", itemsError);
-      throw new Error('Failed to create order items');
+      console.error("Order items error:", JSON.stringify(itemsError));
+      // Don't throw - continue with PIX creation but log the error
+    } else {
+      console.log("Order items created:", JSON.stringify(createdItems));
     }
 
     // Create PIX payment via Mercado Pago API
