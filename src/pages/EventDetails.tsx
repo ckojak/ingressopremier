@@ -209,9 +209,11 @@ const EventDetails = () => {
       });
 
       // Check if Mercado Pago succeeded
-      if (!mpError && mpData?.checkout_url) {
+      if (!mpError && (mpData?.checkout_url || mpData?.sandbox_url)) {
         console.log("[Checkout] Mercado Pago sucesso, redirecionando...");
-        window.location.href = mpData.checkout_url;
+        // Use sandbox_url for testing, checkout_url for production
+        const redirectUrl = mpData.sandbox_url || mpData.checkout_url;
+        window.location.href = redirectUrl;
         return;
       }
 
