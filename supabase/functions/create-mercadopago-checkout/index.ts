@@ -251,7 +251,8 @@ serve(async (req) => {
       statement_descriptor: 'QUINTALBARRA',
       payment_methods: {
         excluded_payment_types: [
-          { id: 'ticket' } // Exclui boleto, mantém PIX (bank_transfer) e cartões
+          { id: 'ticket' }, // Exclui boleto
+          { id: 'bank_transfer' } // Exclui PIX (será usado via checkout transparente)
         ],
         installments: 12,
         default_installments: 1
