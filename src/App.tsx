@@ -20,6 +20,7 @@ const PaymentSuccess = lazy(() => import("./pages/PaymentSuccess"));
 const PaymentSuccessMercadoPago = lazy(() => import("./pages/PaymentSuccessMercadoPago"));
 const PaymentSuccessStripe = lazy(() => import("./pages/PaymentSuccessStripe"));
 const CheckoutStatus = lazy(() => import("./pages/CheckoutStatus"));
+const CheckoutPix = lazy(() => import("./pages/CheckoutPix"));
 const MyTickets = lazy(() => import("./pages/MyTickets"));
 const Cart = lazy(() => import("./pages/Cart"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -92,6 +93,7 @@ const App = () => {
                   <Route path="/evento/:id" element={<EventDetails />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/checkout/status" element={<CheckoutStatus />} />
+                  <Route path="/checkout/pix" element={<CheckoutPix />} />
                   <Route path="/pagamento-sucesso" element={<PaymentSuccessMercadoPago />} />
                   <Route path="/pagamento-sucesso-stripe" element={<PaymentSuccessStripe />} />
                   <Route path="/meus-ingressos" element={<MyTickets />} />

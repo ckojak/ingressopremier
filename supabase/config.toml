@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.create-stripe-checkout]
 verify_jwt = false
+
+[functions.create-pix-payment]
+verify_jwt = false

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle } from "lucide-react";
+import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,7 @@ const EventDetails = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [processingPix, setProcessingPix] = useState(false);
   const [isSandboxMode, setIsSandboxMode] = useState(false);
 
   useEffect(() => {
@@ -251,6 +252,67 @@ const EventDetails = () => {
       toast.error(error.message || "Erro ao processar pagamento");
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const handlePixCheckout = async () => {
+    if (cart.length === 0) {
+      toast.error("Adicione ingressos ao carrinho");
+      return;
+    }
+
+    setProcessingPix(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        localStorage.setItem("pendingCart", JSON.stringify({
+          eventId: id,
+          items: cart.map(item => ({
+            ticketTypeId: item.ticketType.id,
+            quantity: item.quantity,
+          })),
+        }));
+        toast.info("Faça login para continuar com a compra");
+        navigate("/auth", { state: { from: `/evento/${id}` } });
+        return;
+      }
+
+      const checkoutPayload = {
+        event_id: id,
+        items: cart.map(item => ({
+          ticket_type_id: item.ticketType.id,
+          quantity: item.quantity,
+        })),
+      };
+
+      console.log("[PIX Checkout] Criando pagamento PIX...");
+      const { data, error } = await supabase.functions.invoke("create-pix-payment", {
+        body: checkoutPayload,
+      });
+
+      if (error) {
+        console.error("[PIX Checkout] Erro:", error);
+        throw new Error("Não foi possível gerar o PIX. Tente novamente.");
+      }
+
+      if (data?.success) {
+        console.log("[PIX Checkout] Sucesso, redirecionando para página PIX...");
+        
+        // Store PIX data in sessionStorage
+        sessionStorage.setItem('pix_checkout_data', JSON.stringify(data));
+        
+        // Navigate to PIX page
+        navigate(`/checkout/pix?order_id=${data.order_id}`);
+      } else {
+        throw new Error(data?.error || "Erro ao gerar pagamento PIX");
+      }
+    } catch (error: any) {
+      console.error("PIX checkout error:", error);
+      toast.error(error.message || "Erro ao processar pagamento PIX");
+    } finally {
+      setProcessingPix(false);
     }
   };
 
@@ -521,10 +583,21 @@ const EventDetails = () => {
                           <Button
                             className="w-full gap-2"
                             size="lg"
-                            onClick={handleCheckout}
-                            disabled={processing}
+                            onClick={handlePixCheckout}
+                            disabled={processingPix || processing}
+                            variant="secondary"
                           >
-                            {processing ? "Processando..." : `Comprar agora`}
+                            <QrCode className="w-5 h-5" />
+                            {processingPix ? "Gerando PIX..." : "Pagar com PIX"}
+                          </Button>
+
+                          <Button
+                            className="w-full gap-2"
+                            size="lg"
+                            onClick={handleCheckout}
+                            disabled={processing || processingPix}
+                          >
+                            {processing ? "Processando..." : "Comprar com Cartão"}
                           </Button>
                         </div>
                       </>
