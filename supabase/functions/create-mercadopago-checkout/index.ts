@@ -279,40 +279,13 @@ serve(async (req) => {
 
     const preference = await mpResponse.json();
     
-// IMPORTANTE: O campo live_mode vem da resposta da API do Mercado Pago
-    // Ele indica se a preferência foi criada em modo produção ou sandbox
-    // Isso é determinado pelo ACCESS_TOKEN usado, não pela nossa detecção
-    // Deploy v2 - forçando redeploy para diagnóstico
-    const mpLiveMode = preference.live_mode;
+    // SIMPLIFICADO: Usar apenas a detecção pelo prefixo do token (mais confiável)
+    // Token TEST- = sandbox, Token APP_USR- = produção
+    const checkoutUrl = isSandbox ? preference.sandbox_init_point : preference.init_point;
     
-    console.log('=== DIAGNÓSTICO MP v2 ===');
-    console.log('live_mode da API:', mpLiveMode);
-    console.log('token_is_test:', isSandbox);
-    console.log('=========================');
-    
-    // Usar sandbox_init_point se NÃO estiver em live_mode (conforme API do MP)
-    const checkoutUrl = mpLiveMode === false ? preference.sandbox_init_point : preference.init_point;
-    
-    logStep('🔍 DIAGNÓSTICO COMPLETO DO MERCADO PAGO', { 
-      preference_id: preference.id,
-      
-      // O que a API do Mercado Pago diz sobre o modo
-      mp_live_mode: mpLiveMode,
-      mp_live_mode_type: typeof mpLiveMode,
-      
-      // Nossa detecção baseada no prefixo do token
-      token_starts_with_TEST: isSandbox,
-      token_first_15_chars: tokenPrefix + '...',
-      
-      // URLs retornadas pela API
-      init_point: preference.init_point,
-      sandbox_init_point: preference.sandbox_init_point,
-      
-      // URL que vamos usar
-      url_escolhida: checkoutUrl,
-      
-      // Diagnóstico
-      PROBLEMA: mpLiveMode === true && isSandbox ? '⚠️ TOKEN PARECE SER TEST- MAS API RETORNOU LIVE_MODE=TRUE - VERIFIQUE SE O TOKEN É REALMENTE DE SANDBOX!' : 'OK'
+    logStep('Checkout configurado', { 
+      ambiente: isSandbox ? 'SANDBOX' : 'PRODUÇÃO',
+      url: checkoutUrl
     });
 
     // Atualizar pedido com ID da preferência
@@ -324,12 +297,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         checkout_url: checkoutUrl,
-        sandbox_url: preference.sandbox_init_point,
         order_id: order.id,
         preference_id: preference.id,
-        is_sandbox: !mpLiveMode, // Usar o que a API do MP retorna
-        mp_live_mode: mpLiveMode, // Retornar para debug
-        token_detected_as_test: isSandbox // Nossa detecção baseada no prefixo
+        is_sandbox: isSandbox
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
