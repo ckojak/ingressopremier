@@ -32,9 +32,9 @@ serve(async (req) => {
   }
 
   try {
-    const mpAccessToken = Deno.env.get('MP_ACCESS_TOKEN');
+    const mpAccessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
     if (!mpAccessToken) {
-      console.error("MP_ACCESS_TOKEN not configured");
+      console.error("MERCADOPAGO_ACCESS_TOKEN not configured");
       throw new Error('Mercado Pago access token not configured');
     }
 

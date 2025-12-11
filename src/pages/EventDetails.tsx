@@ -575,6 +575,7 @@ const EventDetails = () => {
                             variant="outline"
                             size="lg"
                             onClick={handleAddToCart}
+                            disabled={processing || processingPix}
                           >
                             <ShoppingCart className="w-5 h-5" />
                             Adicionar ao carrinho
