@@ -285,10 +285,16 @@ serve(async (req) => {
 
     const preference = await mpResponse.json();
     
-    // IMPORTANTE: O campo live_mode vem da resposta da API do Mercado Pago
+// IMPORTANTE: O campo live_mode vem da resposta da API do Mercado Pago
     // Ele indica se a preferência foi criada em modo produção ou sandbox
     // Isso é determinado pelo ACCESS_TOKEN usado, não pela nossa detecção
+    // Deploy v2 - forçando redeploy para diagnóstico
     const mpLiveMode = preference.live_mode;
+    
+    console.log('=== DIAGNÓSTICO MP v2 ===');
+    console.log('live_mode da API:', mpLiveMode);
+    console.log('token_is_test:', isSandbox);
+    console.log('=========================');
     
     // Usar sandbox_init_point se NÃO estiver em live_mode (conforme API do MP)
     const checkoutUrl = mpLiveMode === false ? preference.sandbox_init_point : preference.init_point;
