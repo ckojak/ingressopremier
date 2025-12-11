@@ -130,6 +130,7 @@ serve(async (req) => {
       newStatus = 'cancelled';
     }
 
+    // Atualizar status se diferente
     if (newStatus !== order.status) {
       const { error: updateError } = await supabaseClient
         .from('orders')
@@ -145,67 +146,82 @@ serve(async (req) => {
       }
 
       logStep('Status do pedido atualizado', { orderId, newStatus });
+    }
 
-      // Se aprovado, gerar ingressos
-      if (newStatus === 'paid') {
-        // Verificar se já existem ingressos para este pedido
-        const { data: existingTickets } = await supabaseClient
-          .from('tickets')
-          .select('id')
-          .eq('user_id', order.user_id)
-          .eq('event_id', order.event_id)
-          .in('order_item_id', order.order_items.map((item: any) => item.id))
-          .limit(1);
+    // Se aprovado, gerar ingressos (independente se o status mudou ou não)
+    if (newStatus === 'paid') {
+      // Verificar se já existem ingressos para este pedido
+      const { data: existingTickets, error: checkError } = await supabaseClient
+        .from('tickets')
+        .select('id')
+        .in('order_item_id', order.order_items.map((item: any) => item.id))
+        .limit(1);
 
-        if (existingTickets && existingTickets.length > 0) {
-          logStep('Ingressos já existem para este pedido, pulando criação');
-        } else {
-          logStep('Gerando ingressos para pedido aprovado');
+      if (checkError) {
+        logStep('Erro ao verificar ingressos existentes', checkError);
+      }
 
-          for (const item of order.order_items) {
-            for (let i = 0; i < item.quantity; i++) {
-              // Gerar código único do ingresso
-              const ticketCode = generateTicketCode();
+      if (existingTickets && existingTickets.length > 0) {
+        logStep('Ingressos já existem para este pedido, pulando criação', { 
+          existingCount: existingTickets.length 
+        });
+      } else {
+        logStep('Gerando ingressos para pedido aprovado', {
+          orderItemsCount: order.order_items.length,
+          orderItems: order.order_items
+        });
 
-              const { error: ticketError } = await supabaseClient
-                .from('tickets')
-                .insert({
-                  order_item_id: item.id,
-                  user_id: order.user_id,
-                  event_id: order.event_id,
-                  ticket_type_id: item.ticket_type_id,
-                  ticket_code: ticketCode,
-                });
+        for (const item of order.order_items) {
+          for (let i = 0; i < item.quantity; i++) {
+            // Gerar código único do ingresso
+            const ticketCode = generateTicketCode();
 
-              if (ticketError) {
-                logStep('Erro ao criar ingresso', ticketError);
-              }
-            }
-
-            // Atualizar quantidade vendida
-            const { data: ticketTypeData } = await supabaseClient
-              .from('ticket_types')
-              .select('quantity_sold')
-              .eq('id', item.ticket_type_id)
+            const { data: newTicket, error: ticketError } = await supabaseClient
+              .from('tickets')
+              .insert({
+                order_item_id: item.id,
+                user_id: order.user_id,
+                event_id: order.event_id,
+                ticket_type_id: item.ticket_type_id,
+                ticket_code: ticketCode,
+              })
+              .select()
               .single();
 
-            await supabaseClient
-              .from('ticket_types')
-              .update({ quantity_sold: (ticketTypeData?.quantity_sold || 0) + item.quantity })
-              .eq('id', item.ticket_type_id);
+            if (ticketError) {
+              logStep('Erro ao criar ingresso', { 
+                error: ticketError,
+                item: item,
+                ticketCode: ticketCode
+              });
+            } else {
+              logStep('Ingresso criado', { ticketId: newTicket?.id, ticketCode });
+            }
           }
 
-          logStep('Ingressos gerados com sucesso');
+          // Atualizar quantidade vendida
+          const { data: ticketTypeData } = await supabaseClient
+            .from('ticket_types')
+            .select('quantity_sold')
+            .eq('id', item.ticket_type_id)
+            .single();
 
-          // Enviar email de confirmação
-          try {
-            await supabaseClient.functions.invoke('send-ticket-email', {
-              body: { orderId }
-            });
-            logStep('Email de confirmação enviado');
-          } catch (emailError) {
-            logStep('Erro ao enviar email', emailError);
-          }
+          await supabaseClient
+            .from('ticket_types')
+            .update({ quantity_sold: (ticketTypeData?.quantity_sold || 0) + item.quantity })
+            .eq('id', item.ticket_type_id);
+        }
+
+        logStep('Ingressos gerados com sucesso');
+
+        // Enviar email de confirmação
+        try {
+          await supabaseClient.functions.invoke('send-ticket-email', {
+            body: { orderId }
+          });
+          logStep('Email de confirmação enviado');
+        } catch (emailError) {
+          logStep('Erro ao enviar email', emailError);
         }
       }
     }
