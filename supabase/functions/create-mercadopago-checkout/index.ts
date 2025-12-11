@@ -41,7 +41,15 @@ serve(async (req) => {
       throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado');
     }
 
-    logStep('Iniciando checkout Mercado Pago');
+    // Detectar ambiente e logar
+    const isSandbox = mercadopagoAccessToken.startsWith('TEST-');
+    const tokenPrefix = mercadopagoAccessToken.substring(0, 15);
+    
+    logStep('Iniciando checkout Mercado Pago', {
+      ambiente: isSandbox ? 'SANDBOX (TEST-)' : 'PRODUÇÃO (APP_USR-)',
+      tokenPrefix: tokenPrefix + '...',
+      AVISO: isSandbox ? 'Usando credenciais de TESTE' : '⚠️ USANDO CREDENCIAIS DE PRODUÇÃO - cartões de teste NÃO funcionarão!'
+    });
 
     // Cliente para autenticação (usando anon key)
     const supabaseAuth = createClient(
@@ -277,8 +285,7 @@ serve(async (req) => {
 
     const preference = await mpResponse.json();
     
-    // Detectar se estamos em modo sandbox (credenciais TEST-)
-    const isSandbox = mercadopagoAccessToken.startsWith('TEST-');
+    // Usar isSandbox já definido no início
     const checkoutUrl = isSandbox ? preference.sandbox_init_point : preference.init_point;
     
     logStep('Preferência criada', { 
