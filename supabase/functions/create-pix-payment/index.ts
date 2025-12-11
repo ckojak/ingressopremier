@@ -131,6 +131,13 @@ serve(async (req) => {
       .single();
 
     // Create pending order
+    console.log("Creating order with data:", {
+      user_id: user.id,
+      event_id: event_id,
+      status: 'pending',
+      total_amount: totalAmount
+    });
+
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
@@ -142,9 +149,14 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (orderError || !order) {
-      console.error("Order creation error:", orderError);
-      throw new Error('Failed to create order');
+    if (orderError) {
+      console.error("Order creation error details:", JSON.stringify(orderError));
+      throw new Error(`Failed to create order: ${orderError.message}`);
+    }
+
+    if (!order) {
+      console.error("Order is null after insert");
+      throw new Error('Failed to create order: no data returned');
     }
 
     console.log("Order created:", order.id);
