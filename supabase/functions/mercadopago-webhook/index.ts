@@ -7,8 +7,9 @@ const corsHeaders = {
 };
 
 const logStep = (step: string, details?: any) => {
-  const detailsStr = details ? `: ${JSON.stringify(details)}` : '';
-  console.log(`[MERCADOPAGO-WEBHOOK] ${step}${detailsStr}`);
+  const timestamp = new Date().toISOString();
+  const detailsStr = details ? `: ${JSON.stringify(details, null, 2)}` : '';
+  console.log(`[MERCADOPAGO-WEBHOOK][${timestamp}] ${step}${detailsStr}`);
 };
 
 serve(async (req) => {
@@ -22,8 +23,21 @@ serve(async (req) => {
       throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado');
     }
 
+    // Detectar modo de ambiente
+    const isSandbox = mercadopagoAccessToken.startsWith('TEST-');
+    logStep('Ambiente detectado', { 
+      isSandbox, 
+      tokenPrefix: mercadopagoAccessToken.substring(0, 10) + '...',
+      environment: isSandbox ? 'SANDBOX' : 'PRODUÇÃO'
+    });
+
     const body = await req.json();
-    logStep('Webhook recebido', body);
+    logStep('Webhook recebido', { 
+      type: body.type, 
+      action: body.action,
+      data_id: body.data?.id,
+      full_body: body 
+    });
 
     // Mercado Pago envia notificações com type e data.id
     const { type, data } = body;
@@ -59,8 +73,17 @@ serve(async (req) => {
     const payment = await paymentResponse.json();
     logStep('Detalhes do pagamento', { 
       id: payment.id, 
-      status: payment.status, 
-      external_reference: payment.external_reference 
+      status: payment.status,
+      status_detail: payment.status_detail,
+      payment_method_id: payment.payment_method_id,
+      payment_type_id: payment.payment_type_id,
+      external_reference: payment.external_reference,
+      transaction_amount: payment.transaction_amount,
+      currency_id: payment.currency_id,
+      payer_email: payment.payer?.email,
+      date_created: payment.date_created,
+      date_approved: payment.date_approved,
+      live_mode: payment.live_mode
     });
 
     const orderId = payment.external_reference;
