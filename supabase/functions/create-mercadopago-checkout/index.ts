@@ -243,17 +243,14 @@ serve(async (req) => {
       payment_methods: {
         excluded_payment_types: [
           { id: 'ticket' },
-          { id: 'atm' },
-          { id: 'credit_card' },
-          { id: 'debit_card' },
-          { id: 'prepaid_card' }
+          { id: 'atm' }
         ],
         excluded_payment_methods: [
           { id: 'bolbradesco' },
-          { id: 'pec' }
+          { id: 'pec' },
+          { id: 'debcabal' }
         ],
-        default_payment_method_id: 'pix',
-        installments: 1,
+        installments: 12,
         default_installments: 1
       }
     };
