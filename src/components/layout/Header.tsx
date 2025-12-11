@@ -67,14 +67,17 @@ const Header = () => {
   };
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast.error("Erro ao sair da conta");
-      return;
-    }
-    // Forçar limpeza do estado local
+    // Usar scope: 'local' para evitar erro quando sessão já expirou no servidor
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    
+    // Limpar estado local independente do resultado
     setUser(null);
     setUserRole(null);
+    
+    if (error) {
+      console.warn("Logout warning:", error.message);
+    }
+    
     toast.success("Você saiu da sua conta");
     navigate("/");
   };
