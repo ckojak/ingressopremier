@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket } from "lucide-react";
+import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +31,7 @@ const EventDetails = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [isSandboxMode, setIsSandboxMode] = useState(false);
 
   useEffect(() => {
     const fetchEventDetails = async () => {
@@ -210,10 +212,20 @@ const EventDetails = () => {
 
       // Check if Mercado Pago succeeded
       if (!mpError && (mpData?.checkout_url || mpData?.sandbox_url)) {
-        console.log("[Checkout] Mercado Pago sucesso, redirecionando...");
-        // Use sandbox_url for testing, checkout_url for production
-        const redirectUrl = mpData.sandbox_url || mpData.checkout_url;
-        window.location.href = redirectUrl;
+        console.log("[Checkout] Mercado Pago sucesso", {
+          is_sandbox: mpData.is_sandbox,
+          checkout_url: mpData.checkout_url,
+          sandbox_url: mpData.sandbox_url
+        });
+        
+        // Se estiver em sandbox, mostra indicador
+        if (mpData.is_sandbox) {
+          setIsSandboxMode(true);
+          toast.info("Modo de teste ativo - use cartões de teste");
+        }
+        
+        // Use a URL retornada pela edge function (já trata sandbox vs produção)
+        window.location.href = mpData.checkout_url;
         return;
       }
 
@@ -372,6 +384,16 @@ const EventDetails = () => {
                 transition={{ duration: 0.5, delay: 0.2 }}
               >
                 <Card className="bg-card border-border sticky top-24">
+                  {/* Indicador de modo sandbox/teste */}
+                  {isSandboxMode && (
+                    <Alert className="m-4 mb-0 border-yellow-500/50 bg-yellow-500/10">
+                      <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                      <AlertTitle className="text-yellow-500">Modo de Teste</AlertTitle>
+                      <AlertDescription className="text-yellow-500/80 text-sm">
+                        Use cartões de teste do Mercado Pago. Pagamentos não são reais.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Ticket className="w-5 h-5 text-primary" />
