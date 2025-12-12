@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,6 +13,72 @@ const logStep = (step: string, details?: any) => {
   console.log(`[MERCADOPAGO-WEBHOOK][${timestamp}] ${step}${detailsStr}`);
 };
 
+// Verify Mercado Pago webhook signature
+async function verifyWebhookSignature(
+  xSignature: string | null,
+  xRequestId: string | null,
+  dataId: string,
+  secret: string
+): Promise<boolean> {
+  if (!xSignature || !xRequestId) {
+    logStep('Assinatura ou Request ID ausentes', { xSignature: !!xSignature, xRequestId: !!xRequestId });
+    return false;
+  }
+
+  try {
+    // Parse x-signature header: "ts=xxx,v1=xxx"
+    const parts: Record<string, string> = {};
+    xSignature.split(',').forEach(part => {
+      const [key, value] = part.split('=');
+      if (key && value) {
+        parts[key.trim()] = value.trim();
+      }
+    });
+
+    const ts = parts['ts'];
+    const v1 = parts['v1'];
+
+    if (!ts || !v1) {
+      logStep('Formato de assinatura inválido', { parts });
+      return false;
+    }
+
+    // Build the manifest string as per Mercado Pago documentation
+    // Format: id:data.id;request-id:x-request-id;ts:ts_value;
+    const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+    
+    // Generate HMAC SHA256
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    const messageData = encoder.encode(manifest);
+    
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyData,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    
+    const signature = await crypto.subtle.sign("HMAC", cryptoKey, messageData);
+    const hashArray = Array.from(new Uint8Array(signature));
+    const calculatedSignature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const isValid = calculatedSignature === v1;
+    logStep('Verificação de assinatura', { 
+      isValid, 
+      manifest: manifest.substring(0, 50) + '...',
+      receivedSignature: v1.substring(0, 20) + '...',
+      calculatedSignature: calculatedSignature.substring(0, 20) + '...'
+    });
+
+    return isValid;
+  } catch (error) {
+    logStep('Erro ao verificar assinatura', { error: String(error) });
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -19,6 +86,8 @@ serve(async (req) => {
 
   try {
     const mercadopagoAccessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
+    const webhookSecret = Deno.env.get('MERCADOPAGO_WEBHOOK_SECRET');
+    
     if (!mercadopagoAccessToken) {
       throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado');
     }
@@ -28,16 +97,43 @@ serve(async (req) => {
     logStep('Ambiente detectado', { 
       isSandbox, 
       tokenPrefix: mercadopagoAccessToken.substring(0, 10) + '...',
-      environment: isSandbox ? 'SANDBOX' : 'PRODUÇÃO'
+      environment: isSandbox ? 'SANDBOX' : 'PRODUÇÃO',
+      webhookSecretConfigured: !!webhookSecret
+    });
+
+    // Get signature headers
+    const xSignature = req.headers.get('x-signature');
+    const xRequestId = req.headers.get('x-request-id');
+    
+    logStep('Headers de assinatura recebidos', { 
+      hasSignature: !!xSignature, 
+      hasRequestId: !!xRequestId 
     });
 
     const body = await req.json();
     logStep('Webhook recebido', { 
       type: body.type, 
       action: body.action,
-      data_id: body.data?.id,
-      full_body: body 
+      data_id: body.data?.id
     });
+
+    // Verify webhook signature if secret is configured
+    if (webhookSecret) {
+      const dataId = body.data?.id?.toString() || '';
+      const isValidSignature = await verifyWebhookSignature(xSignature, xRequestId, dataId, webhookSecret);
+      
+      if (!isValidSignature) {
+        logStep('ALERTA DE SEGURANÇA: Assinatura de webhook inválida - possível tentativa de fraude');
+        return new Response(JSON.stringify({ error: 'Assinatura inválida' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 401
+        });
+      }
+      
+      logStep('Assinatura do webhook verificada com sucesso');
+    } else {
+      logStep('AVISO: Webhook secret não configurado - verificação de assinatura desabilitada');
+    }
 
     // Mercado Pago envia notificações com type e data.id
     const { type, data } = body;
