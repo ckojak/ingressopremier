@@ -45,6 +45,22 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
   const { toast } = useToast();
   const { sendLocalNotification, isSubscribed } = usePushNotifications();
 
+  // Clean up orphaned transfers (where ticket no longer exists)
+  const cleanupOrphanedTransfer = async (transferId: string) => {
+    try {
+      await supabase
+        .from("ticket_transfers")
+        .update({
+          status: "cancelled",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", transferId);
+      console.log(`Cleaned up orphaned transfer: ${transferId}`);
+    } catch (error) {
+      console.error("Error cleaning up orphaned transfer:", error);
+    }
+  };
+
   const fetchPendingTransfers = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -62,12 +78,16 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
         `)
         .eq("to_user_email", user.email?.toLowerCase())
         .eq("status", "pending")
+        .not("ticket_id", "is", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
       // Fetch ticket info and sender info for each transfer
-      const transfersWithDetails = await Promise.all(
+      const transfersWithDetails: PendingTransfer[] = [];
+      const orphanedTransferIds: string[] = [];
+
+      await Promise.all(
         (transfersData || []).map(async (transfer) => {
           // Fetch sender profile
           const { data: senderProfile } = await supabase
@@ -100,14 +120,24 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
             }
           }
 
-          return {
+          // If ticket doesn't exist, mark transfer as orphaned for cleanup
+          if (!ticketData) {
+            orphanedTransferIds.push(transfer.id);
+            return;
+          }
+
+          transfersWithDetails.push({
             ...transfer,
             ticket: ticketData,
             sender: senderProfile,
-          };
+          });
         })
       );
 
+      // Clean up orphaned transfers in background (don't await)
+      orphanedTransferIds.forEach(id => cleanupOrphanedTransfer(id));
+
+      // Only set valid transfers (with existing tickets)
       setTransfers(transfersWithDetails);
       
       // Send local push notification for new pending transfers
@@ -134,10 +164,12 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
     // Validate ticket ID before proceeding
     const ticketId = transfer.ticket?.id;
     if (!ticketId) {
+      // Clean up orphaned transfer and remove from list
+      await cleanupOrphanedTransfer(transfer.id);
+      setTransfers(prev => prev.filter(t => t.id !== transfer.id));
       toast({
-        title: "Erro",
-        description: "Ingresso não encontrado para esta transferência.",
-        variant: "destructive",
+        title: "Transferência inválida",
+        description: "Esta transferência não é mais válida pois o ingresso não existe.",
       });
       return;
     }
@@ -221,10 +253,12 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
     // Validate ticket ID before proceeding
     const ticketId = transfer.ticket?.id;
     if (!ticketId) {
+      // Clean up orphaned transfer and remove from list
+      await cleanupOrphanedTransfer(transfer.id);
+      setTransfers(prev => prev.filter(t => t.id !== transfer.id));
       toast({
-        title: "Erro",
-        description: "Ingresso não encontrado para esta transferência.",
-        variant: "destructive",
+        title: "Transferência inválida",
+        description: "Esta transferência não é mais válida pois o ingresso não existe.",
       });
       return;
     }
