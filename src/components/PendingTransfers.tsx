@@ -50,7 +50,7 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get transfers where user's email matches
+      // Get transfers where user's email matches - use ticket_id to join
       const { data: transfersData, error } = await supabase
         .from("ticket_transfers")
         .select(`
@@ -58,12 +58,7 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
           transfer_code,
           created_at,
           from_user_id,
-          tickets (
-            id,
-            ticket_code,
-            events (id, title, start_date, venue_name),
-            ticket_types (name)
-          )
+          ticket_id
         `)
         .eq("to_user_email", user.email?.toLowerCase())
         .eq("status", "pending")
@@ -71,34 +66,53 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
 
       if (error) throw error;
 
-      // Fetch sender info for each transfer
-      const transfersWithSender = await Promise.all(
+      // Fetch ticket info and sender info for each transfer
+      const transfersWithDetails = await Promise.all(
         (transfersData || []).map(async (transfer) => {
+          // Fetch sender profile
           const { data: senderProfile } = await supabase
             .from("profiles")
             .select("full_name, email")
             .eq("id", transfer.from_user_id)
-            .single();
+            .maybeSingle();
 
-          const ticketData = transfer.tickets as any;
+          // Fetch ticket with event and type info
+          let ticketData = null;
+          if (transfer.ticket_id) {
+            const { data: ticket } = await supabase
+              .from("tickets")
+              .select(`
+                id,
+                ticket_code,
+                events (id, title, start_date, venue_name),
+                ticket_types (name)
+              `)
+              .eq("id", transfer.ticket_id)
+              .maybeSingle();
+            
+            if (ticket) {
+              ticketData = {
+                id: ticket.id,
+                ticket_code: ticket.ticket_code,
+                event: ticket.events as any,
+                ticket_type: ticket.ticket_types as any,
+              };
+            }
+          }
+
           return {
             ...transfer,
-            ticket: ticketData ? {
-              id: ticketData.id,
-              ticket_code: ticketData.ticket_code,
-              event: ticketData.events,
-              ticket_type: ticketData.ticket_types,
-            } : null,
+            ticket: ticketData,
             sender: senderProfile,
           };
         })
       );
 
-      setTransfers(transfersWithSender);
+      setTransfers(transfersWithDetails);
       
       // Send local push notification for new pending transfers
-      if (transfersWithSender.length > 0 && isSubscribed) {
-        const latestTransfer = transfersWithSender[0];
+      if (transfersWithDetails.length > 0 && isSubscribed) {
+        const latestTransfer = transfersWithDetails[0];
         sendLocalNotification(
           "🎟️ Você recebeu um ingresso!",
           `${latestTransfer.sender?.full_name || "Alguém"} está transferindo um ingresso para ${latestTransfer.ticket?.event?.title || "um evento"}`,
@@ -117,6 +131,17 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
   }, []);
 
   const handleAccept = async (transfer: PendingTransfer) => {
+    // Validate ticket ID before proceeding
+    const ticketId = transfer.ticket?.id;
+    if (!ticketId) {
+      toast({
+        title: "Erro",
+        description: "Ingresso não encontrado para esta transferência.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setProcessing(transfer.id);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -142,7 +167,7 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
           attendee_email: user.email,
           transfer_status: "completed",
         })
-        .eq("id", transfer.ticket?.id);
+        .eq("id", ticketId);
 
       if (ticketError) throw ticketError;
 
@@ -152,7 +177,7 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
           .from("profiles")
           .select("full_name")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
 
         await supabase.functions.invoke("send-notification", {
           body: {
@@ -178,7 +203,8 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
         description: "O ingresso foi adicionado à sua conta.",
       });
 
-      fetchPendingTransfers();
+      // Remove from local state immediately
+      setTransfers(prev => prev.filter(t => t.id !== transfer.id));
       onTransferHandled();
     } catch (error: any) {
       toast({
@@ -192,9 +218,21 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
   };
 
   const handleReject = async (transfer: PendingTransfer) => {
+    // Validate ticket ID before proceeding
+    const ticketId = transfer.ticket?.id;
+    if (!ticketId) {
+      toast({
+        title: "Erro",
+        description: "Ingresso não encontrado para esta transferência.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setProcessing(transfer.id);
     try {
-      const { error } = await supabase
+      // Update transfer status to rejected
+      const { error: transferError } = await supabase
         .from("ticket_transfers")
         .update({
           status: "rejected",
@@ -202,20 +240,23 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
         })
         .eq("id", transfer.id);
 
-      if (error) throw error;
+      if (transferError) throw transferError;
 
-      // Reset ticket transfer_status back to none
-      await supabase
+      // Reset ticket transfer_status back to none so it returns to owner
+      const { error: ticketError } = await supabase
         .from("tickets")
         .update({ transfer_status: "none" })
-        .eq("id", transfer.ticket?.id);
+        .eq("id", ticketId);
+
+      if (ticketError) throw ticketError;
 
       toast({
         title: "Transferência recusada",
         description: "A transferência foi recusada. O ingresso voltou para o proprietário original.",
       });
 
-      fetchPendingTransfers();
+      // Remove from local state immediately for instant UI feedback
+      setTransfers(prev => prev.filter(t => t.id !== transfer.id));
       onTransferHandled();
     } catch (error: any) {
       toast({
