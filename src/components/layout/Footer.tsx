@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Instagram, Mail, MapPin, Phone } from "lucide-react";
+import { Instagram, MapPin, Phone } from "lucide-react";
 import quintalLogo from "@/assets/quintal-logo.png";
 
 const Footer = () => {
@@ -29,7 +29,7 @@ const Footer = () => {
             </p>
             <div className="flex gap-3">
               <a 
-                href="https://instagram.com/quintalbarra" 
+                href="https://www.instagram.com/quintalbarra/" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors"
@@ -46,26 +46,17 @@ const Footer = () => {
             <ul className="space-y-3">
               <li className="flex items-start gap-3 text-muted-foreground text-sm">
                 <MapPin className="w-4 h-4 mt-0.5 text-primary flex-shrink-0" />
-                <span>Barra da Tijuca, Rio de Janeiro - RJ</span>
+                <span>Barra da Tijuca • Olegário Maciel, 402</span>
               </li>
               <li>
                 <a 
-                  href="https://wa.me/5521979934676" 
+                  href="https://wa.me/5521982031368" 
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 text-muted-foreground text-sm hover:text-primary transition-colors"
                 >
                   <Phone className="w-4 h-4 text-primary" />
-                  (21) 97993-4676
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="mailto:contato@quintalbarra.com.br" 
-                  className="flex items-center gap-3 text-muted-foreground text-sm hover:text-primary transition-colors"
-                >
-                  <Mail className="w-4 h-4 text-primary" />
-                  contato@quintalbarra.com.br
+                  +55 21 98203-1368
                 </a>
               </li>
             </ul>
