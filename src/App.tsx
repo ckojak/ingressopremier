@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { HelmetProvider } from "react-helmet-async";
 import LoadingScreen from "@/components/LoadingScreen";
+import WhatsAppButton from "@/components/WhatsAppButton";
 
 // Eager load critical pages
 import Index from "./pages/Index";
@@ -132,6 +133,7 @@ const App = () => {
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
+              <WhatsAppButton />
             </BrowserRouter>
           )}
         </TooltipProvider>
