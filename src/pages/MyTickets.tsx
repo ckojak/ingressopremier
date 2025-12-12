@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Ticket, Calendar, MapPin, QrCode, Send } from "lucide-react";
+import { Ticket, Calendar, MapPin, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,16 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import TicketTransfer from "@/components/TicketTransfer";
-import PendingTransfers from "@/components/PendingTransfers";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -58,7 +50,7 @@ const MyTickets = () => {
   const [tickets, setTickets] = useState<TicketWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<TicketWithDetails | null>(null);
-  const [transferTicket, setTransferTicket] = useState<TicketWithDetails | null>(null);
+  
 
   const fetchTickets = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -222,43 +214,6 @@ const MyTickets = () => {
                 <QrCode className="w-4 h-4" />
                 Ver QR Code
               </Button>
-              {!ticket.is_used && ticket.event && new Date(ticket.event.start_date) >= new Date() && ticket.transfer_status !== "pending" && (
-                ticket.wasTransferred ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="gap-1"
-                            disabled
-                          >
-                            <Send className="w-4 h-4" />
-                            Transferir
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Ingressos recebidos por transferência não podem ser transferidos novamente</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="gap-1"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTransferTicket(ticket);
-                    }}
-                  >
-                    <Send className="w-4 h-4" />
-                    Transferir
-                  </Button>
-                )
-              )}
             </div>
           </CardContent>
         </div>
@@ -284,8 +239,6 @@ const MyTickets = () => {
             </p>
           </motion.div>
 
-          {/* Pending Transfers Section */}
-          <PendingTransfers onTransferHandled={fetchTickets} />
 
           {loading ? (
             <div className="space-y-4">
@@ -415,18 +368,6 @@ const MyTickets = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Transfer Dialog */}
-      {transferTicket && (
-        <TicketTransfer
-          ticketId={transferTicket.id}
-          ticketCode={transferTicket.ticket_code}
-          eventTitle={transferTicket.event?.title || ""}
-          eventDate={transferTicket.event?.start_date}
-          open={!!transferTicket}
-          onOpenChange={(open) => !open && setTransferTicket(null)}
-          onSuccess={fetchTickets}
-        />
-      )}
     </div>
   );
 };
