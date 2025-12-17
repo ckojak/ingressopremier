@@ -73,10 +73,13 @@ const MyTickets = () => {
           created_at,
           transfer_status,
           order_items!inner(
-            orders!inner(status)
-          ),
-          events (id, title, start_date, venue_name, city, state, image_url),
-          ticket_types (name, price)
+            orders!inner(status),
+            ticket_types!inner(
+              name,
+              price,
+              events!inner(id, title, start_date, venue_name, city, state, image_url)
+            )
+          )
         `)
         .eq("user_id", session.user.id)
         .order("created_at", { ascending: false });
@@ -94,14 +97,35 @@ const MyTickets = () => {
       const transferredTicketIds = new Set((transfersData || []).map(t => t.ticket_id));
 
       const formattedTickets = (data || []).map(ticket => {
-        // Extract order status from nested structure - order_items is a single object, not array
-        const orderItem = ticket.order_items as unknown as { orders: { status: string } } | null;
+        // Extract data from nested structure through order_items -> ticket_types -> events
+        const orderItem = ticket.order_items as unknown as { 
+          orders: { status: string },
+          ticket_types: {
+            name: string,
+            price: number,
+            events: {
+              id: string,
+              title: string,
+              start_date: string,
+              venue_name: string | null,
+              city: string | null,
+              state: string | null,
+              image_url: string | null,
+            }
+          }
+        } | null;
+        
         const orderStatus = orderItem?.orders?.status || 'paid';
+        const ticketType = orderItem?.ticket_types ? {
+          name: orderItem.ticket_types.name,
+          price: orderItem.ticket_types.price
+        } : null;
+        const event = orderItem?.ticket_types?.events || null;
         
         return {
           ...ticket,
-          event: ticket.events as TicketWithDetails["event"],
-          ticket_type: ticket.ticket_types as TicketWithDetails["ticket_type"],
+          event: event as TicketWithDetails["event"],
+          ticket_type: ticketType as TicketWithDetails["ticket_type"],
           wasTransferred: transferredTicketIds.has(ticket.id),
           transfer_status: ticket.transfer_status || "none",
           order_status: orderStatus as TicketWithDetails['order_status'],
