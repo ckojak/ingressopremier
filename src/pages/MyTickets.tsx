@@ -27,9 +27,16 @@ interface TicketWithDetails {
   is_used: boolean;
   used_at: string | null;
   created_at: string | null;
+
+  event_id: string | null;
+  ticket_type_id: string | null;
+  order_item_id: string | null;
+
+  is_complimentary: boolean;
   wasTransferred: boolean;
   transfer_status: string;
-  order_status: 'pending' | 'paid' | 'cancelled' | 'failed';
+  order_status: "pending" | "paid" | "cancelled" | "failed";
+
   event: {
     id: string;
     title: string;
@@ -78,7 +85,7 @@ const MyTickets = () => {
           order_item_id,
           order_items!left(
             ticket_type_id,
-            orders!inner(status)
+            orders!left(status)
           ),
           events(id, title, start_date, venue_name, city, state, image_url),
           ticket_types(name, price)
@@ -88,38 +95,78 @@ const MyTickets = () => {
 
       if (error) throw error;
 
-      console.log("Fetched tickets:", data);
-
       // Check which tickets were received via transfer
-      const ticketIds = (data || []).map(t => t.id);
+      const ticketIds = (data || []).map((t) => t.id);
       const { data: transfersData } = await supabase
         .from("ticket_transfers")
         .select("ticket_id")
         .in("ticket_id", ticketIds)
         .eq("status", "accepted");
 
-      const transferredTicketIds = new Set((transfersData || []).map(t => t.ticket_id));
+      const transferredTicketIds = new Set((transfersData || []).map((t) => t.ticket_id));
+
+      // Fallback fetch for missing event/ticket_type relations (by IDs)
+      const missingEventIds = Array.from(
+        new Set(
+          (data || [])
+            .filter((t) => !t.events && t.event_id)
+            .map((t) => t.event_id)
+        )
+      ) as string[];
+
+      const missingTicketTypeIds = Array.from(
+        new Set(
+          (data || [])
+            .filter((t) => !t.ticket_types && t.ticket_type_id)
+            .map((t) => t.ticket_type_id)
+        )
+      ) as string[];
+
+      const [eventsFallbackRes, ticketTypesFallbackRes] = await Promise.all([
+        missingEventIds.length
+          ? supabase
+              .from("events")
+              .select("id, title, start_date, venue_name, city, state, image_url")
+              .in("id", missingEventIds)
+          : Promise.resolve({ data: [], error: null } as any),
+        missingTicketTypeIds.length
+          ? supabase.from("ticket_types").select("id, name, price").in("id", missingTicketTypeIds)
+          : Promise.resolve({ data: [], error: null } as any),
+      ]);
+
+      const eventsById = new Map<string, TicketWithDetails["event"]>();
+      (eventsFallbackRes.data || []).forEach((e: any) => eventsById.set(e.id, e));
+
+      const ticketTypesById = new Map<string, TicketWithDetails["ticket_type"]>();
+      (ticketTypesFallbackRes.data || []).forEach((tt: any) =>
+        ticketTypesById.set(tt.id, { name: tt.name, price: tt.price })
+      );
 
       // Collect ticket_type_ids from order_items to fetch event info
-      const orderItemTicketTypeIds: string[] = [];
-      (data || []).forEach(ticket => {
-        const orderItem = ticket.order_items as { ticket_type_id: string } | null;
-        if (orderItem?.ticket_type_id) {
-          orderItemTicketTypeIds.push(orderItem.ticket_type_id);
-        }
-      });
+      const orderItemTicketTypeIds = Array.from(
+        new Set(
+          (data || [])
+            .map((ticket) => (ticket.order_items as any)?.ticket_type_id)
+            .filter(Boolean)
+        )
+      ) as string[];
 
       // Fetch ticket types with events for order_items
-      let ticketTypesWithEvents: Record<string, { name: string; price: number; event: TicketWithDetails["event"] }> = {};
+      let ticketTypesWithEvents: Record<
+        string,
+        { name: string; price: number; event: TicketWithDetails["event"] }
+      > = {};
       if (orderItemTicketTypeIds.length > 0) {
         const { data: ttData } = await supabase
           .from("ticket_types")
-          .select(`
+          .select(
+            `
             id,
             name,
             price,
             events(id, title, start_date, venue_name, city, state, image_url)
-          `)
+          `
+          )
           .in("id", orderItemTicketTypeIds);
 
         (ttData || []).forEach((tt: any) => {
@@ -131,27 +178,25 @@ const MyTickets = () => {
         });
       }
 
-      const formattedTickets = (data || []).map(ticket => {
+      const formattedTickets: TicketWithDetails[] = (data || []).map((ticket: any) => {
         const isComplimentary = !ticket.order_item_id;
-        
-        let orderStatus: string = "paid";
-        let ticketType: { name: string; price: number } | null = null;
-        let event: TicketWithDetails["event"] = null;
 
-        // Try direct relations first (for complimentary or tickets with direct event_id)
         const directTicketType = ticket.ticket_types as { name: string; price: number } | null;
         const directEvent = ticket.events as TicketWithDetails["event"];
 
-        if (directEvent) {
-          event = directEvent;
-        }
-        if (directTicketType) {
-          ticketType = directTicketType;
-        }
+        const eventFromId = ticket.event_id ? eventsById.get(ticket.event_id) : null;
+        const ticketTypeFromId = ticket.ticket_type_id ? ticketTypesById.get(ticket.ticket_type_id) : null;
+
+        let orderStatus: string = "paid";
+        let ticketType: { name: string; price: number } | null = directTicketType || ticketTypeFromId;
+        let event: TicketWithDetails["event"] = directEvent || eventFromId || null;
 
         if (!isComplimentary) {
           // Paid ticket - get status from order_items
-          const orderItem = ticket.order_items as { ticket_type_id: string; orders: { status: string } } | null;
+          const orderItem = ticket.order_items as
+            | { ticket_type_id: string | null; orders: { status: string } | null }
+            | null;
+
           orderStatus = orderItem?.orders?.status || "paid";
 
           // If no direct event/ticket_type, try to get from order_items -> ticket_types
@@ -164,6 +209,10 @@ const MyTickets = () => {
 
         return {
           ...ticket,
+          event_id: ticket.event_id || null,
+          ticket_type_id: ticket.ticket_type_id || null,
+          order_item_id: ticket.order_item_id || null,
+          is_complimentary: isComplimentary,
           event,
           ticket_type: ticketType,
           wasTransferred: transferredTicketIds.has(ticket.id),
@@ -172,7 +221,6 @@ const MyTickets = () => {
         };
       });
 
-      console.log("Formatted tickets:", formattedTickets);
       setTickets(formattedTickets);
     } catch (error) {
       console.error("Error fetching tickets:", error);
@@ -188,10 +236,10 @@ const MyTickets = () => {
   const now = new Date();
 
   const upcomingTickets = tickets.filter(
-    (t) => !t.is_used && (!t.event || new Date(t.event.start_date) >= now)
+    (t) => !t.is_used && !!t.event && new Date(t.event.start_date) >= now
   );
   const pastTickets = tickets.filter(
-    (t) => t.is_used || (t.event ? new Date(t.event.start_date) < now : false)
+    (t) => t.is_used || !t.event || new Date(t.event.start_date) < now
   );
 
   const TicketCard = ({ ticket }: { ticket: TicketWithDetails }) => (
@@ -237,20 +285,29 @@ const MyTickets = () => {
                     Transferência Pendente
                   </Badge>
                 )}
-                {/* Order Status Badges */}
-                {ticket.order_status === 'pending' && (
+                {/* Status Badge */}
+                {ticket.is_used ? (
+                  <Badge variant="secondary" className="text-xs">
+                    Utilizado
+                  </Badge>
+                ) : ticket.is_complimentary ? (
+                  <Badge variant="secondary" className="text-xs">
+                    Cortesia
+                  </Badge>
+                ) : ticket.order_status === "pending" ? (
                   <Badge className="text-xs bg-yellow-500/20 text-yellow-600 border-yellow-500/30">
                     Pagamento Pendente
                   </Badge>
-                )}
-                {ticket.order_status === 'cancelled' || ticket.order_status === 'failed' ? (
+                ) : ticket.order_status === "cancelled" || ticket.order_status === "failed" ? (
                   <Badge className="text-xs bg-red-500/20 text-red-600 border-red-500/30">
                     Pagamento Recusado
                   </Badge>
-                ) : null}
-                {ticket.order_status === 'paid' && (
-                  <Badge variant={ticket.is_used ? "secondary" : "default"} className={ticket.is_used ? "" : "bg-green-500/20 text-green-600 border-green-500/30"}>
-                    {ticket.is_used ? "Utilizado" : "Aprovado"}
+                ) : (
+                  <Badge
+                    variant="default"
+                    className="text-xs bg-green-500/20 text-green-600 border-green-500/30"
+                  >
+                    Aprovado
                   </Badge>
                 )}
               </div>
@@ -264,12 +321,15 @@ const MyTickets = () => {
                       {format(new Date(ticket.event.start_date), "dd MMM yyyy • HH:mm", { locale: ptBR })}
                     </span>
                   </div>
-                  {ticket.event.city && (
+                  {(ticket.event.venue_name || ticket.event.city || ticket.event.state) && (
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4" />
                       <span>
-                        {ticket.event.venue_name && `${ticket.event.venue_name}, `}
-                        {ticket.event.city}
+                        {ticket.event.venue_name ? `${ticket.event.venue_name}${ticket.event.city ? ", " : ""}` : ""}
+                        {ticket.event.city || ""}
+                        {ticket.event.state
+                          ? `${ticket.event.city ? " • " : ticket.event.venue_name ? " • " : ""}${ticket.event.state}`
+                          : ""}
                       </span>
                     </div>
                   )}
