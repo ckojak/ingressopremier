@@ -61,6 +61,7 @@ const MyTickets = () => {
     }
 
     try {
+      // First, fetch tickets with all possible relations
       const { data, error } = await supabase
         .from("tickets")
         .select(`
@@ -75,13 +76,9 @@ const MyTickets = () => {
           event_id,
           ticket_type_id,
           order_item_id,
-          order_items(
-            orders(status),
-            ticket_types(
-              name,
-              price,
-              events(id, title, start_date, venue_name, city, state, image_url)
-            )
+          order_items!left(
+            ticket_type_id,
+            orders!inner(status)
           ),
           events(id, title, start_date, venue_name, city, state, image_url),
           ticket_types(name, price)
@@ -90,6 +87,8 @@ const MyTickets = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
+
+      console.log("Fetched tickets:", data);
 
       // Check which tickets were received via transfer
       const ticketIds = (data || []).map(t => t.id);
@@ -101,59 +100,66 @@ const MyTickets = () => {
 
       const transferredTicketIds = new Set((transfersData || []).map(t => t.ticket_id));
 
+      // Collect ticket_type_ids from order_items to fetch event info
+      const orderItemTicketTypeIds: string[] = [];
+      (data || []).forEach(ticket => {
+        const orderItem = ticket.order_items as { ticket_type_id: string } | null;
+        if (orderItem?.ticket_type_id) {
+          orderItemTicketTypeIds.push(orderItem.ticket_type_id);
+        }
+      });
+
+      // Fetch ticket types with events for order_items
+      let ticketTypesWithEvents: Record<string, { name: string; price: number; event: TicketWithDetails["event"] }> = {};
+      if (orderItemTicketTypeIds.length > 0) {
+        const { data: ttData } = await supabase
+          .from("ticket_types")
+          .select(`
+            id,
+            name,
+            price,
+            events(id, title, start_date, venue_name, city, state, image_url)
+          `)
+          .in("id", orderItemTicketTypeIds);
+
+        (ttData || []).forEach((tt: any) => {
+          ticketTypesWithEvents[tt.id] = {
+            name: tt.name,
+            price: tt.price,
+            event: tt.events,
+          };
+        });
+      }
+
       const formattedTickets = (data || []).map(ticket => {
         const isComplimentary = !ticket.order_item_id;
         
-        // For complimentary tickets, use direct relations; for paid tickets, use order_items path
-        let orderStatus: string;
+        let orderStatus: string = "paid";
         let ticketType: { name: string; price: number } | null = null;
         let event: TicketWithDetails["event"] = null;
 
-        if (isComplimentary) {
-          // Complimentary ticket - use direct relations
-          orderStatus = "paid"; // Complimentary is always "paid" status
-          
-          const directTicketType = ticket.ticket_types as { name: string; price: number } | null;
-          const directEvent = ticket.events as {
-            id: string;
-            title: string;
-            start_date: string;
-            venue_name: string | null;
-            city: string | null;
-            state: string | null;
-            image_url: string | null;
-          } | null;
-          
-          ticketType = directTicketType;
-          event = directEvent;
-        } else {
-          // Paid ticket - use order_items path
-          const orderItem = ticket.order_items as unknown as {
-            orders: { status: string } | null;
-            ticket_types:
-              | {
-                  name: string;
-                  price: number;
-                  events:
-                    | {
-                        id: string;
-                        title: string;
-                        start_date: string;
-                        venue_name: string | null;
-                        city: string | null;
-                        state: string | null;
-                        image_url: string | null;
-                      }
-                    | null;
-                }
-              | null;
-          } | null;
+        // Try direct relations first (for complimentary or tickets with direct event_id)
+        const directTicketType = ticket.ticket_types as { name: string; price: number } | null;
+        const directEvent = ticket.events as TicketWithDetails["event"];
 
+        if (directEvent) {
+          event = directEvent;
+        }
+        if (directTicketType) {
+          ticketType = directTicketType;
+        }
+
+        if (!isComplimentary) {
+          // Paid ticket - get status from order_items
+          const orderItem = ticket.order_items as { ticket_type_id: string; orders: { status: string } } | null;
           orderStatus = orderItem?.orders?.status || "paid";
-          ticketType = orderItem?.ticket_types
-            ? { name: orderItem.ticket_types.name, price: orderItem.ticket_types.price }
-            : null;
-          event = orderItem?.ticket_types?.events || null;
+
+          // If no direct event/ticket_type, try to get from order_items -> ticket_types
+          if (orderItem?.ticket_type_id && ticketTypesWithEvents[orderItem.ticket_type_id]) {
+            const ttInfo = ticketTypesWithEvents[orderItem.ticket_type_id];
+            if (!ticketType) ticketType = { name: ttInfo.name, price: ttInfo.price };
+            if (!event) event = ttInfo.event;
+          }
         }
 
         return {
@@ -166,6 +172,7 @@ const MyTickets = () => {
         };
       });
 
+      console.log("Formatted tickets:", formattedTickets);
       setTickets(formattedTickets);
     } catch (error) {
       console.error("Error fetching tickets:", error);
