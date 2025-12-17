@@ -142,13 +142,39 @@ const MyTickets = () => {
         ticketTypesById.set(tt.id, { name: tt.name, price: tt.price })
       );
 
-      // Collect ticket_type_ids from order_items to fetch event info
+      // Fetch order_items separately (some RLS setups may hide nested joins)
+      const orderItemIds = Array.from(
+        new Set((data || []).map((t: any) => t.order_item_id).filter(Boolean))
+      ) as string[];
+
+      const { data: orderItemsData } = orderItemIds.length
+        ? await supabase
+            .from("order_items")
+            .select(`
+              id,
+              ticket_type_id,
+              orders(status)
+            `)
+            .in("id", orderItemIds)
+        : ({ data: [] } as any);
+
+      const orderItemsById = new Map<
+        string,
+        { ticket_type_id: string | null; orders: { status: string } | null }
+      >();
+      (orderItemsData || []).forEach((oi: any) => {
+        orderItemsById.set(oi.id, {
+          ticket_type_id: oi.ticket_type_id ?? null,
+          orders: oi.orders ?? null,
+        });
+      });
+
+      // Collect ticket_type_ids from order_items (nested or direct) to fetch event info
       const orderItemTicketTypeIds = Array.from(
-        new Set(
-          (data || [])
-            .map((ticket) => (ticket.order_items as any)?.ticket_type_id)
-            .filter(Boolean)
-        )
+        new Set([
+          ...(data || []).map((t: any) => (t.order_items as any)?.ticket_type_id).filter(Boolean),
+          ...(orderItemsData || []).map((oi: any) => oi.ticket_type_id).filter(Boolean),
+        ])
       ) as string[];
 
       // Fetch ticket types with events for order_items
@@ -192,16 +218,21 @@ const MyTickets = () => {
         let event: TicketWithDetails["event"] = directEvent || eventFromId || null;
 
         if (!isComplimentary) {
-          // Paid ticket - get status from order_items
-          const orderItem = ticket.order_items as
+          // Paid ticket - get status from order_items (nested or direct)
+          const nestedOrderItem = ticket.order_items as
             | { ticket_type_id: string | null; orders: { status: string } | null }
             | null;
+          const directOrderItem = ticket.order_item_id
+            ? orderItemsById.get(ticket.order_item_id)
+            : undefined;
 
-          orderStatus = orderItem?.orders?.status || "paid";
+          const resolvedOrderItem = nestedOrderItem || directOrderItem || null;
+          orderStatus = resolvedOrderItem?.orders?.status || "paid";
 
           // If no direct event/ticket_type, try to get from order_items -> ticket_types
-          if (orderItem?.ticket_type_id && ticketTypesWithEvents[orderItem.ticket_type_id]) {
-            const ttInfo = ticketTypesWithEvents[orderItem.ticket_type_id];
+          const ttId = resolvedOrderItem?.ticket_type_id || null;
+          if (ttId && ticketTypesWithEvents[ttId]) {
+            const ttInfo = ticketTypesWithEvents[ttId];
             if (!ticketType) ticketType = { name: ttInfo.name, price: ttInfo.price };
             if (!event) event = ttInfo.event;
           }
