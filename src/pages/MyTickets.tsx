@@ -74,10 +74,10 @@ const MyTickets = () => {
           transfer_status,
           order_items!inner(
             orders!inner(status),
-            ticket_types!inner(
+            ticket_types(
               name,
               price,
-              events!inner(id, title, start_date, venue_name, city, state, image_url)
+              events(id, title, start_date, venue_name, city, state, image_url)
             )
           )
         `)
@@ -98,37 +98,40 @@ const MyTickets = () => {
 
       const formattedTickets = (data || []).map(ticket => {
         // Extract data from nested structure through order_items -> ticket_types -> events
-        const orderItem = ticket.order_items as unknown as { 
-          orders: { status: string },
-          ticket_types: {
-            name: string,
-            price: number,
-            events: {
-              id: string,
-              title: string,
-              start_date: string,
-              venue_name: string | null,
-              city: string | null,
-              state: string | null,
-              image_url: string | null,
-            }
-          }
+        const orderItem = ticket.order_items as unknown as {
+          orders: { status: string } | null;
+          ticket_types:
+            | {
+                name: string;
+                price: number;
+                events:
+                  | {
+                      id: string;
+                      title: string;
+                      start_date: string;
+                      venue_name: string | null;
+                      city: string | null;
+                      state: string | null;
+                      image_url: string | null;
+                    }
+                  | null;
+              }
+            | null;
         } | null;
-        
-        const orderStatus = orderItem?.orders?.status || 'paid';
-        const ticketType = orderItem?.ticket_types ? {
-          name: orderItem.ticket_types.name,
-          price: orderItem.ticket_types.price
-        } : null;
+
+        const orderStatus = orderItem?.orders?.status || "paid";
+        const ticketType = orderItem?.ticket_types
+          ? { name: orderItem.ticket_types.name, price: orderItem.ticket_types.price }
+          : null;
         const event = orderItem?.ticket_types?.events || null;
-        
+
         return {
           ...ticket,
           event: event as TicketWithDetails["event"],
           ticket_type: ticketType as TicketWithDetails["ticket_type"],
           wasTransferred: transferredTicketIds.has(ticket.id),
           transfer_status: ticket.transfer_status || "none",
-          order_status: orderStatus as TicketWithDetails['order_status'],
+          order_status: orderStatus as TicketWithDetails["order_status"],
         };
       });
 
@@ -144,11 +147,13 @@ const MyTickets = () => {
     fetchTickets();
   }, [navigate]);
 
+  const now = new Date();
+
   const upcomingTickets = tickets.filter(
-    t => t.event && new Date(t.event.start_date) >= new Date() && !t.is_used
+    (t) => !t.is_used && (!t.event || new Date(t.event.start_date) >= now)
   );
   const pastTickets = tickets.filter(
-    t => t.event && (new Date(t.event.start_date) < new Date() || t.is_used)
+    (t) => t.is_used || (t.event ? new Date(t.event.start_date) < now : false)
   );
 
   const TicketCard = ({ ticket }: { ticket: TicketWithDetails }) => (
@@ -177,10 +182,10 @@ const MyTickets = () => {
             <div className="flex items-start justify-between mb-2">
               <div>
                 <h3 className="font-semibold text-foreground line-clamp-1">
-                  {ticket.event?.title}
+                  {ticket.event?.title || "Ingresso Quintal Barra"}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {ticket.ticket_type?.name}
+                  {ticket.ticket_type?.name || "Ingresso"}
                 </p>
               </div>
               <div className="flex gap-1 flex-wrap">
@@ -213,7 +218,7 @@ const MyTickets = () => {
               </div>
             </div>
             <div className="space-y-1 text-sm text-muted-foreground">
-              {ticket.event && (
+              {ticket.event ? (
                 <>
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
@@ -231,6 +236,15 @@ const MyTickets = () => {
                     </div>
                   )}
                 </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  <span>
+                    {ticket.created_at
+                      ? `Comprado em ${format(new Date(ticket.created_at), "dd MMM yyyy", { locale: ptBR })}`
+                      : "Detalhes do evento indisponíveis"}
+                  </span>
+                </div>
               )}
             </div>
             <div className="mt-3 flex items-center gap-2">
@@ -341,11 +355,13 @@ const MyTickets = () => {
             <div className="space-y-6">
               <div className="text-center">
                 <h3 className="font-semibold text-lg text-foreground mb-1">
-                  {selectedTicket.event?.title}
+                  {selectedTicket.event?.title || "Ingresso Quintal Barra"}
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  {selectedTicket.ticket_type?.name}
-                </p>
+                {selectedTicket.ticket_type?.name && (
+                  <p className="text-sm text-muted-foreground">
+                    {selectedTicket.ticket_type.name}
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-center p-6 bg-white rounded-xl">
