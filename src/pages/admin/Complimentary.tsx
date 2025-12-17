@@ -157,6 +157,20 @@ const Complimentary = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Não autenticado");
 
+      // Find recipient user by email
+      const recipientEmail = newTicket.recipientEmail.toLowerCase().trim();
+      const { data: recipientProfile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", recipientEmail)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error("Error finding recipient:", profileError);
+      }
+
+      const recipientUserId = recipientProfile?.id || null;
+
       const tickets = [];
       for (let i = 0; i < newTicket.quantity; i++) {
         tickets.push({
@@ -164,14 +178,12 @@ const Complimentary = () => {
           ticket_type_id: newTicket.ticketTypeId,
           ticket_code: generateTicketCode(),
           attendee_name: newTicket.recipientName || null,
-          attendee_email: newTicket.recipientEmail.toLowerCase(),
-          user_id: null, // Will be null for complimentary tickets until claimed
+          attendee_email: recipientEmail,
+          user_id: recipientUserId, // Assign directly to user if found
           order_item_id: null, // No order for complimentary
         });
       }
 
-      // Insert tickets using service role via edge function would be needed
-      // For now, we'll create a workaround by temporarily adjusting
       const { data: insertedTickets, error } = await supabase
         .from("tickets")
         .insert(tickets)
@@ -187,7 +199,7 @@ const Complimentary = () => {
       await supabase.functions.invoke("send-ticket-email", {
         body: {
           type: "complimentary",
-          recipientEmail: newTicket.recipientEmail.toLowerCase(),
+          recipientEmail: recipientEmail,
           recipientName: newTicket.recipientName || "Convidado",
           eventTitle: event?.title,
           eventDate: event?.start_date 
@@ -201,7 +213,11 @@ const Complimentary = () => {
         },
       });
 
-      toast.success(`${newTicket.quantity} cortesia(s) enviada(s) com sucesso!`);
+      const message = recipientUserId 
+        ? `${newTicket.quantity} cortesia(s) enviada(s) com sucesso! O usuário já pode ver em "Meus Ingressos".`
+        : `${newTicket.quantity} cortesia(s) enviada(s)! O usuário receberá o ingresso quando cadastrar-se com este e-mail.`;
+      
+      toast.success(message);
       setIsDialogOpen(false);
       setNewTicket({
         eventId: "",

@@ -72,14 +72,19 @@ const MyTickets = () => {
           used_at,
           created_at,
           transfer_status,
-          order_items!inner(
-            orders!inner(status),
+          event_id,
+          ticket_type_id,
+          order_item_id,
+          order_items(
+            orders(status),
             ticket_types(
               name,
               price,
               events(id, title, start_date, venue_name, city, state, image_url)
             )
-          )
+          ),
+          events(id, title, start_date, venue_name, city, state, image_url),
+          ticket_types(name, price)
         `)
         .eq("user_id", session.user.id)
         .order("created_at", { ascending: false });
@@ -97,38 +102,64 @@ const MyTickets = () => {
       const transferredTicketIds = new Set((transfersData || []).map(t => t.ticket_id));
 
       const formattedTickets = (data || []).map(ticket => {
-        // Extract data from nested structure through order_items -> ticket_types -> events
-        const orderItem = ticket.order_items as unknown as {
-          orders: { status: string } | null;
-          ticket_types:
-            | {
-                name: string;
-                price: number;
-                events:
-                  | {
-                      id: string;
-                      title: string;
-                      start_date: string;
-                      venue_name: string | null;
-                      city: string | null;
-                      state: string | null;
-                      image_url: string | null;
-                    }
-                  | null;
-              }
-            | null;
-        } | null;
+        const isComplimentary = !ticket.order_item_id;
+        
+        // For complimentary tickets, use direct relations; for paid tickets, use order_items path
+        let orderStatus: string;
+        let ticketType: { name: string; price: number } | null = null;
+        let event: TicketWithDetails["event"] = null;
 
-        const orderStatus = orderItem?.orders?.status || "paid";
-        const ticketType = orderItem?.ticket_types
-          ? { name: orderItem.ticket_types.name, price: orderItem.ticket_types.price }
-          : null;
-        const event = orderItem?.ticket_types?.events || null;
+        if (isComplimentary) {
+          // Complimentary ticket - use direct relations
+          orderStatus = "paid"; // Complimentary is always "paid" status
+          
+          const directTicketType = ticket.ticket_types as { name: string; price: number } | null;
+          const directEvent = ticket.events as {
+            id: string;
+            title: string;
+            start_date: string;
+            venue_name: string | null;
+            city: string | null;
+            state: string | null;
+            image_url: string | null;
+          } | null;
+          
+          ticketType = directTicketType;
+          event = directEvent;
+        } else {
+          // Paid ticket - use order_items path
+          const orderItem = ticket.order_items as unknown as {
+            orders: { status: string } | null;
+            ticket_types:
+              | {
+                  name: string;
+                  price: number;
+                  events:
+                    | {
+                        id: string;
+                        title: string;
+                        start_date: string;
+                        venue_name: string | null;
+                        city: string | null;
+                        state: string | null;
+                        image_url: string | null;
+                      }
+                    | null;
+                }
+              | null;
+          } | null;
+
+          orderStatus = orderItem?.orders?.status || "paid";
+          ticketType = orderItem?.ticket_types
+            ? { name: orderItem.ticket_types.name, price: orderItem.ticket_types.price }
+            : null;
+          event = orderItem?.ticket_types?.events || null;
+        }
 
         return {
           ...ticket,
-          event: event as TicketWithDetails["event"],
-          ticket_type: ticketType as TicketWithDetails["ticket_type"],
+          event,
+          ticket_type: ticketType,
           wasTransferred: transferredTicketIds.has(ticket.id),
           transfer_status: ticket.transfer_status || "none",
           order_status: orderStatus as TicketWithDetails["order_status"],
