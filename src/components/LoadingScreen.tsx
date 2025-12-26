@@ -76,7 +76,7 @@ const LoadingScreen = ({ onLoadingComplete }: LoadingScreenProps) => {
         {/* Enhanced loading bar container */}
         <div className="w-72 h-2 bg-secondary rounded-full overflow-hidden mt-6 border border-border/30">
           <motion.div
-            className="h-full gradient-primary rounded-full shadow-[0_0_15px_hsl(252,85%,63%,0.5)]"
+            className="h-full gradient-primary rounded-full shadow-premium-bar"
             initial={{ width: "0%" }}
             animate={{ width: "100%" }}
             transition={{ duration: 2.2, ease: "easeInOut" }}
