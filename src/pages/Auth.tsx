@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { Separator } from "@/components/ui/separator";
-import quintalLogo from "@/assets/quintal-logo.png";
+import premierpassLogo from "@/assets/premierpass-logo.png";
 
 interface PasswordStrength {
   hasMinLength: boolean;
@@ -301,9 +301,9 @@ const Auth = () => {
           className="flex flex-col items-center gap-4"
         >
           <motion.img
-            src={quintalLogo}
-            alt="Quintal Barra"
-            className="w-20 h-20 rounded-full"
+            src={premierpassLogo}
+            alt="PremierPass"
+            className="w-20 h-20 rounded-2xl"
             animate={{ scale: [1, 1.05, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
@@ -313,11 +313,11 @@ const Auth = () => {
             transition={{ delay: 0.3 }}
             className="text-center"
           >
-            <span className="text-2xl font-display font-semibold text-foreground tracking-wider">
-              QUINTAL
+            <span className="text-2xl font-display font-bold text-foreground">
+              Premier<span className="text-gradient">Pass</span>
             </span>
-            <span className="block text-xs tracking-[0.3em] text-primary uppercase">
-              Gastro Music Bar
+            <span className="block text-xs tracking-widest text-muted-foreground uppercase">
+              Ingressos Premium
             </span>
           </motion.div>
           <motion.div
@@ -351,13 +351,13 @@ const Auth = () => {
 
         <div className="glass rounded-2xl p-8 border border-border/50">
           <div className="flex items-center gap-3 justify-center mb-8">
-            <img src={quintalLogo} alt="Quintal Barra" className="w-14 h-14 rounded-full" />
+            <img src={premierpassLogo} alt="PremierPass" className="w-14 h-14 rounded-xl" />
             <div className="text-center">
-              <span className="text-2xl font-display font-semibold text-foreground tracking-wider">
-                QUINTAL
+              <span className="text-2xl font-display font-bold text-foreground">
+                Premier<span className="text-gradient">Pass</span>
               </span>
-              <span className="block text-xs tracking-[0.2em] text-primary uppercase">
-                Gastro Music Bar
+              <span className="block text-xs tracking-widest text-muted-foreground uppercase">
+                Ingressos Premium
               </span>
             </div>
           </div>

@@ -14,7 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Outfit', 'sans-serif'],
+        sans: ['Inter', 'sans-serif'],
+        display: ['Montserrat', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -88,8 +89,8 @@ export default {
           to: { opacity: "1", transform: "scale(1)" },
         },
         "glow-pulse": {
-          "0%, 100%": { boxShadow: "0 0 20px hsl(190, 90%, 50%, 0.2)" },
-          "50%": { boxShadow: "0 0 40px hsl(190, 90%, 50%, 0.4)" },
+          "0%, 100%": { boxShadow: "0 0 20px hsl(250, 80%, 60%, 0.3)" },
+          "50%": { boxShadow: "0 0 40px hsl(250, 80%, 60%, 0.5)" },
         },
         "loading-bar": {
           "0%": { width: "0%" },
@@ -98,6 +99,10 @@ export default {
         "pulse-glow": {
           "0%, 100%": { opacity: "0.4" },
           "50%": { opacity: "1" },
+        },
+        "shimmer": {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
         },
       },
       animation: {
@@ -109,6 +114,7 @@ export default {
         "glow-pulse": "glow-pulse 2s ease-in-out infinite",
         "loading-bar": "loading-bar 2s ease-in-out forwards",
         "pulse-glow": "pulse-glow 1.5s ease-in-out infinite",
+        "shimmer": "shimmer 2s linear infinite",
       },
     },
   },

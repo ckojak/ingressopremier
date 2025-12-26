@@ -8,8 +8,8 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEO 
-        title="Quintal Barra - Gastro Music Bar | Ingressos"
-        description="Garanta seu ingresso para os melhores eventos do Quintal Barra. Gastro Music Bar na Barra da Tijuca, Rio de Janeiro."
+        title="PremierPass - Ingressos para os Melhores Eventos"
+        description="Compre ingressos para os melhores eventos com segurança e praticidade. PremierPass - Sua porta de entrada para experiências únicas."
       />
       <Header />
       <main>
