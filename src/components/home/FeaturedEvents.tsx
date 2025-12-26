@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Calendar, MapPin, Ticket } from "lucide-react";
+import { ArrowRight, Calendar, MapPin, Ticket, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
@@ -104,21 +104,21 @@ const FeaturedEvents = () => {
             transition={{ duration: 0.6 }}
             className="text-center py-16"
           >
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-              <Ticket className="w-10 h-10 text-primary" />
+            <div className="w-20 h-20 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-6 shadow-premium">
+              <Ticket className="w-10 h-10 text-primary-foreground" />
             </div>
-            <h2 className="text-3xl md:text-4xl font-display font-semibold text-foreground mb-4">
+            <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-4">
               Em breve, novos eventos
             </h2>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               Estamos preparando experiências incríveis para você. Fique ligado nas nossas redes sociais!
             </p>
             <a 
-              href="https://instagram.com/quintalbarra" 
+              href="https://instagram.com/premierpass" 
               target="_blank" 
               rel="noopener noreferrer"
             >
-              <Button variant="outline" className="border-primary/30 hover:border-primary">
+              <Button variant="outline" className="border-primary/30 hover:border-primary hover:bg-primary/10">
                 Seguir no Instagram
               </Button>
             </a>
@@ -129,7 +129,10 @@ const FeaturedEvents = () => {
   }
 
   return (
-    <section id="eventos" className="py-20 bg-background">
+    <section id="eventos" className="py-20 bg-background relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+      
       <div className="container mx-auto px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -138,11 +141,16 @@ const FeaturedEvents = () => {
           transition={{ duration: 0.6 }}
           className="text-center mb-12"
         >
-          <h2 className="text-3xl md:text-5xl font-display font-semibold text-foreground mb-4 tracking-wide">
-            Próximos Eventos
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <Sparkles className="w-5 h-5 text-accent" />
+            <span className="text-sm tracking-widest text-accent uppercase font-medium">Destaques</span>
+            <Sparkles className="w-5 h-5 text-accent" />
+          </div>
+          <h2 className="text-3xl md:text-5xl font-display font-bold text-foreground mb-4">
+            Próximos <span className="text-gradient">Eventos</span>
           </h2>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Garanta seu ingresso e viva experiências únicas no Quintal
+            Garanta seu ingresso e viva experiências únicas
           </p>
         </motion.div>
 
@@ -156,7 +164,7 @@ const FeaturedEvents = () => {
               transition={{ delay: index * 0.1, duration: 0.5 }}
             >
               <Link to={`/evento/${event.id}`} className="group block">
-                <div className="gradient-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-500 hover:-translate-y-2 border border-border/30">
+                <div className="gradient-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-500 hover:-translate-y-2 border border-border/30 hover:border-primary/30">
                   {/* Image */}
                   <div className="relative aspect-[16/10] overflow-hidden">
                     {event.image_url ? (
@@ -170,9 +178,9 @@ const FeaturedEvents = () => {
                         <Ticket className="w-12 h-12 text-muted-foreground/50" />
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
                     {event.category && (
-                      <Badge className="absolute top-4 left-4 bg-primary/90 text-primary-foreground border-0">
+                      <Badge className="absolute top-4 left-4 gradient-primary text-primary-foreground border-0 font-semibold">
                         {event.category}
                       </Badge>
                     )}
@@ -180,7 +188,7 @@ const FeaturedEvents = () => {
 
                   {/* Content */}
                   <div className="p-5">
-                    <h3 className="font-display text-xl font-semibold text-foreground mb-3 line-clamp-2 group-hover:text-primary transition-colors">
+                    <h3 className="font-display text-xl font-bold text-foreground mb-3 line-clamp-2 group-hover:text-primary transition-colors">
                       {event.title}
                     </h3>
 
@@ -193,7 +201,7 @@ const FeaturedEvents = () => {
                       </div>
                       {event.venue_name && (
                         <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                          <MapPin className="w-4 h-4 text-primary" />
+                          <MapPin className="w-4 h-4 text-accent" />
                           <span className="line-clamp-1">{event.venue_name}</span>
                         </div>
                       )}
@@ -202,14 +210,14 @@ const FeaturedEvents = () => {
                     <div className="flex items-center justify-between pt-4 border-t border-border/50">
                       <div>
                         <span className="text-xs text-muted-foreground">A partir de</span>
-                        <p className="text-lg font-semibold text-primary">
+                        <p className="text-lg font-bold text-gradient">
                           {event.min_price !== undefined 
                             ? `R$ ${event.min_price.toFixed(2)}`
                             : "Ver ingressos"}
                         </p>
                       </div>
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ArrowRight className="w-5 h-5 text-primary" />
+                      <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform group-hover:scale-110">
+                        <ArrowRight className="w-5 h-5 text-primary-foreground" />
                       </div>
                     </div>
                   </div>
@@ -228,7 +236,7 @@ const FeaturedEvents = () => {
             className="text-center mt-12"
           >
             <Link to="/eventos">
-              <Button variant="outline" size="lg" className="border-primary/30 hover:border-primary group">
+              <Button variant="outline" size="lg" className="border-primary/30 hover:border-primary hover:bg-primary/10 group">
                 Ver todos os eventos
                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
               </Button>

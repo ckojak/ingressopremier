@@ -43,8 +43,8 @@ const LoadingScreen = ({ onLoadingComplete }: LoadingScreenProps) => {
           }}
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
         >
-          <div className="w-20 h-20 rounded-2xl gradient-primary flex items-center justify-center shadow-glow">
-            <Ticket className="w-10 h-10 text-primary-foreground" />
+          <div className="w-24 h-24 rounded-2xl gradient-primary flex items-center justify-center shadow-premium animate-pulse-glow">
+            <Ticket className="w-12 h-12 text-primary-foreground" />
           </div>
           <motion.div
             className="absolute inset-0 rounded-2xl gradient-primary opacity-50 blur-xl"
@@ -58,11 +58,11 @@ const LoadingScreen = ({ onLoadingComplete }: LoadingScreenProps) => {
 
         {/* Brand name */}
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-foreground">
-            Quintal <span className="text-gradient">Barra</span>
+          <h1 className="text-4xl font-display font-bold text-foreground">
+            Premier<span className="text-gradient">Pass</span>
           </h1>
           <p className="text-muted-foreground text-sm mt-2 uppercase tracking-widest">
-            Seu point na Barra
+            Ingressos Premium
           </p>
         </div>
 
@@ -89,7 +89,7 @@ const LoadingScreen = ({ onLoadingComplete }: LoadingScreenProps) => {
       {/* Footer */}
       <div className="absolute bottom-8 text-center">
         <p className="text-muted-foreground/50 text-xs">
-          ©{new Date().getFullYear()} Quintal Barra • Todos os direitos reservados
+          © {new Date().getFullYear()} PremierPass • Todos os direitos reservados
         </p>
       </div>
     </motion.div>

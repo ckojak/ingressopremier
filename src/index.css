@@ -2,63 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 25 15% 8%;
-    --foreground: 35 20% 95%;
+    --background: 220 20% 4%;
+    --foreground: 220 20% 98%;
 
-    --card: 25 12% 12%;
-    --card-foreground: 35 20% 95%;
+    --card: 220 18% 8%;
+    --card-foreground: 220 20% 98%;
 
-    --popover: 25 12% 12%;
-    --popover-foreground: 35 20% 95%;
+    --popover: 220 18% 8%;
+    --popover-foreground: 220 20% 98%;
 
-    --primary: 35 55% 55%;
-    --primary-foreground: 25 15% 8%;
+    --primary: 250 80% 60%;
+    --primary-foreground: 220 20% 98%;
 
-    --secondary: 25 10% 18%;
-    --secondary-foreground: 35 20% 95%;
+    --secondary: 220 15% 12%;
+    --secondary-foreground: 220 20% 98%;
 
-    --muted: 25 8% 22%;
-    --muted-foreground: 35 15% 55%;
+    --muted: 220 12% 16%;
+    --muted-foreground: 220 15% 55%;
 
-    --accent: 35 65% 45%;
-    --accent-foreground: 35 20% 95%;
+    --accent: 280 70% 55%;
+    --accent-foreground: 220 20% 98%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 25 10% 18%;
-    --input: 25 10% 18%;
-    --ring: 35 55% 55%;
+    --border: 220 15% 15%;
+    --input: 220 15% 15%;
+    --ring: 250 80% 60%;
 
     --radius: 0.75rem;
 
-    /* Custom tokens - Quintal Barra style */
-    --gradient-primary: linear-gradient(135deg, hsl(35, 55%, 55%) 0%, hsl(35, 65%, 45%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(35, 65%, 45%) 0%, hsl(25, 50%, 35%) 100%);
-    --gradient-hero: radial-gradient(ellipse at center, hsl(25, 12%, 15%) 0%, hsl(25, 15%, 8%) 70%);
-    --gradient-card: linear-gradient(145deg, hsl(25, 12%, 14%) 0%, hsl(25, 12%, 10%) 100%);
-    --shadow-glow: 0 0 80px hsl(35, 55%, 55%, 0.15);
-    --shadow-accent: 0 0 60px hsl(35, 65%, 45%, 0.2);
-    --shadow-card: 0 8px 32px hsl(25, 15%, 0%, 0.5);
-    --shadow-card-hover: 0 16px 48px hsl(25, 15%, 0%, 0.6);
+    /* PremierPass Premium Theme */
+    --gradient-primary: linear-gradient(135deg, hsl(250, 80%, 60%) 0%, hsl(280, 70%, 55%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(280, 70%, 55%) 0%, hsl(250, 80%, 50%) 100%);
+    --gradient-hero: radial-gradient(ellipse at center, hsl(220, 18%, 12%) 0%, hsl(220, 20%, 4%) 70%);
+    --gradient-card: linear-gradient(145deg, hsl(220, 18%, 10%) 0%, hsl(220, 18%, 6%) 100%);
+    --gradient-premium: linear-gradient(135deg, hsl(250, 80%, 60%) 0%, hsl(280, 70%, 55%) 50%, hsl(250, 80%, 60%) 100%);
+    
+    --shadow-glow: 0 0 80px hsl(250, 80%, 60%, 0.2);
+    --shadow-accent: 0 0 60px hsl(280, 70%, 55%, 0.25);
+    --shadow-card: 0 8px 32px hsl(220, 20%, 0%, 0.5);
+    --shadow-card-hover: 0 16px 48px hsl(220, 20%, 0%, 0.6);
+    --shadow-premium: 0 0 40px hsl(250, 80%, 60%, 0.3);
 
-    --sidebar-background: 25 12% 10%;
-    --sidebar-foreground: 35 20% 95%;
-    --sidebar-primary: 35 55% 55%;
-    --sidebar-primary-foreground: 25 15% 8%;
-    --sidebar-accent: 25 10% 18%;
-    --sidebar-accent-foreground: 35 20% 95%;
-    --sidebar-border: 25 10% 18%;
-    --sidebar-ring: 35 55% 55%;
+    --sidebar-background: 220 18% 6%;
+    --sidebar-foreground: 220 20% 98%;
+    --sidebar-primary: 250 80% 60%;
+    --sidebar-primary-foreground: 220 20% 98%;
+    --sidebar-accent: 220 15% 12%;
+    --sidebar-accent-foreground: 220 20% 98%;
+    --sidebar-border: 220 15% 15%;
+    --sidebar-ring: 250 80% 60%;
   }
 
   .dark {
-    --background: 25 15% 8%;
-    --foreground: 35 20% 95%;
+    --background: 220 20% 4%;
+    --foreground: 220 20% 98%;
   }
 }
 
@@ -69,12 +72,12 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Cormorant Garamond', serif;
-    @apply font-semibold tracking-wide;
+    font-family: 'Montserrat', sans-serif;
+    @apply font-bold tracking-tight;
   }
 }
 
@@ -95,6 +98,10 @@
     background: var(--gradient-card);
   }
 
+  .gradient-premium {
+    background: var(--gradient-premium);
+  }
+
   .shadow-glow {
     box-shadow: var(--shadow-glow);
   }
@@ -109,6 +116,10 @@
 
   .shadow-card-hover {
     box-shadow: var(--shadow-card-hover);
+  }
+
+  .shadow-premium {
+    box-shadow: var(--shadow-premium);
   }
 
   .text-gradient {
@@ -129,8 +140,18 @@
     @apply bg-card/80 backdrop-blur-xl border border-border/50;
   }
 
+  .glass-premium {
+    @apply bg-card/60 backdrop-blur-2xl border border-primary/20;
+  }
+
   .font-display {
-    font-family: 'Cormorant Garamond', serif;
+    font-family: 'Montserrat', sans-serif;
+  }
+
+  .border-glow {
+    border: 1px solid transparent;
+    background: linear-gradient(var(--gradient-card), var(--gradient-card)) padding-box,
+                var(--gradient-primary) border-box;
   }
 }
 
@@ -148,7 +169,7 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-muted-foreground/50;
+  @apply bg-primary/50;
 }
 
 /* Fix datetime-local inputs for dark theme */
@@ -175,6 +196,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .animate-gradient {
+  background-size: 200% 200%;
   animation: gradient 3s ease infinite;
 }
 
@@ -200,6 +222,20 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .animate-float-particle {
   animation: float-particle 8s ease-in-out infinite;
+}
+
+/* Pulse glow animation */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px hsl(250, 80%, 60%, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px hsl(250, 80%, 60%, 0.5), 0 0 60px hsl(280, 70%, 55%, 0.3);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
 }
 
 /* Hide scrollbar for carousel */

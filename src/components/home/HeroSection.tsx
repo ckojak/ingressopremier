@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { ChevronDown, Calendar } from "lucide-react";
-import quintalLogo from "@/assets/quintal-logo.png";
+import { ChevronDown, Ticket, Sparkles } from "lucide-react";
+import premierpassLogo from "@/assets/premierpass-logo.png";
 
 const HeroSection = () => {
   const scrollToEvents = () => {
@@ -11,82 +11,137 @@ const HeroSection = () => {
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Background Image Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/80 to-background z-10" />
+      {/* Background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-background z-0" />
       
-      {/* Ambient Light Effects */}
+      {/* Animated gradient orbs */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[150px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-accent/10 rounded-full blur-[120px]" />
+        <motion.div 
+          className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[150px]"
+          animate={{ 
+            scale: [1, 1.2, 1],
+            opacity: [0.2, 0.3, 0.2]
+          }}
+          transition={{ duration: 8, repeat: Infinity }}
+        />
+        <motion.div 
+          className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-accent/20 rounded-full blur-[120px]"
+          animate={{ 
+            scale: [1.2, 1, 1.2],
+            opacity: [0.15, 0.25, 0.15]
+          }}
+          transition={{ duration: 6, repeat: Infinity }}
+        />
+        <motion.div 
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-primary/10 rounded-full blur-[100px]"
+          animate={{ 
+            scale: [1, 1.3, 1],
+            opacity: [0.1, 0.2, 0.1]
+          }}
+          transition={{ duration: 10, repeat: Infinity }}
+        />
       </div>
 
+      {/* Grid pattern overlay */}
+      <div className="absolute inset-0 opacity-[0.02]" style={{
+        backgroundImage: 'linear-gradient(hsl(var(--primary)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--primary)) 1px, transparent 1px)',
+        backgroundSize: '50px 50px'
+      }} />
+
       <div className="container mx-auto px-4 relative z-20">
-        <div className="max-w-3xl mx-auto text-center">
+        <div className="max-w-4xl mx-auto text-center">
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.8 }}
-            className="mb-8"
+            className="mb-8 relative inline-block"
           >
             <img 
-              src={quintalLogo} 
-              alt="Quintal Barra" 
-              className="w-24 h-24 md:w-32 md:h-32 mx-auto rounded-full object-cover shadow-glow"
+              src={premierpassLogo} 
+              alt="PremierPass" 
+              className="w-28 h-28 md:w-36 md:h-36 mx-auto rounded-2xl object-cover shadow-premium"
+            />
+            <motion.div
+              className="absolute inset-0 rounded-2xl"
+              animate={{ 
+                boxShadow: [
+                  '0 0 20px hsl(250, 80%, 60%, 0.3)',
+                  '0 0 40px hsl(250, 80%, 60%, 0.5)',
+                  '0 0 20px hsl(250, 80%, 60%, 0.3)'
+                ]
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
             />
           </motion.div>
 
-          <motion.p
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="text-sm md:text-base tracking-[0.3em] text-primary uppercase mb-4"
+            className="flex items-center justify-center gap-2 mb-6"
           >
-            Barra da Tijuca • Rio de Janeiro
-          </motion.p>
+            <Sparkles className="w-4 h-4 text-accent" />
+            <span className="text-sm md:text-base tracking-widest text-accent uppercase font-medium">
+              Plataforma de Ingressos Premium
+            </span>
+            <Sparkles className="w-4 h-4 text-accent" />
+          </motion.div>
 
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-5xl md:text-7xl lg:text-8xl font-display font-semibold text-foreground mb-4 tracking-wider"
+            className="text-5xl md:text-7xl lg:text-8xl font-display font-bold text-foreground mb-4"
           >
-            QUINTAL
+            Premier<span className="text-gradient">Pass</span>
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-sm md:text-base tracking-[0.4em] text-primary/80 uppercase mb-8"
+            className="text-lg md:text-xl text-muted-foreground mb-12 max-w-2xl mx-auto font-light leading-relaxed"
           >
-            Gastro Music Bar
-          </motion.p>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="text-lg md:text-xl text-muted-foreground mb-12 max-w-xl mx-auto font-light"
-          >
-            Onde o Rio se encontra. Alta gastronomia, música na medida, drinks e aquela vibe boa.
+            Sua porta de entrada para os melhores eventos. Compre ingressos com segurança e praticidade.
           </motion.p>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
             className="flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
             <Button 
               size="lg" 
-              className="bg-primary text-primary-foreground hover:bg-primary/90 px-8 h-14 text-base tracking-wide"
+              className="gradient-primary text-primary-foreground hover:opacity-90 px-8 h-14 text-base font-semibold shadow-premium hover:shadow-accent transition-all"
               asChild
             >
               <Link to="/eventos">
-                <Calendar className="w-5 h-5 mr-2" />
-                Ver Programação
+                <Ticket className="w-5 h-5 mr-2" />
+                Explorar Eventos
               </Link>
             </Button>
+          </motion.div>
+
+          {/* Trust badges */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.5 }}
+            className="flex items-center justify-center gap-8 mt-16 text-muted-foreground"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-sm">Pagamento Seguro</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-primary" />
+              <span className="text-sm">Ingresso Digital</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-accent" />
+              <span className="text-sm">Suporte 24h</span>
+            </div>
           </motion.div>
         </div>
       </div>
@@ -100,7 +155,7 @@ const HeroSection = () => {
         className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 text-muted-foreground hover:text-primary transition-colors"
       >
         <div className="flex flex-col items-center gap-2">
-          <span className="text-xs tracking-[0.2em] uppercase">Explore</span>
+          <span className="text-xs tracking-widest uppercase">Explore</span>
           <motion.div
             animate={{ y: [0, 8, 0] }}
             transition={{ repeat: Infinity, duration: 1.5 }}
