@@ -100,7 +100,6 @@ export default {
           "0%, 100%": { opacity: "0.4" },
           "50%": { opacity: "1" },
         },
-
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -111,7 +110,6 @@ export default {
         "glow-pulse": "glow-pulse 2s ease-in-out infinite",
         "loading-bar": "loading-bar 2s ease-in-out forwards",
         "pulse-glow": "pulse-glow 1.5s ease-in-out infinite",
-
       },
     },
   },
