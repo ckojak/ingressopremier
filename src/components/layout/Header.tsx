@@ -83,7 +83,7 @@ const Header = () => {
   const isAdmin = userRole === "admin" || userRole === "organizer";
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-b border-border/50">
+    <header className="fixed top-0 left-0 right-0 z-50 glass-strong border-b border-border/40">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
@@ -92,15 +92,15 @@ const Header = () => {
               <img 
                 src={premierpassLogo} 
                 alt="PremierPass" 
-                className="w-10 h-10 md:w-12 md:h-12 rounded-xl object-cover transition-transform group-hover:scale-105"
+                className="w-12 h-12 md:w-14 md:h-14 rounded-xl object-cover transition-all duration-300 group-hover:scale-110 shadow-subtle"
               />
-              <div className="absolute inset-0 rounded-xl bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity blur-xl" />
+              <div className="absolute inset-0 rounded-xl bg-primary/20 opacity-0 group-hover:opacity-100 transition-all duration-300 blur-lg" />
             </div>
             <div className="hidden sm:block">
               <span className="text-xl md:text-2xl font-display font-bold text-foreground tracking-tight">
                 Premier<span className="text-gradient">Pass</span>
               </span>
-              <span className="block text-[10px] md:text-xs tracking-widest text-muted-foreground uppercase">
+              <span className="block text-[10px] md:text-xs tracking-[0.15em] text-muted-foreground uppercase font-medium">
                 Ingressos Premium
               </span>
             </div>
@@ -108,17 +108,20 @@ const Header = () => {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
-            <Link to="/eventos" className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium tracking-wide">
+            <Link to="/eventos" className="text-muted-foreground hover:text-primary transition-all duration-200 text-sm font-semibold tracking-wide relative group">
               Eventos
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-primary group-hover:w-full transition-all duration-300"></span>
             </Link>
             {user && (
-              <Link to="/meus-ingressos" className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium tracking-wide">
+              <Link to="/meus-ingressos" className="text-muted-foreground hover:text-primary transition-all duration-200 text-sm font-semibold tracking-wide relative group">
                 Meus Ingressos
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-primary group-hover:w-full transition-all duration-300"></span>
               </Link>
             )}
             {isAdmin && (
-              <Link to="/admin" className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium tracking-wide">
+              <Link to="/admin" className="text-muted-foreground hover:text-primary transition-all duration-200 text-sm font-semibold tracking-wide relative group">
                 Admin
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-primary group-hover:w-full transition-all duration-300"></span>
               </Link>
             )}
           </nav>
@@ -126,10 +129,10 @@ const Header = () => {
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-3">
             <Link to="/carrinho" className="relative">
-              <Button variant="ghost" size="icon" className="text-foreground hover:text-primary hover:bg-primary/10">
+              <Button variant="ghost" size="icon" className="text-foreground hover:text-primary hover:bg-primary/10 transition-all duration-200 rounded-xl">
                 <ShoppingCart className="w-5 h-5" />
                 {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full gradient-primary text-primary-foreground text-xs flex items-center justify-center font-bold">
+                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full gradient-primary text-primary-foreground text-xs flex items-center justify-center font-bold shadow-premium animate-pulse-glow">
                     {cartCount}
                   </span>
                 )}
@@ -138,12 +141,12 @@ const Header = () => {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="gap-2 border-primary/30 hover:border-primary hover:bg-primary/10">
+                  <Button variant="outline" className="gap-2 border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 rounded-xl font-semibold">
                     <User className="w-4 h-4" />
                     {user.user_metadata?.full_name || user.email?.split("@")[0]}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 bg-card border-border">
+                <DropdownMenuContent align="end" className="w-48 glass-strong border-border/40 rounded-xl">
                   <DropdownMenuItem asChild>
                     <Link to="/perfil" className="cursor-pointer">
                       <UserCircle className="w-4 h-4 mr-2" />
@@ -173,7 +176,7 @@ const Header = () => {
               </DropdownMenu>
             ) : (
               <Link to="/auth">
-                <Button className="gradient-primary text-primary-foreground hover:opacity-90 font-semibold">
+                <Button className="gradient-primary text-primary-foreground hover:opacity-90 font-semibold rounded-xl shadow-subtle hover:shadow-premium transition-all duration-300 hover-lift">
                   Entrar
                 </Button>
               </Link>
@@ -183,10 +186,10 @@ const Header = () => {
           {/* Mobile Menu Button */}
           <div className="flex items-center gap-2 md:hidden">
             <Link to="/carrinho" className="relative">
-              <Button variant="ghost" size="icon" className="hover:bg-primary/10">
+              <Button variant="ghost" size="icon" className="hover:bg-primary/10 rounded-xl transition-all">
                 <ShoppingCart className="w-5 h-5" />
                 {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full gradient-primary text-primary-foreground text-xs flex items-center justify-center font-bold">
+                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full gradient-primary text-primary-foreground text-xs flex items-center justify-center font-bold shadow-premium">
                     {cartCount}
                   </span>
                 )}
@@ -196,7 +199,7 @@ const Header = () => {
               variant="ghost"
               size="icon"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="hover:bg-primary/10"
+              className="hover:bg-primary/10 rounded-xl transition-all"
             >
               {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>
@@ -211,12 +214,12 @@ const Header = () => {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-card/95 backdrop-blur-xl border-t border-border"
+            className="md:hidden glass-strong border-t border-border/40"
           >
-            <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
+            <div className="container mx-auto px-4 py-6 flex flex-col gap-4">
               <Link
                 to="/eventos"
-                className="text-muted-foreground hover:text-primary transition-colors py-2 text-sm font-medium tracking-wide"
+                className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Eventos
@@ -225,14 +228,14 @@ const Header = () => {
                 <>
                   <Link
                     to="/perfil"
-                    className="text-muted-foreground hover:text-primary transition-colors py-2 text-sm font-medium tracking-wide"
+                    className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Meu Perfil
                   </Link>
                   <Link
                     to="/meus-ingressos"
-                    className="text-muted-foreground hover:text-primary transition-colors py-2 text-sm font-medium tracking-wide"
+                    className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Meus Ingressos
@@ -242,21 +245,21 @@ const Header = () => {
               {isAdmin && (
                 <Link
                   to="/admin"
-                  className="text-muted-foreground hover:text-primary transition-colors py-2 text-sm font-medium tracking-wide"
+                  className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Admin
                 </Link>
               )}
-              <div className="flex flex-col gap-2 pt-4 border-t border-border">
+              <div className="flex flex-col gap-3 pt-4">
                 {user ? (
-                  <Button variant="outline" className="w-full border-primary/30 hover:border-primary" onClick={() => { handleLogout(); setIsMenuOpen(false); }}>
+                  <Button variant="outline" className="w-full border-border/40 hover:border-primary/40 rounded-xl font-semibold" onClick={() => { handleLogout(); setIsMenuOpen(false); }}>
                     <LogOut className="w-4 h-4 mr-2" />
                     Sair
                   </Button>
                 ) : (
                   <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
-                    <Button className="w-full gradient-primary text-primary-foreground font-semibold">Entrar</Button>
+                    <Button className="w-full gradient-primary text-primary-foreground font-semibold rounded-xl shadow-subtle hover:shadow-premium transition-all">Entrar</Button>
                   </Link>
                 )}
               </div>

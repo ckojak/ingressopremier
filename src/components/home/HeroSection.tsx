@@ -11,87 +11,87 @@ const HeroSection = () => {
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-background z-0" />
+      {/* Enhanced background gradient */}
+      <div className="absolute inset-0 gradient-hero z-0" />
       
-      {/* Animated gradient orbs */}
+      {/* Animated gradient orbs with improved styling */}
       <div className="absolute inset-0 overflow-hidden">
         <motion.div 
-          className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[150px]"
-          animate={{ 
-            scale: [1, 1.2, 1],
-            opacity: [0.2, 0.3, 0.2]
-          }}
-          transition={{ duration: 8, repeat: Infinity }}
-        />
-        <motion.div 
-          className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-accent/20 rounded-full blur-[120px]"
-          animate={{ 
-            scale: [1.2, 1, 1.2],
-            opacity: [0.15, 0.25, 0.15]
-          }}
-          transition={{ duration: 6, repeat: Infinity }}
-        />
-        <motion.div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-primary/10 rounded-full blur-[100px]"
+          className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-primary/15 rounded-full blur-[180px]"
           animate={{ 
             scale: [1, 1.3, 1],
-            opacity: [0.1, 0.2, 0.1]
+            opacity: [0.15, 0.25, 0.15]
           }}
-          transition={{ duration: 10, repeat: Infinity }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div 
+          className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-accent/12 rounded-full blur-[150px]"
+          animate={{ 
+            scale: [1.3, 1, 1.3],
+            opacity: [0.12, 0.22, 0.12]
+          }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div 
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-primary/8 rounded-full blur-[120px]"
+          animate={{ 
+            scale: [1, 1.4, 1],
+            opacity: [0.08, 0.18, 0.08]
+          }}
+          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
-      {/* Grid pattern overlay */}
-      <div className="absolute inset-0 opacity-[0.02]" style={{
+      {/* Enhanced grid pattern overlay */}
+      <div className="absolute inset-0 opacity-[0.015]" style={{
         backgroundImage: 'linear-gradient(hsl(var(--primary)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--primary)) 1px, transparent 1px)',
-        backgroundSize: '50px 50px'
+        backgroundSize: '60px 60px'
       }} />
 
       <div className="container mx-auto px-4 relative z-20">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className="max-w-5xl mx-auto text-center">
           <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
+            initial={{ opacity: 0, scale: 0.7 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8 }}
-            className="mb-8 relative inline-block"
+            transition={{ duration: 0.9, ease: "easeOut" }}
+            className="mb-10 relative inline-block"
           >
             <img 
               src={premierpassLogo} 
               alt="PremierPass" 
-              className="w-28 h-28 md:w-36 md:h-36 mx-auto rounded-2xl object-cover shadow-premium"
+              className="w-32 h-32 md:w-40 md:h-40 mx-auto rounded-3xl object-cover shadow-premium hover-glow"
             />
             <motion.div
-              className="absolute inset-0 rounded-2xl"
+              className="absolute inset-0 rounded-3xl"
               animate={{ 
                 boxShadow: [
-                  '0 0 20px hsl(250, 80%, 60%, 0.3)',
-                  '0 0 40px hsl(250, 80%, 60%, 0.5)',
-                  '0 0 20px hsl(250, 80%, 60%, 0.3)'
+                  '0 0 25px hsl(252, 85%, 63%, 0.35)',
+                  '0 0 50px hsl(252, 85%, 63%, 0.55)',
+                  '0 0 25px hsl(252, 85%, 63%, 0.35)'
                 ]
               }}
-              transition={{ duration: 2, repeat: Infinity }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
             />
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="flex items-center justify-center gap-2 mb-6"
+            transition={{ duration: 0.7, delay: 0.1 }}
+            className="flex items-center justify-center gap-2 mb-8"
           >
-            <Sparkles className="w-4 h-4 text-accent" />
-            <span className="text-sm md:text-base tracking-widest text-accent uppercase font-medium">
+            <Sparkles className="w-5 h-5 text-accent animate-pulse" />
+            <span className="text-sm md:text-base tracking-[0.2em] text-accent uppercase font-semibold">
               Plataforma de Ingressos Premium
             </span>
-            <Sparkles className="w-4 h-4 text-accent" />
+            <Sparkles className="w-5 h-5 text-accent animate-pulse" />
           </motion.div>
 
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-5xl md:text-7xl lg:text-8xl font-display font-bold text-foreground mb-4"
+            transition={{ duration: 0.7, delay: 0.2 }}
+            className="text-6xl md:text-7xl lg:text-8xl font-display font-bold text-foreground mb-6 leading-[1.05]"
           >
             Premier<span className="text-gradient">Pass</span>
           </motion.h1>
@@ -99,8 +99,8 @@ const HeroSection = () => {
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-lg md:text-xl text-muted-foreground mb-12 max-w-2xl mx-auto font-light leading-relaxed"
+            transition={{ duration: 0.7, delay: 0.3 }}
+            className="text-xl md:text-2xl text-muted-foreground mb-14 max-w-3xl mx-auto font-light leading-relaxed"
           >
             Sua porta de entrada para os melhores eventos. Compre ingressos com segurança e praticidade.
           </motion.p>
@@ -108,57 +108,58 @@ const HeroSection = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+            transition={{ duration: 0.7, delay: 0.4 }}
+            className="flex flex-col sm:flex-row gap-5 justify-center items-center"
           >
             <Button 
               size="lg" 
-              className="gradient-primary text-primary-foreground hover:opacity-90 px-8 h-14 text-base font-semibold shadow-premium hover:shadow-accent transition-all"
+              className="gradient-primary text-primary-foreground hover:opacity-90 px-10 h-16 text-lg font-semibold shadow-premium hover:shadow-accent transition-all duration-300 rounded-2xl hover-lift"
               asChild
             >
               <Link to="/eventos">
-                <Ticket className="w-5 h-5 mr-2" />
+                <Ticket className="w-6 h-6 mr-2" />
                 Explorar Eventos
               </Link>
             </Button>
           </motion.div>
 
-          {/* Trust badges */}
+          {/* Enhanced trust badges */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-            className="flex items-center justify-center gap-8 mt-16 text-muted-foreground"
+            transition={{ duration: 0.7, delay: 0.6 }}
+            className="flex flex-wrap items-center justify-center gap-6 md:gap-10 mt-20 text-muted-foreground"
           >
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-sm">Pagamento Seguro</span>
+            <div className="flex items-center gap-2.5 group cursor-default">
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)] group-hover:scale-125 transition-transform" />
+              <span className="text-sm md:text-base font-medium group-hover:text-foreground transition-colors">Pagamento Seguro</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-primary" />
-              <span className="text-sm">Ingresso Digital</span>
+            <div className="flex items-center gap-2.5 group cursor-default">
+              <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_hsl(252,85%,63%,0.4)] group-hover:scale-125 transition-transform" />
+              <span className="text-sm md:text-base font-medium group-hover:text-foreground transition-colors">Ingresso Digital</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-accent" />
-              <span className="text-sm">Suporte 24h</span>
+            <div className="flex items-center gap-2.5 group cursor-default">
+              <div className="w-2.5 h-2.5 rounded-full bg-accent shadow-[0_0_10px_hsl(282,75%,58%,0.4)] group-hover:scale-125 transition-transform" />
+              <span className="text-sm md:text-base font-medium group-hover:text-foreground transition-colors">Suporte 24h</span>
             </div>
           </motion.div>
         </div>
       </div>
 
-      {/* Scroll Indicator */}
+      {/* Enhanced Scroll Indicator */}
       <motion.button
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1 }}
+        transition={{ delay: 1.2 }}
         onClick={scrollToEvents}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 text-muted-foreground hover:text-primary transition-colors"
+        className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 text-muted-foreground hover:text-primary transition-all duration-300 group"
       >
-        <div className="flex flex-col items-center gap-2">
-          <span className="text-xs tracking-widest uppercase">Explore</span>
+        <div className="flex flex-col items-center gap-3">
+          <span className="text-xs tracking-[0.2em] uppercase font-medium group-hover:text-primary transition-colors">Explore</span>
           <motion.div
-            animate={{ y: [0, 8, 0] }}
-            transition={{ repeat: Infinity, duration: 1.5 }}
+            animate={{ y: [0, 10, 0] }}
+            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            className="w-10 h-10 rounded-full glass-premium flex items-center justify-center group-hover:border-primary/30 transition-colors"
           >
             <ChevronDown className="w-5 h-5" />
           </motion.div>
