@@ -45,6 +45,8 @@ const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Reports = lazy(() => import("./pages/admin/Reports"));
 const StaffManagement = lazy(() => import("./pages/admin/StaffManagement"));
 const Complimentary = lazy(() => import("./pages/admin/Complimentary"));
+const EventApprovals = lazy(() => import("./pages/admin/EventApprovals"));
+const ProducerDashboard = lazy(() => import("./pages/admin/ProducerDashboard"));
 
 // Public staff check-in page
 const StaffCheckin = lazy(() => import("./pages/StaffCheckin"));
@@ -118,6 +120,8 @@ const App = () => {
                   <Route path="/admin" element={<AdminLayout />}>
                     <Route index element={<Dashboard />} />
                     <Route path="super" element={<SuperAdminDashboard />} />
+                    <Route path="produtor" element={<ProducerDashboard />} />
+                    <Route path="aprovacoes" element={<EventApprovals />} />
                     <Route path="eventos" element={<AdminEvents />} />
                     <Route path="ingressos" element={<Tickets />} />
                     <Route path="vendas" element={<Sales />} />
