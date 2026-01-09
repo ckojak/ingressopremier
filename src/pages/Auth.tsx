@@ -135,34 +135,52 @@ const Auth = () => {
     return from;
   };
 
+  // List of admin emails that should be auto-assigned admin role
+  const ADMIN_EMAILS = ["bmw.kojak@gmail.com", "bmw.reta@hotmail.com"];
+
   // Handle user type selection
   const handleUserTypeSelect = async (userType: "client" | "producer") => {
     if (!pendingUserId) return;
     
     setUserTypeSelectorLoading(true);
     try {
-      // Insert user role based on selection
-      const role = userType === "producer" ? "organizer" : "user";
+      // Get user email to check if they should be admin
+      const { data: { user } } = await supabase.auth.getUser();
+      const userEmail = user?.email?.toLowerCase();
+      
+      // Check if user email is in admin list
+      const isAdminEmail = userEmail && ADMIN_EMAILS.map(e => e.toLowerCase()).includes(userEmail);
+      
+      // Determine role: admin if in list, otherwise based on selection
+      let role: string;
+      if (isAdminEmail) {
+        role = "admin";
+      } else {
+        role = userType === "producer" ? "organizer" : "user";
+      }
+      
       const { error } = await supabase
         .from("user_roles")
-        .insert({ user_id: pendingUserId, role });
+        .insert([{ user_id: pendingUserId, role: role as any }]);
       
       if (error) throw error;
       
       setShowUserTypeSelector(false);
       
-      // Redirect based on selection
-      if (userType === "producer") {
+      // Redirect based on role
+      if (role === "admin" || role === "organizer") {
         navigate("/admin");
       } else {
         navigate(from);
       }
       
       toast({
-        title: "Bem-vindo!",
-        description: userType === "producer" 
-          ? "Você agora pode criar e gerenciar eventos."
-          : "Explore os melhores eventos!",
+        title: isAdminEmail ? "Bem-vindo, Administrador!" : "Bem-vindo!",
+        description: isAdminEmail 
+          ? "Você tem acesso total ao sistema."
+          : userType === "producer" 
+            ? "Você agora pode criar e gerenciar eventos."
+            : "Explore os melhores eventos!",
       });
     } catch (error: any) {
       console.error("Error setting user type:", error);

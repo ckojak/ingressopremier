@@ -75,18 +75,20 @@ const EventApprovals = () => {
 
   const fetchPendingEvents = async () => {
     try {
-      // Fetch draft events as "pending" for approval workflow
+      // Fetch pending events for approval workflow (status = 'pending')
       const { data, error } = await supabase
         .from("events")
         .select("*")
-        .eq("status", "draft")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       
+      // Filter for pending status (since DB type doesn't include 'pending')
+      const pendingEvents = (data || []).filter((e: any) => e.status === "pending");
+      
       // Fetch organizer info separately
       const eventsWithOrganizers = await Promise.all(
-        (data || []).map(async (event) => {
+        pendingEvents.map(async (event) => {
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name, email, phone")
@@ -111,6 +113,9 @@ const EventApprovals = () => {
   }, []);
 
   const handleApprove = async (eventId: string) => {
+    const eventToApprove = events.find(e => e.id === eventId);
+    if (!eventToApprove) return;
+    
     setProcessing(true);
     try {
       const { error } = await supabase
@@ -119,6 +124,23 @@ const EventApprovals = () => {
         .eq("id", eventId);
 
       if (error) throw error;
+      
+      // Send notification email to producer
+      try {
+        await supabase.functions.invoke("send-notification", {
+          body: {
+            type: "event_approved",
+            data: {
+              eventId: eventToApprove.id,
+              eventTitle: eventToApprove.title,
+              producerEmail: eventToApprove.organizer?.email,
+              producerName: eventToApprove.organizer?.full_name,
+            },
+          },
+        });
+      } catch (emailError) {
+        console.error("Error sending approval notification:", emailError);
+      }
       
       toast.success("Evento aprovado e publicado!");
       fetchPendingEvents();
@@ -136,16 +158,33 @@ const EventApprovals = () => {
     
     setProcessing(true);
     try {
+      // Set back to draft so producer can edit and resubmit
       const { error } = await supabase
         .from("events")
-        .update({ 
-          status: "cancelled"
-        })
+        .update({ status: "draft" as any })
         .eq("id", selectedEvent.id);
 
       if (error) throw error;
       
-      toast.success("Evento rejeitado");
+      // Send notification email to producer
+      try {
+        await supabase.functions.invoke("send-notification", {
+          body: {
+            type: "event_rejected",
+            data: {
+              eventId: selectedEvent.id,
+              eventTitle: selectedEvent.title,
+              producerEmail: selectedEvent.organizer?.email,
+              producerName: selectedEvent.organizer?.full_name,
+              rejectionReason: rejectReason || undefined,
+            },
+          },
+        });
+      } catch (emailError) {
+        console.error("Error sending rejection notification:", emailError);
+      }
+      
+      toast.success("Evento rejeitado. O produtor foi notificado.");
       fetchPendingEvents();
       setRejectDialogOpen(false);
       setViewDialogOpen(false);
