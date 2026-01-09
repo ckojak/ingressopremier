@@ -116,14 +116,19 @@ const Events = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Check user role
-      const { data: roleData } = await supabase
+      // Check all user roles and get highest priority
+      const { data: rolesData } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        .eq("user_id", user.id);
       
-      setUserRole(roleData?.role || null);
+      // Get highest priority role (admin > organizer > user)
+      const roles = rolesData?.map(r => r.role) || [];
+      const highestRole = roles.includes("admin") ? "admin" 
+        : roles.includes("organizer") ? "organizer" 
+        : roles[0] || null;
+      
+      setUserRole(highestRole);
 
       // If admin, fetch all events. If organizer, fetch only their events
       let query = supabase
@@ -131,7 +136,7 @@ const Events = () => {
         .select("*")
         .order("created_at", { ascending: false });
       
-      if (roleData?.role !== "admin") {
+      if (highestRole !== "admin") {
         query = query.eq("organizer_id", user.id);
       }
 
@@ -259,8 +264,12 @@ const Events = () => {
   };
 
   const handlePublish = async (eventId: string) => {
-    // For organizers, submit for approval. For admins, publish directly.
-    const newStatus = userRole === "admin" ? "published" : "pending";
+    // For admins, publish directly. For organizers, submit for approval.
+    const isAdmin = userRole === "admin";
+    const currentStatus = events.find(e => e.id === eventId)?.status;
+    
+    // If admin and event is pending or draft, publish directly
+    const newStatus = isAdmin ? "published" : "pending";
     
     setSubmitting(true);
     try {
@@ -301,9 +310,10 @@ const Events = () => {
       
       fetchEvents();
     } catch (error: any) {
+      console.error("Error publishing event:", error);
       toast({
         title: "Erro ao publicar",
-        description: error.message,
+        description: error.message || "Tente novamente mais tarde.",
         variant: "destructive",
       });
     } finally {

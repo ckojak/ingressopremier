@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useSiteContext } from "@/hooks/useSiteContext";
 
 interface PlatformStats {
   totalEvents: number;
@@ -30,6 +31,7 @@ const SERVICE_FEE_PERCENTAGE = 0.05;
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', '#10b981', '#f59e0b'];
 
 const SuperAdminDashboard = () => {
+  const { siteId, name: siteName, getStatsSiteIds } = useSiteContext();
   const [stats, setStats] = useState<PlatformStats>({
     totalEvents: 0,
     totalTicketsSold: 0,
@@ -45,40 +47,54 @@ const SuperAdminDashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Fetch all events count
-        const { count: eventsCount } = await supabase
+        const statsSiteIds = getStatsSiteIds();
+        
+        // Fetch events for this site only
+        const { data: eventsData } = await supabase
           .from("events")
-          .select("*", { count: "exact", head: true });
+          .select("*");
+        
+        const siteEvents = (eventsData || []).filter((e: any) => statsSiteIds.includes(e.site_id));
+        const eventsCount = siteEvents.length;
 
-        // Fetch all tickets sold
-        const { count: ticketsCount } = await supabase
+        // Fetch all tickets, then filter by site events
+        const { data: ticketsData } = await supabase
           .from("tickets")
-          .select("*", { count: "exact", head: true });
+          .select("*, events!inner(site_id)");
+        
+        const siteTickets = (ticketsData || []).filter((t: any) => 
+          statsSiteIds.includes(t.events?.site_id)
+        );
+        const ticketsCount = siteTickets.length;
 
-        // Fetch all orders for revenue
-        const { data: orders } = await supabase
+        // Fetch all orders, then filter by site events
+        const { data: ordersData } = await supabase
           .from("orders")
-          .select("total_amount, created_at")
+          .select("*, events!inner(site_id)")
           .eq("status", "paid");
-
-        const totalRevenue = orders?.reduce((acc, order) => acc + Number(order.total_amount), 0) || 0;
+        
+        const siteOrders = (ordersData || []).filter((o: any) => 
+          statsSiteIds.includes(o.events?.site_id)
+        );
+        
+        const totalRevenue = siteOrders.reduce((acc: number, order: any) => acc + Number(order.total_amount), 0);
         const serviceFeeRevenue = totalRevenue * SERVICE_FEE_PERCENTAGE;
         const platformFeeRevenue = totalRevenue * PLATFORM_FEE_PERCENTAGE;
 
-        // Fetch users count
+        // Fetch users count (global - all users)
         const { count: usersCount } = await supabase
           .from("profiles")
           .select("*", { count: "exact", head: true });
 
-        // Fetch organizers count
+        // Fetch organizers count (global - all organizers)
         const { count: organizersCount } = await supabase
           .from("user_roles")
           .select("*", { count: "exact", head: true })
           .eq("role", "organizer");
 
         setStats({
-          totalEvents: eventsCount || 0,
-          totalTicketsSold: ticketsCount || 0,
+          totalEvents: eventsCount,
+          totalTicketsSold: ticketsCount,
           totalRevenue,
           totalUsers: usersCount || 0,
           totalOrganizers: organizersCount || 0,
@@ -98,8 +114,8 @@ const SuperAdminDashboard = () => {
           };
         });
 
-        // Aggregate orders by day
-        orders?.forEach(order => {
+        // Aggregate site orders by day
+        siteOrders.forEach((order: any) => {
           const orderDate = new Date(order.created_at || "");
           const dayIndex = last30Days.findIndex(day => {
             const start = startOfDay(day.fullDate);
@@ -185,7 +201,7 @@ const SuperAdminDashboard = () => {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Dashboard Administrativo</h1>
         <p className="text-muted-foreground mt-1">
-          Visão geral completa da plataforma Premier Pass
+          Visão geral da plataforma <span className="font-semibold text-primary">{siteName}</span>
         </p>
       </div>
 
