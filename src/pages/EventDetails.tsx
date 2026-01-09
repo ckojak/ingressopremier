@@ -14,6 +14,7 @@ import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { useSiteContext } from "@/hooks/useSiteContext";
 
 type Event = Tables<"events">;
 type TicketType = Tables<"ticket_types">;
@@ -26,6 +27,7 @@ interface CartItem {
 const EventDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { siteId } = useSiteContext();
   const [event, setEvent] = useState<Event | null>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -198,6 +200,7 @@ const EventDetails = () => {
 
       const checkoutPayload = {
         event_id: id,
+        site_id: siteId, // Send site_id for multi-tenant payment isolation
         items: cart.map(item => ({
           ticket_type_id: item.ticketType.id,
           quantity: item.quantity,
@@ -206,7 +209,7 @@ const EventDetails = () => {
       };
 
       // Try Mercado Pago first
-      console.log("[Checkout] Tentando Mercado Pago...");
+      console.log("[Checkout] Tentando Mercado Pago...", { site_id: siteId });
       const { data: mpData, error: mpError } = await supabase.functions.invoke("create-mercadopago-checkout", {
         body: checkoutPayload,
       });
@@ -281,13 +284,14 @@ const EventDetails = () => {
 
       const checkoutPayload = {
         event_id: id,
+        site_id: siteId, // Send site_id for multi-tenant payment isolation
         items: cart.map(item => ({
           ticket_type_id: item.ticketType.id,
           quantity: item.quantity,
         })),
       };
 
-      console.log("[PIX Checkout] Criando pagamento PIX...");
+      console.log("[PIX Checkout] Criando pagamento PIX...", { site_id: siteId });
       const { data, error } = await supabase.functions.invoke("create-pix-payment", {
         body: checkoutPayload,
       });

@@ -13,6 +13,7 @@ import { Tables } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useSiteContext } from "@/hooks/useSiteContext";
 
 type TicketType = Tables<"ticket_types">;
 type Event = Tables<"events">;
@@ -28,6 +29,7 @@ const SERVICE_FEE_PERCENTAGE = 0.08; // 8% taxa de serviço
 
 const Cart = () => {
   const navigate = useNavigate();
+  const { siteId } = useSiteContext();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -304,6 +306,7 @@ const Cart = () => {
       const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
         body: {
           event_id: firstEventId,
+          site_id: siteId, // Send site_id for multi-tenant payment isolation
           items: items.map(item => ({
             ticket_type_id: item.ticketType.id,
             quantity: item.quantity,
@@ -376,6 +379,7 @@ const Cart = () => {
       const { data, error } = await supabase.functions.invoke("create-pix-payment", {
         body: {
           event_id: firstEventId,
+          site_id: siteId, // Send site_id for multi-tenant payment isolation
           items: items.map(item => ({
             ticket_type_id: item.ticketType.id,
             quantity: item.quantity,
