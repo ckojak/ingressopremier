@@ -40,6 +40,7 @@ import { z } from "zod";
 import ImageUpload from "@/components/ImageUpload";
 import { useIBGEStates, useIBGECities } from "@/hooks/useIBGE";
 import { EVENT_CATEGORIES } from "@/lib/constants";
+import { useSiteContext, getCurrentSiteConfig } from "@/hooks/useSiteContext";
 
 const eventSchema = z.object({
   title: z.string().min(1, "Título é obrigatório").max(200, "Título deve ter no máximo 200 caracteres"),
@@ -193,6 +194,9 @@ const Events = () => {
         if (error) throw error;
         toast({ title: "Evento atualizado com sucesso!" });
       } else {
+        // Get current site_id from context
+        const { siteId } = getCurrentSiteConfig();
+        
         const { error } = await supabase
           .from("events")
           .insert([{
@@ -211,6 +215,7 @@ const Events = () => {
             contact: validatedData.contact || null,
             status: validatedData.status as any,
             organizer_id: user.id,
+            site_id: siteId, // Set site_id based on current domain
           }]);
 
         if (error) throw error;
