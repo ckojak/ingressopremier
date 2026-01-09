@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { Separator } from "@/components/ui/separator";
 import premierpassLogo from "@/assets/premierpass-logo.png";
+import { getSiteConfig } from "@/lib/site-config";
 
 interface PasswordStrength {
   hasMinLength: boolean;
@@ -76,8 +77,9 @@ const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const siteConfig = getSiteConfig();
 
-  const from = (location.state as any)?.from || "/";
+  const from = (location.state as any)?.from || siteConfig.homeRedirect;
 
   const passwordStrength: PasswordStrength = useMemo(() => ({
     hasMinLength: password.length >= 8,
@@ -124,8 +126,9 @@ const Auth = () => {
             .eq("user_id", session.user.id)
             .single();
 
+          // Redirect based on role and site config
           if (roleData?.role === "admin" || roleData?.role === "organizer") {
-            navigate("/admin");
+            navigate(siteConfig.adminRedirect);
           } else {
             navigate(from);
           }
@@ -142,8 +145,9 @@ const Auth = () => {
           .eq("user_id", session.user.id)
           .single();
 
+        // Redirect based on role and site config
         if (roleData?.role === "admin" || roleData?.role === "organizer") {
-          navigate("/admin");
+          navigate(siteConfig.adminRedirect);
         } else {
           navigate(from);
         }

@@ -23,6 +23,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import premierpassLogo from "@/assets/premierpass-logo.png";
+import { getSiteConfig } from "@/lib/site-config";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
 
@@ -36,6 +38,7 @@ const AdminLayout = () => {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const siteConfig = getSiteConfig();
 
   // Menu items based on role
   const getMenuItems = () => {
@@ -157,7 +160,10 @@ const AdminLayout = () => {
   if (!isInitialized) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Carregando...</div>
+        <div className="flex flex-col items-center gap-4">
+          <img src={premierpassLogo} alt="PremierPass" className="w-16 h-16 rounded-xl animate-pulse" />
+          <span className="text-muted-foreground">Carregando...</span>
+        </div>
       </div>
     );
   }
@@ -177,22 +183,28 @@ const AdminLayout = () => {
           sidebarOpen ? "w-64" : "w-20"
         )}
       >
-        <div className="p-4 flex items-center justify-between border-b border-sidebar-border">
+        <div className="p-4 flex items-center justify-between border-b border-sidebar-border bg-gradient-to-r from-primary/10 to-accent/10">
           {sidebarOpen && (
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
-                <Ticket className="w-5 h-5 text-primary-foreground" />
+            <Link to="/" className="flex items-center gap-3">
+              <img src={premierpassLogo} alt="PremierPass" className="w-10 h-10 rounded-xl" />
+              <div className="flex flex-col">
+                <span className="text-lg font-bold text-sidebar-foreground">
+                  Premier<span className="text-gradient">Pass</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Admin</span>
               </div>
-              <span className="text-lg font-bold text-sidebar-foreground">
-                Event<span className="text-gradient">ix</span>
-              </span>
+            </Link>
+          )}
+          {!sidebarOpen && (
+            <Link to="/" className="mx-auto">
+              <img src={premierpassLogo} alt="PremierPass" className="w-10 h-10 rounded-xl" />
             </Link>
           )}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-sidebar-foreground"
+            className="text-sidebar-foreground hover:bg-primary/20"
           >
             <ChevronLeft className={cn("w-5 h-5 transition-transform", !sidebarOpen && "rotate-180")} />
           </Button>
@@ -200,19 +212,20 @@ const AdminLayout = () => {
 
         {/* Role Badge */}
         {sidebarOpen && (
-          <div className="px-4 py-2 border-b border-sidebar-border">
+          <div className="px-4 py-3 border-b border-sidebar-border bg-secondary/30">
             <span className={cn(
-              "text-xs font-medium px-2 py-1 rounded-full",
+              "text-xs font-medium px-3 py-1.5 rounded-full inline-flex items-center gap-1.5",
               userRole === "admin" 
-                ? "bg-yellow-500/20 text-yellow-400" 
+                ? "bg-gradient-to-r from-primary/30 to-accent/30 text-primary border border-primary/30" 
                 : "bg-primary/20 text-primary"
             )}>
+              {userRole === "admin" && <Crown className="w-3 h-3" />}
               {userRole === "admin" ? "Administrador" : "Organizador"}
             </span>
           </div>
         )}
 
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
@@ -220,25 +233,25 @@ const AdminLayout = () => {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
                   isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent"
+                    ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
+                    : "text-sidebar-foreground hover:bg-primary/10 hover:text-primary"
                 )}
               >
-                <item.icon className="w-5 h-5 flex-shrink-0" />
-                {sidebarOpen && <span>{item.label}</span>}
+                <item.icon className={cn("w-5 h-5 flex-shrink-0", isActive && "drop-shadow-sm")} />
+                {sidebarOpen && <span className="font-medium">{item.label}</span>}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border">
+        <div className="p-4 border-t border-sidebar-border bg-secondary/20">
           <Button
             variant="ghost"
             onClick={handleLogout}
             className={cn(
-              "w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent",
+              "w-full justify-start gap-3 text-sidebar-foreground hover:bg-destructive/20 hover:text-destructive transition-colors",
               !sidebarOpen && "justify-center"
             )}
           >
@@ -250,20 +263,21 @@ const AdminLayout = () => {
 
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-sidebar border-b border-sidebar-border">
-        <div className="flex items-center justify-between p-4">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
-              <Ticket className="w-5 h-5 text-primary-foreground" />
+        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/10 to-accent/10">
+          <Link to="/" className="flex items-center gap-3">
+            <img src={premierpassLogo} alt="PremierPass" className="w-10 h-10 rounded-xl" />
+            <div className="flex flex-col">
+              <span className="text-lg font-bold text-sidebar-foreground">
+                Premier<span className="text-gradient">Pass</span>
+              </span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Admin</span>
             </div>
-            <span className="text-lg font-bold text-sidebar-foreground">
-              Event<span className="text-gradient">ix</span>
-            </span>
           </Link>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-sidebar-foreground"
+            className="text-sidebar-foreground hover:bg-primary/20"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>
@@ -271,7 +285,7 @@ const AdminLayout = () => {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <nav className="p-4 space-y-2 border-t border-sidebar-border">
+          <nav className="p-4 space-y-1 border-t border-sidebar-border bg-sidebar/95 backdrop-blur-sm max-h-[70vh] overflow-y-auto">
             {menuItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
@@ -280,21 +294,21 @@ const AdminLayout = () => {
                   to={item.path}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
                     isActive
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent"
+                      ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
+                      : "text-sidebar-foreground hover:bg-primary/10 hover:text-primary"
                   )}
                 >
                   <item.icon className="w-5 h-5" />
-                  <span>{item.label}</span>
+                  <span className="font-medium">{item.label}</span>
                 </Link>
               );
             })}
             <Button
               variant="ghost"
               onClick={handleLogout}
-              className="w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent"
+              className="w-full justify-start gap-3 text-sidebar-foreground hover:bg-destructive/20 hover:text-destructive mt-4"
             >
               <LogOut className="w-5 h-5" />
               <span>Sair</span>
@@ -304,7 +318,7 @@ const AdminLayout = () => {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 lg:p-8 p-4 pt-20 lg:pt-8 overflow-auto">
+      <main className="flex-1 lg:p-8 p-4 pt-20 lg:pt-8 overflow-auto bg-gradient-to-br from-background via-background to-secondary/20">
         <Outlet />
       </main>
     </div>
