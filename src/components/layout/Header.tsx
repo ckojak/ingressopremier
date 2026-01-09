@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Ticket, User, LogOut, LayoutDashboard, ShoppingCart, UserCircle, Building2, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Menu, X, Ticket, User, LogOut, LayoutDashboard, ShoppingCart, UserCircle, Building2, Users, Shield, Crown } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import premierpassLogo from "@/assets/premierpass-logo.png";
@@ -82,7 +84,20 @@ const Header = () => {
 
   const isAdmin = userRole === "admin";
   const isProducer = userRole === "organizer";
-  const isClient = userRole === "user" || userRole === "client";
+
+  // Get role badge info
+  const getRoleBadge = () => {
+    if (isAdmin) {
+      return { label: "Admin", variant: "destructive" as const, icon: Shield };
+    }
+    if (isProducer) {
+      return { label: "Produtor", variant: "default" as const, icon: Crown };
+    }
+    return { label: "Cliente", variant: "secondary" as const, icon: Users };
+  };
+
+  const roleBadge = getRoleBadge();
+  const RoleIcon = roleBadge.icon;
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 glass-strong border-b border-border/40">
@@ -140,9 +155,27 @@ const Header = () => {
                   <Button variant="outline" className="gap-2 border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 rounded-xl font-semibold">
                     <User className="w-4 h-4" />
                     {user.user_metadata?.full_name || user.email?.split("@")[0]}
+                    <Badge variant={roleBadge.variant} className="ml-1 text-[10px] px-1.5 py-0">
+                      <RoleIcon className="w-3 h-3 mr-1" />
+                      {roleBadge.label}
+                    </Badge>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 glass-strong border-border/40 rounded-xl">
+                <DropdownMenuContent align="end" className="w-64 glass-strong border-border/40 rounded-xl">
+                  {/* User Info Header */}
+                  <DropdownMenuLabel className="flex items-center gap-2 pb-2">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{user.user_metadata?.full_name || "Usuário"}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                    <Badge variant={roleBadge.variant} className="text-[10px]">
+                      <RoleIcon className="w-3 h-3 mr-1" />
+                      {roleBadge.label}
+                    </Badge>
+                  </DropdownMenuLabel>
+                  
+                  <DropdownMenuSeparator />
+                  
                   <DropdownMenuItem asChild>
                     <Link to="/perfil" className="cursor-pointer">
                       <UserCircle className="w-4 h-4 mr-2" />
@@ -158,11 +191,16 @@ const Header = () => {
                   
                   <DropdownMenuSeparator />
                   
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Meus Painéis
+                  </DropdownMenuLabel>
+                  
                   {/* Client Dashboard - available for all logged users */}
                   <DropdownMenuItem asChild>
                     <Link to="/painel" className="cursor-pointer">
                       <Users className="w-4 h-4 mr-2" />
                       Painel do Cliente
+                      <Badge variant="secondary" className="ml-auto text-[9px] px-1.5">Cliente</Badge>
                     </Link>
                   </DropdownMenuItem>
                   
@@ -172,6 +210,7 @@ const Header = () => {
                       <Link to="/admin/produtor" className="cursor-pointer">
                         <Building2 className="w-4 h-4 mr-2" />
                         Painel do Produtor
+                        <Badge variant="default" className="ml-auto text-[9px] px-1.5">Produtor</Badge>
                       </Link>
                     </DropdownMenuItem>
                   )}
@@ -182,6 +221,7 @@ const Header = () => {
                       <Link to="/admin/super" className="cursor-pointer">
                         <LayoutDashboard className="w-4 h-4 mr-2" />
                         Painel Admin
+                        <Badge variant="destructive" className="ml-auto text-[9px] px-1.5">Admin</Badge>
                       </Link>
                     </DropdownMenuItem>
                   )}
@@ -236,6 +276,20 @@ const Header = () => {
             className="md:hidden glass-strong border-t border-border/40"
           >
             <div className="container mx-auto px-4 py-6 flex flex-col gap-4">
+              {/* User Info with Badge - Mobile */}
+              {user && (
+                <div className="flex items-center justify-between pb-4 border-b border-border/30">
+                  <div>
+                    <p className="font-semibold text-sm">{user.user_metadata?.full_name || "Usuário"}</p>
+                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                  </div>
+                  <Badge variant={roleBadge.variant} className="text-xs">
+                    <RoleIcon className="w-3 h-3 mr-1" />
+                    {roleBadge.label}
+                  </Badge>
+                </div>
+              )}
+              
               <Link
                 to="/eventos"
                 className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30"
@@ -268,22 +322,28 @@ const Header = () => {
                   {/* Client Dashboard - available for all */}
                   <Link
                     to="/painel"
-                    className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center gap-2"
+                    className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center justify-between"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    <Users className="w-4 h-4" />
-                    Painel do Cliente
+                    <span className="flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      Painel do Cliente
+                    </span>
+                    <Badge variant="secondary" className="text-[10px]">Cliente</Badge>
                   </Link>
                   
                   {/* Producer Dashboard */}
                   {(isProducer || isAdmin) && (
                     <Link
                       to="/admin/produtor"
-                      className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center gap-2"
+                      className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center justify-between"
                       onClick={() => setIsMenuOpen(false)}
                     >
-                      <Building2 className="w-4 h-4" />
-                      Painel do Produtor
+                      <span className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4" />
+                        Painel do Produtor
+                      </span>
+                      <Badge variant="default" className="text-[10px]">Produtor</Badge>
                     </Link>
                   )}
                   
@@ -291,11 +351,14 @@ const Header = () => {
                   {isAdmin && (
                     <Link
                       to="/admin/super"
-                      className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center gap-2"
+                      className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center justify-between"
                       onClick={() => setIsMenuOpen(false)}
                     >
-                      <LayoutDashboard className="w-4 h-4" />
-                      Painel Admin
+                      <span className="flex items-center gap-2">
+                        <LayoutDashboard className="w-4 h-4" />
+                        Painel Admin
+                      </span>
+                      <Badge variant="destructive" className="text-[10px]">Admin</Badge>
                     </Link>
                   )}
                 </>
