@@ -31,6 +31,7 @@ const Support = lazy(() => import("./pages/Support"));
 const About = lazy(() => import("./pages/About"));
 const HalfPrice = lazy(() => import("./pages/HalfPrice"));
 const AcceptTransfer = lazy(() => import("./pages/AcceptTransfer"));
+const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
 
 // Admin pages - lazy loaded
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
@@ -102,6 +103,7 @@ const App = () => {
                   <Route path="/meus-ingressos" element={<MyTickets />} />
                   <Route path="/carrinho" element={<Cart />} />
                   <Route path="/perfil" element={<Profile />} />
+                  <Route path="/painel" element={<ClientDashboard />} />
                   
                   {/* Institutional Pages */}
                   <Route path="/sobre" element={<About />} />
