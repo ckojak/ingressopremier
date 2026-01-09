@@ -25,7 +25,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EVENT_CATEGORIES } from "@/lib/constants";
-import { useSiteContext } from "@/hooks/useSiteContext";
+import { useSiteContext, detectSiteFromHostname } from "@/hooks/useSiteContext";
+
+// Site filter options for PremierPass
+const SITE_FILTER_OPTIONS = [
+  { label: "Todos os sites", value: "all" },
+  { label: "PremierPass", value: "premierpass" },
+  { label: "Quintal", value: "quintal" },
+];
 
 type Event = Tables<"events">;
 
@@ -52,29 +59,33 @@ const Events = () => {
   const [selectedDateFilter, setSelectedDateFilter] = useState("all");
   const [customDate, setCustomDate] = useState<Date | undefined>();
   const [selectedCity, setSelectedCity] = useState("all");
+  const [selectedSite, setSelectedSite] = useState("all");
   const [cities, setCities] = useState<string[]>([]);
-  const { getVisibleSiteIds } = useSiteContext();
+  const { getVisibleSiteIds, showAllSiteEvents } = useSiteContext();
+  const currentSite = detectSiteFromHostname();
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
         // Get visible site_ids based on current domain
         const visibleSiteIds = getVisibleSiteIds();
-        const siteFilter = visibleSiteIds.length > 1 
-          ? `site_id.eq.${visibleSiteIds[0]},site_id.eq.${visibleSiteIds[1]}`
-          : `site_id.eq.${visibleSiteIds[0]}`;
 
+        // Fetch ALL published events, then filter in memory
         const { data, error } = await supabase
           .from("events")
           .select("*")
           .eq("status", "published")
-          .or(siteFilter)
           .gte("start_date", new Date().toISOString())
           .order("start_date", { ascending: true });
 
         if (error) throw error;
         
-        const eventsData = data || [];
+        // Filter by visible site_ids in memory (avoids type issues)
+        const filteredData = (data || []).filter((event: any) => 
+          visibleSiteIds.includes(event.site_id) || !event.site_id
+        );
+        
+        const eventsData = filteredData;
 
         // Extract unique cities
         const uniqueCities = [...new Set(eventsData.map(e => e.city).filter(Boolean))] as string[];
@@ -163,7 +174,11 @@ const Events = () => {
     // City filter
     const matchesCity = selectedCity === "all" || event.city === selectedCity;
     
-    return matchesSearch && matchesCategory && matchesDate && matchesCity;
+    // Site filter (only for PremierPass which shows all sites)
+    const eventSiteId = (event as any).site_id;
+    const matchesSite = selectedSite === "all" || eventSiteId === selectedSite;
+    
+    return matchesSearch && matchesCategory && matchesDate && matchesCity && matchesSite;
   });
 
   const clearFilters = () => {
@@ -172,9 +187,10 @@ const Events = () => {
     setSelectedDateFilter("all");
     setCustomDate(undefined);
     setSelectedCity("all");
+    setSelectedSite("all");
   };
 
-  const hasActiveFilters = searchTerm || selectedCategory !== "Todos" || selectedDateFilter !== "all" || selectedCity !== "all";
+  const hasActiveFilters = searchTerm || selectedCategory !== "Todos" || selectedDateFilter !== "all" || selectedCity !== "all" || selectedSite !== "all";
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -270,6 +286,23 @@ const Events = () => {
                   </SelectContent>
                 </Select>
 
+                {/* Site Filter - only show on PremierPass */}
+                {showAllSiteEvents && (
+                  <Select value={selectedSite} onValueChange={setSelectedSite}>
+                    <SelectTrigger className="h-12 w-full md:w-48 glass-premium border-border/40 rounded-xl">
+                      <Ticket className="w-4 h-4 mr-2 text-primary" />
+                      <SelectValue placeholder="Site" />
+                    </SelectTrigger>
+                    <SelectContent className="glass-strong border-border/40 rounded-xl">
+                      {SITE_FILTER_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
                 {/* Clear Filters */}
                 {hasActiveFilters && (
                   <Button variant="outline" className="h-12 glass-premium border-border/40 hover:border-primary/40 hover:bg-primary/5 rounded-xl transition-all hover-lift" onClick={clearFilters}>
@@ -318,7 +351,15 @@ const Events = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredEvents.map((event, index) => (
+              {filteredEvents.map((event, index) => {
+                const eventSiteId = (event as any).site_id;
+                const siteBadge = eventSiteId === "quintal" 
+                  ? { label: "Quintal", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" }
+                  : eventSiteId === "premierpass"
+                  ? { label: "PremierPass", className: "bg-primary/20 text-primary border-primary/30" }
+                  : null;
+                  
+                return (
                 <motion.div
                   key={event.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -341,11 +382,18 @@ const Events = () => {
                           </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
-                        {event.category && (
-                          <Badge className="absolute top-4 left-4 gradient-primary text-primary-foreground border-0 font-semibold px-3 py-1 shadow-premium">
-                            {event.category}
-                          </Badge>
-                        )}
+                        <div className="absolute top-4 left-4 flex flex-wrap gap-2">
+                          {event.category && (
+                            <Badge className="gradient-primary text-primary-foreground border-0 font-semibold px-3 py-1 shadow-premium">
+                              {event.category}
+                            </Badge>
+                          )}
+                          {siteBadge && showAllSiteEvents && (
+                            <Badge variant="outline" className={siteBadge.className}>
+                              {siteBadge.label}
+                            </Badge>
+                          )}
+                        </div>
                         {event.total_available === 0 && (
                           <Badge className="absolute top-4 right-4 bg-destructive text-destructive-foreground border-0 font-semibold px-3 py-1">
                             Esgotado
@@ -402,7 +450,8 @@ const Events = () => {
                     </div>
                   </Link>
                 </motion.div>
-              ))}
+              );
+              })}
             </div>
           )}
 

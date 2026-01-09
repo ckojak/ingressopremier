@@ -13,7 +13,20 @@ interface EventCardProps {
   category: string;
   availableTickets: number;
   index?: number;
+  siteId?: string;
 }
+
+// Site badge configuration
+const SITE_BADGES: Record<string, { label: string; className: string }> = {
+  quintal: { 
+    label: "Quintal", 
+    className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" 
+  },
+  premierpass: { 
+    label: "PremierPass", 
+    className: "bg-primary/20 text-primary border-primary/30" 
+  },
+};
 
 const EventCard = ({
   id,
@@ -25,7 +38,10 @@ const EventCard = ({
   category,
   availableTickets,
   index = 0,
+  siteId,
 }: EventCardProps) => {
+  const siteBadge = siteId ? SITE_BADGES[siteId] : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -42,9 +58,16 @@ const EventCard = ({
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent" />
-            <Badge className="absolute top-4 left-4 gradient-primary text-primary-foreground border-0">
-              {category}
-            </Badge>
+            <div className="absolute top-4 left-4 flex flex-wrap gap-2">
+              <Badge className="gradient-primary text-primary-foreground border-0">
+                {category}
+              </Badge>
+              {siteBadge && (
+                <Badge variant="outline" className={siteBadge.className}>
+                  {siteBadge.label}
+                </Badge>
+              )}
+            </div>
             {availableTickets < 50 && (
               <Badge variant="destructive" className="absolute top-4 right-4">
                 Últimos ingressos

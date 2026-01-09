@@ -27,23 +27,22 @@ const FeaturedEvents = () => {
         // Get visible site_ids based on current domain
         const visibleSiteIds = getVisibleSiteIds();
         
-        // Build site filter for the query
-        const siteFilter = visibleSiteIds.length > 1 
-          ? `site_id.eq.${visibleSiteIds[0]},site_id.eq.${visibleSiteIds[1]}`
-          : `site_id.eq.${visibleSiteIds[0]}`;
-        
+        // Fetch ALL published events first, then filter in memory
         const { data, error } = await supabase
           .from("events")
           .select("*")
           .eq("status", "published")
-          .or(siteFilter)
           .gte("start_date", new Date().toISOString())
-          .order("start_date", { ascending: true })
-          .limit(6);
+          .order("start_date", { ascending: true });
 
         if (error) throw error;
         
-        const eventsData = data || [];
+        // Filter by visible site_ids in memory (avoids type issues)
+        const filteredData = (data || []).filter((event: any) => 
+          visibleSiteIds.includes(event.site_id) || !event.site_id
+        );
+        
+        const eventsData = filteredData.slice(0, 6);
 
         // Fetch minimum prices for each event
         if (eventsData.length > 0) {
@@ -168,7 +167,15 @@ const FeaturedEvents = () => {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
-          {events.map((event, index) => (
+          {events.map((event, index) => {
+            const eventSiteId = (event as any).site_id;
+            const siteBadge = eventSiteId === "quintal" 
+              ? { label: "Quintal", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" }
+              : eventSiteId === "premierpass"
+              ? { label: "PremierPass", className: "bg-primary/20 text-primary border-primary/30" }
+              : null;
+              
+            return (
             <motion.div
               key={event.id}
               initial={{ opacity: 0, y: 30 }}
@@ -192,11 +199,18 @@ const FeaturedEvents = () => {
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
-                    {event.category && (
-                      <Badge className="absolute top-4 left-4 gradient-primary text-primary-foreground border-0 font-semibold px-3 py-1 shadow-premium">
-                        {event.category}
-                      </Badge>
-                    )}
+                    <div className="absolute top-4 left-4 flex flex-wrap gap-2">
+                      {event.category && (
+                        <Badge className="gradient-primary text-primary-foreground border-0 font-semibold px-3 py-1 shadow-premium">
+                          {event.category}
+                        </Badge>
+                      )}
+                      {siteBadge && (
+                        <Badge variant="outline" className={siteBadge.className}>
+                          {siteBadge.label}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   {/* Content */}
@@ -241,7 +255,8 @@ const FeaturedEvents = () => {
                 </div>
               </Link>
             </motion.div>
-          ))}
+          );
+          })}
         </div>
 
         {events.length >= 6 && (
