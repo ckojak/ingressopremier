@@ -108,16 +108,13 @@ const AdminLayout = () => {
         setSession(currentSession);
         setUser(currentSession.user);
 
-        // Fetch user role
-        const { data: roleData, error: roleError } = await supabase
+        // Fetch user roles (user may have multiple)
+        const { data: rolesData, error: roleError } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", currentSession.user.id)
-          .maybeSingle();
+          .eq("user_id", currentSession.user.id);
 
         if (!isMounted) return;
-
-        console.log("Role data:", roleData, "Error:", roleError);
 
         if (roleError) {
           console.error("Error fetching role:", roleError);
@@ -127,6 +124,20 @@ const AdminLayout = () => {
           navigate("/");
           return;
         }
+
+        // Get the highest priority role (admin > organizer > user)
+        const roleList = rolesData?.map(r => r.role) || [];
+        let primaryRole: AppRole | null = null;
+        
+        if (roleList.includes("admin")) {
+          primaryRole = "admin";
+        } else if (roleList.includes("organizer")) {
+          primaryRole = "organizer";
+        } else if (roleList.length > 0) {
+          primaryRole = roleList[0] as AppRole;
+        }
+
+        const roleData = primaryRole ? { role: primaryRole } : null;
 
         const role = roleData?.role;
         setUserRole(role ?? null);

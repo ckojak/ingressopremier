@@ -64,7 +64,7 @@ const isValidPhone = (phone: string): boolean => {
 };
 
 // List of admin emails that should be auto-assigned admin role
-const ADMIN_EMAILS = ["bmw.kojak@gmail.com", "bmw.reta@hotmail.com"];
+const ADMIN_EMAILS = ["bmw.reta@hotmail.com"];
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
