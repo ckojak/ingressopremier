@@ -49,6 +49,7 @@ const Complimentary = lazy(() => import("./pages/admin/Complimentary"));
 const EventApprovals = lazy(() => import("./pages/admin/EventApprovals"));
 const ProducerDashboard = lazy(() => import("./pages/admin/ProducerDashboard"));
 const ProducerWelcome = lazy(() => import("./pages/admin/ProducerWelcome"));
+const WebhookLogs = lazy(() => import("./pages/admin/WebhookLogs"));
 
 // Public staff check-in page
 const StaffCheckin = lazy(() => import("./pages/StaffCheckin"));
@@ -135,6 +136,7 @@ const App = () => {
                     <Route path="usuarios" element={<Users />} />
                     <Route path="equipe" element={<StaffManagement />} />
                     <Route path="cortesias" element={<Complimentary />} />
+                    <Route path="webhooks" element={<WebhookLogs />} />
                   </Route>
                   
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
