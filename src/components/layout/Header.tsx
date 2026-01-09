@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Ticket, User, LogOut, LayoutDashboard, ShoppingCart, UserCircle } from "lucide-react";
+import { Menu, X, Ticket, User, LogOut, LayoutDashboard, ShoppingCart, UserCircle, Building2, Users } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,7 +80,9 @@ const Header = () => {
     navigate("/");
   };
 
-  const isAdmin = userRole === "admin" || userRole === "organizer";
+  const isAdmin = userRole === "admin";
+  const isProducer = userRole === "organizer";
+  const isClient = userRole === "user" || userRole === "client";
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 glass-strong border-b border-border/40">
@@ -118,12 +120,6 @@ const Header = () => {
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-primary group-hover:w-full transition-all duration-300"></span>
               </Link>
             )}
-            {isAdmin && (
-              <Link to="/admin" className="text-muted-foreground hover:text-primary transition-all duration-200 text-sm font-semibold tracking-wide relative group">
-                Admin
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-primary group-hover:w-full transition-all duration-300"></span>
-              </Link>
-            )}
           </nav>
 
           {/* Desktop Actions */}
@@ -146,7 +142,7 @@ const Header = () => {
                     {user.user_metadata?.full_name || user.email?.split("@")[0]}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 glass-strong border-border/40 rounded-xl">
+                <DropdownMenuContent align="end" className="w-56 glass-strong border-border/40 rounded-xl">
                   <DropdownMenuItem asChild>
                     <Link to="/perfil" className="cursor-pointer">
                       <UserCircle className="w-4 h-4 mr-2" />
@@ -159,14 +155,37 @@ const Header = () => {
                       Meus Ingressos
                     </Link>
                   </DropdownMenuItem>
+                  
+                  <DropdownMenuSeparator />
+                  
+                  {/* Client Dashboard - available for all logged users */}
+                  <DropdownMenuItem asChild>
+                    <Link to="/painel" className="cursor-pointer">
+                      <Users className="w-4 h-4 mr-2" />
+                      Painel do Cliente
+                    </Link>
+                  </DropdownMenuItem>
+                  
+                  {/* Producer Dashboard - only for producers and admins */}
+                  {(isProducer || isAdmin) && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin/produtor" className="cursor-pointer">
+                        <Building2 className="w-4 h-4 mr-2" />
+                        Painel do Produtor
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  
+                  {/* Admin Dashboard - only for admins */}
                   {isAdmin && (
                     <DropdownMenuItem asChild>
-                      <Link to="/admin" className="cursor-pointer">
+                      <Link to="/admin/super" className="cursor-pointer">
                         <LayoutDashboard className="w-4 h-4 mr-2" />
                         Painel Admin
                       </Link>
                     </DropdownMenuItem>
                   )}
+                  
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
                     <LogOut className="w-4 h-4 mr-2" />
@@ -240,16 +259,46 @@ const Header = () => {
                   >
                     Meus Ingressos
                   </Link>
+                  
+                  {/* Dashboards Section */}
+                  <div className="py-2">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Meus Painéis</span>
+                  </div>
+                  
+                  {/* Client Dashboard - available for all */}
+                  <Link
+                    to="/painel"
+                    className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center gap-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <Users className="w-4 h-4" />
+                    Painel do Cliente
+                  </Link>
+                  
+                  {/* Producer Dashboard */}
+                  {(isProducer || isAdmin) && (
+                    <Link
+                      to="/admin/produtor"
+                      className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center gap-2"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <Building2 className="w-4 h-4" />
+                      Painel do Produtor
+                    </Link>
+                  )}
+                  
+                  {/* Admin Dashboard */}
+                  {isAdmin && (
+                    <Link
+                      to="/admin/super"
+                      className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center gap-2"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <LayoutDashboard className="w-4 h-4" />
+                      Painel Admin
+                    </Link>
+                  )}
                 </>
-              )}
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Admin
-                </Link>
               )}
               <div className="flex flex-col gap-3 pt-4">
                 {user ? (
