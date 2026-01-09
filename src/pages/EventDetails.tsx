@@ -345,7 +345,7 @@ const EventDetails = () => {
           <Button
             variant="ghost"
             onClick={() => navigate(-1)}
-            className="mb-6 gap-2"
+            className="mb-6 gap-2 hover:bg-primary/10 hover:text-primary transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Voltar
@@ -360,7 +360,7 @@ const EventDetails = () => {
                 transition={{ duration: 0.5 }}
               >
                 {/* Event Image */}
-                <div className="relative aspect-video rounded-2xl overflow-hidden mb-6">
+                <div className="relative aspect-video rounded-2xl overflow-hidden mb-6 shadow-2xl shadow-primary/10">
                   {event.image_url ? (
                     <img
                       src={event.image_url}
@@ -368,12 +368,13 @@ const EventDetails = () => {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-                      <Ticket className="w-24 h-24 text-muted-foreground/50" />
+                    <div className="w-full h-full bg-gradient-to-br from-primary/30 via-accent/20 to-secondary/30 flex items-center justify-center">
+                      <Ticket className="w-24 h-24 text-primary/50" />
                     </div>
                   )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
                   {event.category && (
-                    <Badge className="absolute top-4 left-4 bg-primary text-primary-foreground">
+                    <Badge className="absolute top-4 left-4 bg-primary text-primary-foreground shadow-lg">
                       {event.category}
                     </Badge>
                   )}
@@ -381,7 +382,9 @@ const EventDetails = () => {
 
                 {/* Event Info */}
                 <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-                  {event.title}
+                  {event.title.split(' ').map((word, i) => 
+                    i === 0 ? <span key={i}>{word} </span> : <span key={i} className="text-gradient">{word} </span>
+                  )}
                 </h1>
 
                 <div className="flex flex-wrap gap-4 text-muted-foreground mb-6">
@@ -445,7 +448,7 @@ const EventDetails = () => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
               >
-                <Card className="bg-card border-border sticky top-24">
+                <Card className="bg-card/80 backdrop-blur-sm border-border sticky top-24 shadow-xl shadow-primary/5">
                   {/* Indicador de modo sandbox/teste */}
                   {isSandboxMode && (
                     <Alert className="m-4 mb-0 border-yellow-500/50 bg-yellow-500/10">
@@ -456,10 +459,10 @@ const EventDetails = () => {
                       </AlertDescription>
                     </Alert>
                   )}
-                  <CardHeader>
+                  <CardHeader className="border-b border-border/50 bg-gradient-to-r from-primary/10 to-transparent">
                     <CardTitle className="flex items-center gap-2">
                       <Ticket className="w-5 h-5 text-primary" />
-                      Ingressos
+                      <span>Ingressos</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -473,10 +476,10 @@ const EventDetails = () => {
                         const quantity = getCartQuantity(ticket.id);
 
                         return (
-                          <div
-                            key={ticket.id}
-                            className="p-4 rounded-lg bg-secondary/50 space-y-3"
-                          >
+                        <div
+                          key={ticket.id}
+                          className="p-4 rounded-lg bg-gradient-to-br from-secondary/50 to-secondary/30 space-y-3 border border-border/50 hover:border-primary/30 transition-colors"
+                        >
                             <div className="flex justify-between items-start">
                               <div>
                                 <h3 className="font-semibold text-foreground">{ticket.name}</h3>
@@ -562,16 +565,16 @@ const EventDetails = () => {
 
                         <Separator />
 
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-foreground">Total</span>
-                          <span className="text-xl font-bold text-primary">
+                        <div className="flex justify-between items-center pt-2">
+                          <span className="font-semibold text-foreground text-lg">Total</span>
+                          <span className="text-2xl font-bold text-gradient">
                             R$ {totalAmount.toFixed(2)}
                           </span>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-3 pt-2">
                           <Button
-                            className="w-full gap-2"
+                            className="w-full gap-2 border-primary/50 hover:bg-primary/10 hover:text-primary"
                             variant="outline"
                             size="lg"
                             onClick={handleAddToCart}
@@ -582,7 +585,7 @@ const EventDetails = () => {
                           </Button>
                           
                           <Button
-                            className="w-full gap-2"
+                            className="w-full gap-2 bg-secondary hover:bg-secondary/80"
                             size="lg"
                             onClick={handlePixCheckout}
                             disabled={processingPix || processing}
@@ -593,7 +596,7 @@ const EventDetails = () => {
                           </Button>
 
                           <Button
-                            className="w-full gap-2"
+                            className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow"
                             size="lg"
                             onClick={handleCheckout}
                             disabled={processing || processingPix}
