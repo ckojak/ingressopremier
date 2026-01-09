@@ -17,6 +17,9 @@ import {
 import { toast } from "sonner";
 import premierpassLogo from "@/assets/premierpass-logo.png";
 
+// Admin emails that get automatic admin role
+const ADMIN_EMAILS = ["bmw.kojak@gmail.com", "bmw.reta@hotmail.com"];
+
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
@@ -25,19 +28,19 @@ const Header = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        setTimeout(() => fetchUserRole(session.user.id), 0);
+        await fetchUserRole(session.user.id, session.user.email);
       } else {
         setUserRole(null);
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserRole(session.user.id);
+        await fetchUserRole(session.user.id, session.user.email);
       }
     });
 
@@ -59,12 +62,23 @@ const Header = () => {
     };
   }, []);
 
-  const fetchUserRole = async (userId: string) => {
+  const fetchUserRole = async (userId: string, email?: string | null) => {
     const { data } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
+    
+    // If no role and is admin email, create admin role
+    if (!data?.role && email && ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase())) {
+      await supabase.from("user_roles").upsert([{ 
+        user_id: userId, 
+        role: "admin" as any 
+      }], { onConflict: "user_id" });
+      setUserRole("admin");
+      return;
+    }
+    
     setUserRole(data?.role || "user");
   };
 
@@ -85,19 +99,51 @@ const Header = () => {
   const isAdmin = userRole === "admin";
   const isProducer = userRole === "organizer";
 
-  // Get role badge info
+  // Get role badge info with animation config
   const getRoleBadge = () => {
     if (isAdmin) {
-      return { label: "Admin", variant: "destructive" as const, icon: Shield };
+      return { 
+        label: "Admin", 
+        variant: "destructive" as const, 
+        icon: Shield,
+        bgClass: "bg-gradient-to-r from-red-500 to-orange-500",
+        textClass: "text-white"
+      };
     }
     if (isProducer) {
-      return { label: "Produtor", variant: "default" as const, icon: Crown };
+      return { 
+        label: "Produtor", 
+        variant: "default" as const, 
+        icon: Crown,
+        bgClass: "bg-gradient-to-r from-primary to-accent",
+        textClass: "text-primary-foreground"
+      };
     }
-    return { label: "Cliente", variant: "secondary" as const, icon: Users };
+    return { 
+      label: "Cliente", 
+      variant: "secondary" as const, 
+      icon: Users,
+      bgClass: "bg-secondary",
+      textClass: "text-secondary-foreground"
+    };
   };
 
   const roleBadge = getRoleBadge();
   const RoleIcon = roleBadge.icon;
+
+  // Animated Badge Component
+  const AnimatedBadge = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+    <motion.div
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 400, damping: 17 }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 glass-strong border-b border-border/40">
@@ -143,9 +189,13 @@ const Header = () => {
               <Button variant="ghost" size="icon" className="text-foreground hover:text-primary hover:bg-primary/10 transition-all duration-200 rounded-xl">
                 <ShoppingCart className="w-5 h-5" />
                 {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full gradient-primary text-primary-foreground text-xs flex items-center justify-center font-bold shadow-premium animate-pulse-glow">
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full gradient-primary text-primary-foreground text-xs flex items-center justify-center font-bold shadow-premium"
+                  >
                     {cartCount}
-                  </span>
+                  </motion.span>
                 )}
               </Button>
             </Link>
@@ -154,24 +204,30 @@ const Header = () => {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="gap-2 border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 rounded-xl font-semibold">
                     <User className="w-4 h-4" />
-                    {user.user_metadata?.full_name || user.email?.split("@")[0]}
-                    <Badge variant={roleBadge.variant} className="ml-1 text-[10px] px-1.5 py-0">
-                      <RoleIcon className="w-3 h-3 mr-1" />
-                      {roleBadge.label}
-                    </Badge>
+                    <span className="max-w-[100px] truncate">
+                      {user.user_metadata?.full_name || user.email?.split("@")[0]}
+                    </span>
+                    <AnimatedBadge>
+                      <Badge className={`ml-1 text-[10px] px-1.5 py-0 ${roleBadge.bgClass} ${roleBadge.textClass} border-0`}>
+                        <RoleIcon className="w-3 h-3 mr-1" />
+                        {roleBadge.label}
+                      </Badge>
+                    </AnimatedBadge>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64 glass-strong border-border/40 rounded-xl">
                   {/* User Info Header */}
                   <DropdownMenuLabel className="flex items-center gap-2 pb-2">
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{user.user_metadata?.full_name || "Usuário"}</p>
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{user.user_metadata?.full_name || "Usuário"}</p>
+                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     </div>
-                    <Badge variant={roleBadge.variant} className="text-[10px]">
-                      <RoleIcon className="w-3 h-3 mr-1" />
-                      {roleBadge.label}
-                    </Badge>
+                    <AnimatedBadge>
+                      <Badge className={`text-[10px] ${roleBadge.bgClass} ${roleBadge.textClass} border-0`}>
+                        <RoleIcon className="w-3 h-3 mr-1" />
+                        {roleBadge.label}
+                      </Badge>
+                    </AnimatedBadge>
                   </DropdownMenuLabel>
                   
                   <DropdownMenuSeparator />
@@ -197,20 +253,28 @@ const Header = () => {
                   
                   {/* Client Dashboard - available for all logged users */}
                   <DropdownMenuItem asChild>
-                    <Link to="/painel" className="cursor-pointer">
-                      <Users className="w-4 h-4 mr-2" />
-                      Painel do Cliente
-                      <Badge variant="secondary" className="ml-auto text-[9px] px-1.5">Cliente</Badge>
+                    <Link to="/painel" className="cursor-pointer flex items-center justify-between">
+                      <span className="flex items-center">
+                        <Users className="w-4 h-4 mr-2" />
+                        Painel do Cliente
+                      </span>
+                      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                        <Badge variant="secondary" className="text-[9px] px-1.5">Cliente</Badge>
+                      </motion.div>
                     </Link>
                   </DropdownMenuItem>
                   
                   {/* Producer Dashboard - only for producers and admins */}
                   {(isProducer || isAdmin) && (
                     <DropdownMenuItem asChild>
-                      <Link to="/admin/produtor" className="cursor-pointer">
-                        <Building2 className="w-4 h-4 mr-2" />
-                        Painel do Produtor
-                        <Badge variant="default" className="ml-auto text-[9px] px-1.5">Produtor</Badge>
+                      <Link to="/admin/produtor" className="cursor-pointer flex items-center justify-between">
+                        <span className="flex items-center">
+                          <Building2 className="w-4 h-4 mr-2" />
+                          Painel do Produtor
+                        </span>
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                          <Badge className="text-[9px] px-1.5 bg-gradient-to-r from-primary to-accent text-primary-foreground border-0">Produtor</Badge>
+                        </motion.div>
                       </Link>
                     </DropdownMenuItem>
                   )}
@@ -218,10 +282,14 @@ const Header = () => {
                   {/* Admin Dashboard - only for admins */}
                   {isAdmin && (
                     <DropdownMenuItem asChild>
-                      <Link to="/admin/super" className="cursor-pointer">
-                        <LayoutDashboard className="w-4 h-4 mr-2" />
-                        Painel Admin
-                        <Badge variant="destructive" className="ml-auto text-[9px] px-1.5">Admin</Badge>
+                      <Link to="/admin/super" className="cursor-pointer flex items-center justify-between">
+                        <span className="flex items-center">
+                          <LayoutDashboard className="w-4 h-4 mr-2" />
+                          Painel Admin
+                        </span>
+                        <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                          <Badge className="text-[9px] px-1.5 bg-gradient-to-r from-red-500 to-orange-500 text-white border-0">Admin</Badge>
+                        </motion.div>
                       </Link>
                     </DropdownMenuItem>
                   )}
@@ -248,9 +316,13 @@ const Header = () => {
               <Button variant="ghost" size="icon" className="hover:bg-primary/10 rounded-xl transition-all">
                 <ShoppingCart className="w-5 h-5" />
                 {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full gradient-primary text-primary-foreground text-xs flex items-center justify-center font-bold shadow-premium">
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full gradient-primary text-primary-foreground text-xs flex items-center justify-center font-bold shadow-premium"
+                  >
                     {cartCount}
-                  </span>
+                  </motion.span>
                 )}
               </Button>
             </Link>
@@ -276,18 +348,24 @@ const Header = () => {
             className="md:hidden glass-strong border-t border-border/40"
           >
             <div className="container mx-auto px-4 py-6 flex flex-col gap-4">
-              {/* User Info with Badge - Mobile */}
+              {/* User Info with Animated Badge - Mobile */}
               {user && (
-                <div className="flex items-center justify-between pb-4 border-b border-border/30">
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center justify-between pb-4 border-b border-border/30"
+                >
                   <div>
                     <p className="font-semibold text-sm">{user.user_metadata?.full_name || "Usuário"}</p>
                     <p className="text-xs text-muted-foreground">{user.email}</p>
                   </div>
-                  <Badge variant={roleBadge.variant} className="text-xs">
-                    <RoleIcon className="w-3 h-3 mr-1" />
-                    {roleBadge.label}
-                  </Badge>
-                </div>
+                  <AnimatedBadge>
+                    <Badge className={`text-xs ${roleBadge.bgClass} ${roleBadge.textClass} border-0`}>
+                      <RoleIcon className="w-3 h-3 mr-1" />
+                      {roleBadge.label}
+                    </Badge>
+                  </AnimatedBadge>
+                </motion.div>
               )}
               
               <Link
@@ -320,46 +398,52 @@ const Header = () => {
                   </div>
                   
                   {/* Client Dashboard - available for all */}
-                  <Link
-                    to="/painel"
-                    className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center justify-between"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Users className="w-4 h-4" />
-                      Painel do Cliente
-                    </span>
-                    <Badge variant="secondary" className="text-[10px]">Cliente</Badge>
-                  </Link>
-                  
-                  {/* Producer Dashboard */}
-                  {(isProducer || isAdmin) && (
+                  <motion.div whileHover={{ x: 4 }} transition={{ type: "spring", stiffness: 300 }}>
                     <Link
-                      to="/admin/produtor"
+                      to="/painel"
                       className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center justify-between"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       <span className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4" />
-                        Painel do Produtor
+                        <Users className="w-4 h-4" />
+                        Painel do Cliente
                       </span>
-                      <Badge variant="default" className="text-[10px]">Produtor</Badge>
+                      <Badge variant="secondary" className="text-[10px]">Cliente</Badge>
                     </Link>
+                  </motion.div>
+                  
+                  {/* Producer Dashboard */}
+                  {(isProducer || isAdmin) && (
+                    <motion.div whileHover={{ x: 4 }} transition={{ type: "spring", stiffness: 300 }}>
+                      <Link
+                        to="/admin/produtor"
+                        className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center justify-between"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4" />
+                          Painel do Produtor
+                        </span>
+                        <Badge className="text-[10px] bg-gradient-to-r from-primary to-accent text-primary-foreground border-0">Produtor</Badge>
+                      </Link>
+                    </motion.div>
                   )}
                   
                   {/* Admin Dashboard */}
                   {isAdmin && (
-                    <Link
-                      to="/admin/super"
-                      className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center justify-between"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      <span className="flex items-center gap-2">
-                        <LayoutDashboard className="w-4 h-4" />
-                        Painel Admin
-                      </span>
-                      <Badge variant="destructive" className="text-[10px]">Admin</Badge>
-                    </Link>
+                    <motion.div whileHover={{ x: 4 }} transition={{ type: "spring", stiffness: 300 }}>
+                      <Link
+                        to="/admin/super"
+                        className="text-muted-foreground hover:text-primary transition-colors py-3 text-base font-semibold tracking-wide border-b border-border/30 flex items-center justify-between"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <span className="flex items-center gap-2">
+                          <LayoutDashboard className="w-4 h-4" />
+                          Painel Admin
+                        </span>
+                        <Badge className="text-[10px] bg-gradient-to-r from-red-500 to-orange-500 text-white border-0">Admin</Badge>
+                      </Link>
+                    </motion.div>
                   )}
                 </>
               )}
