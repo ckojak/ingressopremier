@@ -15,6 +15,7 @@ interface CheckoutItem {
 interface CheckoutRequest {
   event_id: string;
   items: CheckoutItem[];
+  site_id?: string; // Site identifier for multi-tenant payment isolation
 }
 
 interface TicketType {
@@ -30,27 +31,26 @@ const logStep = (step: string, details?: unknown) => {
   console.log(`[MERCADOPAGO-CHECKOUT] ${step}${detailsStr}`);
 };
 
+// Get Mercado Pago credentials based on site_id
+const getMercadoPagoCredentials = (siteId: string) => {
+  if (siteId === 'premierpass') {
+    const token = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
+    if (token) {
+      logStep('Using PremierPass Mercado Pago credentials');
+      return token;
+    }
+  }
+  // Default to Quintal credentials
+  logStep('Using Quintal (default) Mercado Pago credentials');
+  return Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const mercadopagoAccessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-    if (!mercadopagoAccessToken) {
-      throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado');
-    }
-
-    // Detectar ambiente e logar
-    const isSandbox = mercadopagoAccessToken.startsWith('TEST-');
-    const tokenPrefix = mercadopagoAccessToken.substring(0, 15);
-    
-    logStep('Iniciando checkout Mercado Pago', {
-      ambiente: isSandbox ? 'SANDBOX (TEST-)' : 'PRODUÇÃO (APP_USR-)',
-      tokenPrefix: tokenPrefix + '...',
-      AVISO: isSandbox ? 'Usando credenciais de TESTE' : '⚠️ USANDO CREDENCIAIS DE PRODUÇÃO - cartões de teste NÃO funcionarão!'
-    });
-
     // Cliente para autenticação (usando anon key)
     const supabaseAuth = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -78,8 +78,8 @@ serve(async (req) => {
 
     logStep('Usuário autenticado', { id: user.id, email: user.email });
 
-    const { event_id, items }: CheckoutRequest = await req.json();
-    logStep('Request recebido', { event_id, items });
+    const { event_id, items, site_id }: CheckoutRequest = await req.json();
+    logStep('Request recebido', { event_id, items, site_id });
 
     if (!event_id || !items || items.length === 0) {
       throw new Error('Dados inválidos: event_id e items são obrigatórios');
@@ -98,6 +98,21 @@ serve(async (req) => {
     }
 
     logStep('Evento encontrado', { title: event.title });
+
+    // Determine site_id from event or request and get credentials
+    const effectiveSiteId = site_id || event.site_id || 'quintal';
+    const mercadopagoAccessToken = getMercadoPagoCredentials(effectiveSiteId);
+    
+    if (!mercadopagoAccessToken) {
+      throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado para o site: ' + effectiveSiteId);
+    }
+
+    // Detectar ambiente
+    const isSandbox = mercadopagoAccessToken.startsWith('TEST-');
+    logStep('Ambiente detectado', { 
+      site: effectiveSiteId,
+      ambiente: isSandbox ? 'SANDBOX' : 'PRODUÇÃO' 
+    });
 
     // Buscar tipos de ingresso
     const ticketTypeIds = items.map(item => item.ticket_type_id);
@@ -177,12 +192,13 @@ serve(async (req) => {
 
     logStep('Totais calculados', { subtotal, serviceFee, platformFee, totalAmount });
 
-    // Criar pedido pendente no Supabase (usando admin client para bypass RLS)
+    // Criar pedido pendente no Supabase com site_id para isolamento multi-tenant
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
       .insert({
         user_id: user.id,
         event_id: event_id,
+        site_id: effectiveSiteId,
         total_amount: totalAmount,
         status: 'pending',
         payment_intent_id: null

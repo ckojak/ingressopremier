@@ -14,6 +14,7 @@ interface CheckoutItem {
 interface CheckoutRequest {
   event_id: string;
   items: CheckoutItem[];
+  site_id?: string; // Site identifier for multi-tenant payment isolation
 }
 
 interface TicketType {
@@ -24,6 +25,20 @@ interface TicketType {
   quantity_sold: number;
 }
 
+// Get Mercado Pago credentials based on site_id
+const getMercadoPagoCredentials = (siteId: string) => {
+  if (siteId === 'premierpass') {
+    const token = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
+    if (token) {
+      console.log("Using PremierPass Mercado Pago credentials");
+      return token;
+    }
+  }
+  // Default to Quintal credentials
+  console.log("Using Quintal (default) Mercado Pago credentials");
+  return Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
+};
+
 serve(async (req) => {
   console.log("=== Create PIX Payment Function Started ===");
   
@@ -32,12 +47,6 @@ serve(async (req) => {
   }
 
   try {
-    const mpAccessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-    if (!mpAccessToken) {
-      console.error("MERCADOPAGO_ACCESS_TOKEN not configured");
-      throw new Error('Mercado Pago access token not configured');
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -59,7 +68,7 @@ serve(async (req) => {
     console.log("User authenticated:", user.id);
 
     const body: CheckoutRequest = await req.json();
-    const { event_id, items } = body;
+    const { event_id, items, site_id } = body;
 
     console.log("Request body:", JSON.stringify(body));
 
@@ -80,6 +89,15 @@ serve(async (req) => {
     }
 
     console.log("Event found:", event.title);
+
+    // Determine site_id from event or request
+    const effectiveSiteId = site_id || event.site_id || 'quintal';
+    const mpAccessToken = getMercadoPagoCredentials(effectiveSiteId);
+    
+    if (!mpAccessToken) {
+      console.error("Mercado Pago access token not configured for site:", effectiveSiteId);
+      throw new Error('Mercado Pago access token not configured');
+    }
 
     // Get ticket types and validate availability
     const ticketTypeIds = items.map(item => item.ticket_type_id);
@@ -130,10 +148,11 @@ serve(async (req) => {
       .eq('id', user.id)
       .single();
 
-    // Create pending order
+    // Create pending order with site_id for multi-tenant isolation
     console.log("Creating order with data:", {
       user_id: user.id,
       event_id: event_id,
+      site_id: effectiveSiteId,
       status: 'pending',
       total_amount: totalAmount
     });
@@ -143,6 +162,7 @@ serve(async (req) => {
       .insert({
         user_id: user.id,
         event_id: event_id,
+        site_id: effectiveSiteId,
         status: 'pending',
         total_amount: totalAmount
       })
