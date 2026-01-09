@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { Separator } from "@/components/ui/separator";
 import premierpassLogo from "@/assets/premierpass-logo.png";
-import { getSiteConfig } from "@/lib/site-config";
+import { useSiteContext } from "@/hooks/useSiteContext";
 
 interface PasswordStrength {
   hasMinLength: boolean;
@@ -77,7 +77,7 @@ const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const siteConfig = getSiteConfig();
+  const siteConfig = useSiteContext();
 
   const from = (location.state as any)?.from || siteConfig.homeRedirect;
 
@@ -107,6 +107,30 @@ const Auth = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // Helper function to determine redirect destination based on role and site
+  const getRedirectDestination = (role: string | null | undefined): string => {
+    const isAdmin = role === "admin" || role === "organizer";
+    
+    // PremierPass: admins ALWAYS go to admin panel
+    if (siteConfig.siteId === "premierpass" && isAdmin) {
+      return siteConfig.adminRedirect;
+    }
+    
+    // Quintal: admins can go to admin, but regular users go home
+    if (siteConfig.siteId === "quintal") {
+      if (isAdmin) {
+        return siteConfig.adminRedirect;
+      }
+      return from;
+    }
+    
+    // Default behavior
+    if (isAdmin) {
+      return siteConfig.adminRedirect;
+    }
+    return from;
+  };
+
   useEffect(() => {
     let isMounted = true;
     
@@ -127,11 +151,8 @@ const Auth = () => {
             .single();
 
           // Redirect based on role and site config
-          if (roleData?.role === "admin" || roleData?.role === "organizer") {
-            navigate(siteConfig.adminRedirect);
-          } else {
-            navigate(from);
-          }
+          const destination = getRedirectDestination(roleData?.role);
+          navigate(destination);
         }, 0);
       }
     });
@@ -146,11 +167,8 @@ const Auth = () => {
           .single();
 
         // Redirect based on role and site config
-        if (roleData?.role === "admin" || roleData?.role === "organizer") {
-          navigate(siteConfig.adminRedirect);
-        } else {
-          navigate(from);
-        }
+        const destination = getRedirectDestination(roleData?.role);
+        navigate(destination);
       }
     });
 
