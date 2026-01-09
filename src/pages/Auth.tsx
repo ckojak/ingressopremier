@@ -11,6 +11,7 @@ import { Link } from "react-router-dom";
 import { Separator } from "@/components/ui/separator";
 import premierpassLogo from "@/assets/premierpass-logo.png";
 import { useSiteContext } from "@/hooks/useSiteContext";
+import UserTypeSelector from "@/components/UserTypeSelector";
 
 interface PasswordStrength {
   hasMinLength: boolean;
@@ -74,6 +75,9 @@ const Auth = () => {
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showUserTypeSelector, setShowUserTypeSelector] = useState(false);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [userTypeSelectorLoading, setUserTypeSelectorLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -131,6 +135,47 @@ const Auth = () => {
     return from;
   };
 
+  // Handle user type selection
+  const handleUserTypeSelect = async (userType: "client" | "producer") => {
+    if (!pendingUserId) return;
+    
+    setUserTypeSelectorLoading(true);
+    try {
+      // Insert user role based on selection
+      const role = userType === "producer" ? "organizer" : "user";
+      const { error } = await supabase
+        .from("user_roles")
+        .insert({ user_id: pendingUserId, role });
+      
+      if (error) throw error;
+      
+      setShowUserTypeSelector(false);
+      
+      // Redirect based on selection
+      if (userType === "producer") {
+        navigate("/admin");
+      } else {
+        navigate(from);
+      }
+      
+      toast({
+        title: "Bem-vindo!",
+        description: userType === "producer" 
+          ? "Você agora pode criar e gerenciar eventos."
+          : "Explore os melhores eventos!",
+      });
+    } catch (error: any) {
+      console.error("Error setting user type:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível definir seu tipo de usuário.",
+        variant: "destructive",
+      });
+    } finally {
+      setUserTypeSelectorLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     
@@ -148,7 +193,14 @@ const Auth = () => {
             .from("user_roles")
             .select("role")
             .eq("user_id", session.user.id)
-            .single();
+            .maybeSingle();
+
+          // If no role exists, show the user type selector (first login)
+          if (!roleData?.role) {
+            setPendingUserId(session.user.id);
+            setShowUserTypeSelector(true);
+            return;
+          }
 
           // Redirect based on role and site config
           const destination = getRedirectDestination(roleData?.role);
@@ -164,7 +216,14 @@ const Auth = () => {
           .from("user_roles")
           .select("role")
           .eq("user_id", session.user.id)
-          .single();
+          .maybeSingle();
+
+        // If no role exists, show the user type selector (first login)
+        if (!roleData?.role) {
+          setPendingUserId(session.user.id);
+          setShowUserTypeSelector(true);
+          return;
+        }
 
         // Redirect based on role and site config
         const destination = getRedirectDestination(roleData?.role);
@@ -354,7 +413,13 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
+    <>
+      <UserTypeSelector
+        open={showUserTypeSelector}
+        onSelect={handleUserTypeSelect}
+        loading={userTypeSelectorLoading}
+      />
+      <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[150px]" />
         <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-accent/10 rounded-full blur-[120px]" />
@@ -627,6 +692,7 @@ const Auth = () => {
         </div>
       </motion.div>
     </div>
+    </>
   );
 };
 

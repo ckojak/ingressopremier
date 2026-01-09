@@ -19,6 +19,7 @@ import {
   BarChart3,
   Gift,
   UserCheck,
+  ClipboardCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -42,27 +43,37 @@ const AdminLayout = () => {
 
   // Menu items based on role
   const getMenuItems = () => {
-    const baseItems = [
-      { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
-      { icon: Calendar, label: "Eventos", path: "/admin/eventos" },
+    // Producer/Organizer menu - only their events and related features
+    const producerItems = [
+      { icon: LayoutDashboard, label: "Meu Painel", path: "/admin/produtor" },
+      { icon: Calendar, label: "Meus Eventos", path: "/admin/eventos" },
       { icon: Ticket, label: "Ingressos", path: "/admin/ingressos" },
       { icon: ShoppingCart, label: "Vendas", path: "/admin/vendas" },
       { icon: Tag, label: "Cupons", path: "/admin/cupons" },
-      { icon: BarChart3, label: "Relatórios", path: "/admin/relatorios" },
       { icon: Gift, label: "Cortesias", path: "/admin/cortesias" },
       { icon: QrCode, label: "Check-in", path: "/admin/checkin" },
       { icon: UserCheck, label: "Equipe Check-in", path: "/admin/equipe" },
     ];
 
+    // Admin menu - full access including approvals
     if (userRole === "admin") {
       return [
         { icon: Crown, label: "Dashboard Admin", path: "/admin/super" },
-        ...baseItems,
+        { icon: ClipboardCheck, label: "Aprovar Eventos", path: "/admin/aprovacoes" },
+        { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
+        { icon: Calendar, label: "Eventos", path: "/admin/eventos" },
+        { icon: Ticket, label: "Ingressos", path: "/admin/ingressos" },
+        { icon: ShoppingCart, label: "Vendas", path: "/admin/vendas" },
+        { icon: Tag, label: "Cupons", path: "/admin/cupons" },
+        { icon: BarChart3, label: "Relatórios", path: "/admin/relatorios" },
+        { icon: Gift, label: "Cortesias", path: "/admin/cortesias" },
+        { icon: QrCode, label: "Check-in", path: "/admin/checkin" },
+        { icon: UserCheck, label: "Equipe Check-in", path: "/admin/equipe" },
         { icon: Users, label: "Usuários", path: "/admin/usuarios" },
       ];
     }
 
-    return baseItems;
+    return producerItems;
   };
 
   // Single effect to handle auth and role checking
