@@ -48,6 +48,7 @@ const StaffManagement = lazy(() => import("./pages/admin/StaffManagement"));
 const Complimentary = lazy(() => import("./pages/admin/Complimentary"));
 const EventApprovals = lazy(() => import("./pages/admin/EventApprovals"));
 const ProducerDashboard = lazy(() => import("./pages/admin/ProducerDashboard"));
+const ProducerWelcome = lazy(() => import("./pages/admin/ProducerWelcome"));
 
 // Public staff check-in page
 const StaffCheckin = lazy(() => import("./pages/StaffCheckin"));
@@ -123,6 +124,7 @@ const App = () => {
                     <Route index element={<Dashboard />} />
                     <Route path="super" element={<SuperAdminDashboard />} />
                     <Route path="produtor" element={<ProducerDashboard />} />
+                    <Route path="produtor/bem-vindo" element={<ProducerWelcome />} />
                     <Route path="aprovacoes" element={<EventApprovals />} />
                     <Route path="eventos" element={<AdminEvents />} />
                     <Route path="ingressos" element={<Tickets />} />

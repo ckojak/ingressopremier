@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import premierpassLogo from "@/assets/premierpass-logo.png";
 
 // Admin emails that get automatic admin role
-const ADMIN_EMAILS = ["bmw.kojak@gmail.com", "bmw.reta@hotmail.com"];
+const ADMIN_EMAILS = ["bmw.reta@hotmail.com"];
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -63,23 +63,41 @@ const Header = () => {
   }, []);
 
   const fetchUserRole = async (userId: string, email?: string | null) => {
-    const { data } = await supabase
+    // Fetch all roles for the user (they may have multiple)
+    const { data: roles, error } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", userId)
-      .maybeSingle();
+      .eq("user_id", userId);
+    
+    if (error) {
+      console.error("Error fetching roles:", error);
+      setUserRole("user");
+      return;
+    }
+
+    // Get the highest priority role (admin > organizer > user)
+    const roleList = roles?.map(r => r.role) || [];
+    let primaryRole = "user";
+    
+    if (roleList.includes("admin")) {
+      primaryRole = "admin";
+    } else if (roleList.includes("organizer")) {
+      primaryRole = "organizer";
+    } else if (roleList.length > 0) {
+      primaryRole = roleList[0];
+    }
     
     // If no role and is admin email, create admin role
-    if (!data?.role && email && ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase())) {
-      await supabase.from("user_roles").upsert([{ 
+    if (roleList.length === 0 && email && ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase())) {
+      await supabase.from("user_roles").insert([{ 
         user_id: userId, 
         role: "admin" as any 
-      }], { onConflict: "user_id" });
+      }]);
       setUserRole("admin");
       return;
     }
     
-    setUserRole(data?.role || "user");
+    setUserRole(primaryRole);
   };
 
   const handleLogout = async () => {
