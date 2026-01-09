@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useSiteContext } from "@/hooks/useSiteContext";
 
 type Event = Tables<"events">;
 
@@ -18,21 +19,31 @@ interface EventWithPrice extends Event {
 const FeaturedEvents = () => {
   const [events, setEvents] = useState<EventWithPrice[]>([]);
   const [loading, setLoading] = useState(true);
+  const { getVisibleSiteIds } = useSiteContext();
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
+        // Get visible site_ids based on current domain
+        const visibleSiteIds = getVisibleSiteIds();
+        
+        // Build site filter for the query
+        const siteFilter = visibleSiteIds.length > 1 
+          ? `site_id.eq.${visibleSiteIds[0]},site_id.eq.${visibleSiteIds[1]}`
+          : `site_id.eq.${visibleSiteIds[0]}`;
+        
         const { data, error } = await supabase
           .from("events")
           .select("*")
           .eq("status", "published")
+          .or(siteFilter)
           .gte("start_date", new Date().toISOString())
           .order("start_date", { ascending: true })
           .limit(6);
 
         if (error) throw error;
         
-        let eventsData = data || [];
+        const eventsData = data || [];
 
         // Fetch minimum prices for each event
         if (eventsData.length > 0) {

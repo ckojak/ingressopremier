@@ -23,7 +23,9 @@ export const SITE_CONFIG: Record<SiteId, {
   adminRedirect: string;
   homeRedirect: string;
   authRedirect: string;
-  defaultAdminRedirect: boolean; // If true, admins go to /admin after login
+  defaultAdminRedirect: boolean;
+  // New: controls event visibility logic
+  showAllSiteEvents: boolean; // If true, shows events from all sites (PremierPass is universal)
 }> = {
   premierpass: {
     name: "PremierPass",
@@ -31,7 +33,8 @@ export const SITE_CONFIG: Record<SiteId, {
     adminRedirect: "/admin",
     homeRedirect: "/",
     authRedirect: "/auth",
-    defaultAdminRedirect: true, // PremierPass admins always go to admin panel
+    defaultAdminRedirect: true,
+    showAllSiteEvents: true, // PremierPass shows events from ALL sites (universal marketplace)
   },
   quintal: {
     name: "Quintal",
@@ -39,7 +42,8 @@ export const SITE_CONFIG: Record<SiteId, {
     adminRedirect: "/admin",
     homeRedirect: "/",
     authRedirect: "/auth",
-    defaultAdminRedirect: false, // Quintal users go to home by default
+    defaultAdminRedirect: false,
+    showAllSiteEvents: false, // Quintal shows only its own events
   },
 };
 
@@ -60,17 +64,48 @@ export const useSiteContext = () => {
     homeRedirect: config.homeRedirect,
     authRedirect: config.authRedirect,
     defaultAdminRedirect: config.defaultAdminRedirect,
+    showAllSiteEvents: config.showAllSiteEvents,
     
     // Helper to build filter object for queries
     getSiteFilter: () => ({ site_id: siteId }),
     
     // Helper to check if we should apply site filter
     shouldFilterBySite: () => true,
+    
+    /**
+     * Returns array of site_ids to include in event queries
+     * - PremierPass (universal): shows ALL events (premierpass + quintal)
+     * - Quintal: shows ONLY quintal events
+     */
+    getVisibleSiteIds: (): SiteId[] => {
+      if (config.showAllSiteEvents) {
+        return ["premierpass", "quintal"]; // Universal site shows all
+      }
+      return [siteId]; // Specific site shows only its own
+    },
+    
+    /**
+     * Returns array of site_ids for statistics (always own site only)
+     * Each site sees only its own statistics
+     */
+    getStatsSiteIds: (): SiteId[] => {
+      return [siteId]; // Stats are always isolated per site
+    },
   };
 };
 
 // Export standalone function for non-React contexts
 export const getCurrentSiteConfig = () => {
   const siteId = detectSiteFromHostname();
-  return { siteId, ...SITE_CONFIG[siteId] };
+  return { 
+    siteId, 
+    ...SITE_CONFIG[siteId],
+    getVisibleSiteIds: (): SiteId[] => {
+      if (SITE_CONFIG[siteId].showAllSiteEvents) {
+        return ["premierpass", "quintal"];
+      }
+      return [siteId];
+    },
+    getStatsSiteIds: (): SiteId[] => [siteId],
+  };
 };

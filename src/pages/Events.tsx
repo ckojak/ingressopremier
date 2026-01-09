@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EVENT_CATEGORIES } from "@/lib/constants";
+import { useSiteContext } from "@/hooks/useSiteContext";
 
 type Event = Tables<"events">;
 
@@ -52,14 +53,22 @@ const Events = () => {
   const [customDate, setCustomDate] = useState<Date | undefined>();
   const [selectedCity, setSelectedCity] = useState("all");
   const [cities, setCities] = useState<string[]>([]);
+  const { getVisibleSiteIds } = useSiteContext();
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
+        // Get visible site_ids based on current domain
+        const visibleSiteIds = getVisibleSiteIds();
+        const siteFilter = visibleSiteIds.length > 1 
+          ? `site_id.eq.${visibleSiteIds[0]},site_id.eq.${visibleSiteIds[1]}`
+          : `site_id.eq.${visibleSiteIds[0]}`;
+
         const { data, error } = await supabase
           .from("events")
           .select("*")
           .eq("status", "published")
+          .or(siteFilter)
           .gte("start_date", new Date().toISOString())
           .order("start_date", { ascending: true });
 
