@@ -24,6 +24,7 @@ import {
   Eye,
   Building2,
   Webhook,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -83,6 +84,7 @@ const AdminLayout = () => {
         { icon: UserCheck, label: "Equipe Check-in", path: "/admin/equipe" },
         { icon: Users, label: "Usuários", path: "/admin/usuarios" },
         { icon: Webhook, label: "Webhooks", path: "/admin/webhooks" },
+        { icon: Settings, label: "Pagamentos", path: "/admin/pagamentos" },
       ];
     }
 
