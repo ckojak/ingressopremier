@@ -47,17 +47,21 @@ const ClientDashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData?.user;
         if (!user) {
           navigate("/auth");
           return;
         }
 
-        const { data: profileData } = await supabase
+        // Fetch profile separately
+        const profileResult = await supabase
           .from("profiles")
           .select("full_name, avatar_url")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
+
+        const profileData = profileResult.data;
 
         setProfile({
           full_name: profileData?.full_name || user.user_metadata?.full_name || "Usuário",
@@ -65,7 +69,8 @@ const ClientDashboard = () => {
           avatar_url: profileData?.avatar_url || null,
         });
 
-        const { data: ticketsData } = await supabase
+        // Fetch tickets - use any to avoid deep type instantiation issue with Supabase types
+        const ticketsResult = await (supabase as any)
           .from("tickets")
           .select("id, ticket_type_id")
           .eq("user_id", user.id)
@@ -73,34 +78,51 @@ const ClientDashboard = () => {
           .order("created_at", { ascending: false })
           .limit(10);
 
+        const ticketsRaw = (ticketsResult.data || []) as Array<{ id: string; ticket_type_id: string }>;
         const formattedTickets: TicketData[] = [];
         
-        for (const ticket of ticketsData || []) {
-          const { data: ticketType } = await supabase
+        for (const ticket of ticketsRaw) {
+          // Fetch ticket type separately - use any to avoid type issues
+          const ticketTypeResult = await (supabase as any)
             .from("ticket_types")
             .select("name, event_id")
             .eq("id", ticket.ticket_type_id)
-            .single();
+            .maybeSingle();
+          
+          const ticketType = ticketTypeResult.data as { name: string; event_id: string } | null;
           
           if (ticketType?.event_id) {
-            const { data: event } = await supabase
+            // Fetch event separately - use any to avoid type issues
+            const eventResult = await (supabase as any)
               .from("events")
-              .select("title, start_date, location, image_url")
+              .select("title, start_date, venue_name, city, state, image_url")
               .eq("id", ticketType.event_id)
-              .single();
+              .maybeSingle();
             
+            const event = eventResult.data as { 
+              title: string; 
+              start_date: string | null; 
+              venue_name: string | null; 
+              city: string | null; 
+              state: string | null; 
+              image_url: string | null; 
+            } | null;
+            
+            // Build location string
+            const locationParts = [event?.venue_name, event?.city, event?.state].filter(Boolean);
+            const locationString = locationParts.length > 0 ? locationParts.join(", ") : null;
+
             formattedTickets.push({
               id: ticket.id,
               event_title: event?.title || "Evento",
               event_date: event?.start_date || null,
-              event_location: event?.location || null,
+              event_location: locationString,
               event_image: event?.image_url || null,
               ticket_type: ticketType?.name || "Ingresso",
             });
           }
         }
 
-        const now = new Date();
         setUpcomingTickets(formattedTickets.filter(t => t.event_date && isFuture(new Date(t.event_date))));
         setPastTicketsCount(formattedTickets.filter(t => t.event_date && isPast(new Date(t.event_date))).length);
       } catch (error) {
