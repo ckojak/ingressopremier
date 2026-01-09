@@ -20,12 +20,23 @@ import {
   Gift,
   UserCheck,
   ClipboardCheck,
+  Home,
+  Eye,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import premierpassLogo from "@/assets/premierpass-logo.png";
 import { getSiteConfig } from "@/lib/site-config";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
 
@@ -124,7 +135,7 @@ const AdminLayout = () => {
           toast.error("Você não tem permissão para acessar o painel administrativo.");
           setHasAccess(false);
           setIsInitialized(true);
-          navigate("/");
+          navigate("/painel");
           return;
         }
 
@@ -168,6 +179,38 @@ const AdminLayout = () => {
     navigate("/");
   };
 
+  // View switcher for admin to see different dashboards
+  const ViewSwitcher = () => {
+    if (userRole !== "admin") return null;
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2">
+            <Eye className="w-4 h-4" />
+            {sidebarOpen && "Trocar Visão"}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel>Visualizar como</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => navigate("/admin/super")}>
+            <Crown className="w-4 h-4 mr-2" />
+            Admin
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate("/admin/produtor")}>
+            <Building2 className="w-4 h-4 mr-2" />
+            Produtor
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate("/painel")}>
+            <Users className="w-4 h-4 mr-2" />
+            Cliente
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   if (!isInitialized) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -202,7 +245,9 @@ const AdminLayout = () => {
                 <span className="text-lg font-bold text-sidebar-foreground">
                   Premier<span className="text-gradient">Pass</span>
                 </span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Admin</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  {userRole === "admin" ? "Admin" : "Produtor"}
+                </span>
               </div>
             </Link>
           )}
@@ -221,9 +266,9 @@ const AdminLayout = () => {
           </Button>
         </div>
 
-        {/* Role Badge */}
+        {/* Role Badge and View Switcher */}
         {sidebarOpen && (
-          <div className="px-4 py-3 border-b border-sidebar-border bg-secondary/30">
+          <div className="px-4 py-3 border-b border-sidebar-border bg-secondary/30 space-y-2">
             <span className={cn(
               "text-xs font-medium px-3 py-1.5 rounded-full inline-flex items-center gap-1.5",
               userRole === "admin" 
@@ -233,6 +278,7 @@ const AdminLayout = () => {
               {userRole === "admin" && <Crown className="w-3 h-3" />}
               {userRole === "admin" ? "Administrador" : "Organizador"}
             </span>
+            <ViewSwitcher />
           </div>
         )}
 
@@ -257,7 +303,20 @@ const AdminLayout = () => {
           })}
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border bg-secondary/20">
+        {/* Quick Links */}
+        <div className="p-4 border-t border-sidebar-border space-y-2">
+          <Link to="/">
+            <Button
+              variant="ghost"
+              className={cn(
+                "w-full justify-start gap-3 text-sidebar-foreground hover:bg-secondary",
+                !sidebarOpen && "justify-center"
+              )}
+            >
+              <Home className="w-5 h-5" />
+              {sidebarOpen && <span>Ir para o Site</span>}
+            </Button>
+          </Link>
           <Button
             variant="ghost"
             onClick={handleLogout}
@@ -281,17 +340,22 @@ const AdminLayout = () => {
               <span className="text-lg font-bold text-sidebar-foreground">
                 Premier<span className="text-gradient">Pass</span>
               </span>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Admin</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                {userRole === "admin" ? "Admin" : "Produtor"}
+              </span>
             </div>
           </Link>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-sidebar-foreground hover:bg-primary/20"
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </Button>
+          <div className="flex items-center gap-2">
+            {userRole === "admin" && <ViewSwitcher />}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="text-sidebar-foreground hover:bg-primary/20"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </Button>
+          </div>
         </div>
 
         {/* Mobile Menu */}
@@ -316,14 +380,22 @@ const AdminLayout = () => {
                 </Link>
               );
             })}
-            <Button
-              variant="ghost"
-              onClick={handleLogout}
-              className="w-full justify-start gap-3 text-sidebar-foreground hover:bg-destructive/20 hover:text-destructive mt-4"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Sair</span>
-            </Button>
+            <div className="pt-4 space-y-2 border-t border-sidebar-border mt-4">
+              <Link to="/" onClick={() => setMobileMenuOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start gap-3 text-sidebar-foreground">
+                  <Home className="w-5 h-5" />
+                  <span>Ir para o Site</span>
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                onClick={handleLogout}
+                className="w-full justify-start gap-3 text-sidebar-foreground hover:bg-destructive/20 hover:text-destructive"
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Sair</span>
+              </Button>
+            </div>
           </nav>
         )}
       </div>

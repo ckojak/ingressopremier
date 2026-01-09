@@ -63,6 +63,9 @@ const isValidPhone = (phone: string): boolean => {
   return digits.length === 10 || digits.length === 11;
 };
 
+// List of admin emails that should be auto-assigned admin role
+const ADMIN_EMAILS = ["bmw.kojak@gmail.com", "bmw.reta@hotmail.com"];
+
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -75,9 +78,18 @@ const Auth = () => {
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  // User type selector - shown during REGISTRATION
   const [showUserTypeSelector, setShowUserTypeSelector] = useState(false);
-  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [pendingRegistrationData, setPendingRegistrationData] = useState<{
+    email: string;
+    password: string;
+    fullName: string;
+    cpf: string;
+    phone: string;
+  } | null>(null);
   const [userTypeSelectorLoading, setUserTypeSelectorLoading] = useState(false);
+  
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -111,45 +123,25 @@ const Auth = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Helper function to determine redirect destination based on role and site
+  // Helper function to determine redirect destination based on role
   const getRedirectDestination = (role: string | null | undefined): string => {
-    const isAdmin = role === "admin" || role === "organizer";
-    
-    // PremierPass: admins ALWAYS go to admin panel
-    if (siteConfig.siteId === "premierpass" && isAdmin) {
-      return siteConfig.adminRedirect;
+    if (role === "admin") {
+      return "/admin/super"; // Admin goes to SuperAdmin Dashboard
     }
-    
-    // Quintal: admins can go to admin, but regular users go home
-    if (siteConfig.siteId === "quintal") {
-      if (isAdmin) {
-        return siteConfig.adminRedirect;
-      }
-      return from;
+    if (role === "organizer") {
+      return "/admin/produtor"; // Producer goes to Producer Dashboard
     }
-    
-    // Default behavior
-    if (isAdmin) {
-      return siteConfig.adminRedirect;
-    }
-    return from;
+    return "/painel"; // Client goes to Client Dashboard
   };
 
-  // List of admin emails that should be auto-assigned admin role
-  const ADMIN_EMAILS = ["bmw.kojak@gmail.com", "bmw.reta@hotmail.com"];
-
-  // Handle user type selection
+  // Handle user type selection during REGISTRATION
   const handleUserTypeSelect = async (userType: "client" | "producer") => {
-    if (!pendingUserId) return;
+    if (!pendingRegistrationData) return;
     
     setUserTypeSelectorLoading(true);
     try {
-      // Get user email to check if they should be admin
-      const { data: { user } } = await supabase.auth.getUser();
-      const userEmail = user?.email?.toLowerCase();
-      
       // Check if user email is in admin list
-      const isAdminEmail = userEmail && ADMIN_EMAILS.map(e => e.toLowerCase()).includes(userEmail);
+      const isAdminEmail = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(pendingRegistrationData.email.toLowerCase());
       
       // Determine role: admin if in list, otherwise based on selection
       let role: string;
@@ -158,35 +150,67 @@ const Auth = () => {
       } else {
         role = userType === "producer" ? "organizer" : "user";
       }
-      
-      const { error } = await supabase
-        .from("user_roles")
-        .insert([{ user_id: pendingUserId, role: role as any }]);
-      
-      if (error) throw error;
-      
-      setShowUserTypeSelector(false);
-      
-      // Redirect based on role
-      if (role === "admin" || role === "organizer") {
-        navigate("/admin");
-      } else {
-        navigate(from);
-      }
-      
-      toast({
-        title: isAdminEmail ? "Bem-vindo, Administrador!" : "Bem-vindo!",
-        description: isAdminEmail 
-          ? "Você tem acesso total ao sistema."
-          : userType === "producer" 
-            ? "Você agora pode criar e gerenciar eventos."
-            : "Explore os melhores eventos!",
+
+      // Now create the account with the selected type
+      const { data, error } = await supabase.auth.signUp({
+        email: pendingRegistrationData.email,
+        password: pendingRegistrationData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth`,
+          data: {
+            full_name: pendingRegistrationData.fullName,
+            user_type: userType,
+            cpf: pendingRegistrationData.cpf.replace(/\D/g, ""),
+            phone: pendingRegistrationData.phone.replace(/\D/g, ""),
+            selected_role: role,
+          },
+        },
       });
+
+      if (error) throw error;
+
+      // If user was created and signed in (email confirmation disabled)
+      if (data.user && data.session) {
+        // Create the role in user_roles table
+        const { error: roleError } = await supabase
+          .from("user_roles")
+          .insert([{ user_id: data.user.id, role: role as any }]);
+
+        if (roleError) {
+          console.error("Error creating role:", roleError);
+        }
+
+        setShowUserTypeSelector(false);
+        setPendingRegistrationData(null);
+        
+        // Redirect based on role
+        const destination = getRedirectDestination(role);
+        navigate(destination);
+        
+        toast({
+          title: isAdminEmail ? "Bem-vindo, Administrador!" : "Cadastro realizado!",
+          description: isAdminEmail 
+            ? "Você tem acesso total ao sistema."
+            : userType === "producer" 
+              ? "Você agora pode criar e gerenciar eventos."
+              : "Explore os melhores eventos!",
+        });
+      } else {
+        // Email confirmation is enabled
+        setShowUserTypeSelector(false);
+        setPendingRegistrationData(null);
+        setIsLogin(true);
+        
+        toast({
+          title: "Cadastro realizado com sucesso!",
+          description: "Verifique seu email para confirmar a conta e depois faça login.",
+        });
+      }
     } catch (error: any) {
-      console.error("Error setting user type:", error);
+      console.error("Error during registration:", error);
       toast({
         title: "Erro",
-        description: "Não foi possível definir seu tipo de usuário.",
+        description: error.message || "Não foi possível criar sua conta.",
         variant: "destructive",
       });
     } finally {
@@ -194,56 +218,65 @@ const Auth = () => {
     }
   };
 
+  // Check for existing session on mount
   useEffect(() => {
     let isMounted = true;
     
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Ignorar evento de SIGNED_OUT para não interferir
-      if (event === 'SIGNED_OUT') {
-        return;
-      }
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user && isMounted) {
-        setTimeout(async () => {
-          if (!isMounted) return;
-          
-          const { data: roleData } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", session.user.id)
-            .maybeSingle();
-
-          // If no role exists, show the user type selector (first login)
-          if (!roleData?.role) {
-            setPendingUserId(session.user.id);
-            setShowUserTypeSelector(true);
-            return;
-          }
-
-          // Redirect based on role and site config
-          const destination = getRedirectDestination(roleData?.role);
-          navigate(destination);
-        }, 0);
-      }
-    });
-
-    // Verificar sessão existente apenas no mount inicial
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user && isMounted) {
+        // User is logged in, check their role and redirect
         const { data: roleData } = await supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", session.user.id)
           .maybeSingle();
 
-        // If no role exists, show the user type selector (first login)
+        const destination = getRedirectDestination(roleData?.role);
+        navigate(destination);
+      }
+    };
+
+    checkSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Check if user has a role
+        const { data: roleData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+
+        // If no role exists, check if this was from OAuth (Google)
         if (!roleData?.role) {
-          setPendingUserId(session.user.id);
-          setShowUserTypeSelector(true);
+          // For OAuth users without role, we need to handle this
+          // Check if user is admin email
+          const isAdminEmail = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(session.user.email?.toLowerCase() || "");
+          
+          if (isAdminEmail) {
+            // Auto-create admin role
+            await supabase.from("user_roles").insert([{ 
+              user_id: session.user.id, 
+              role: "admin" as any 
+            }]);
+            navigate("/admin/super");
+          } else {
+            // For OAuth users, default to client role
+            await supabase.from("user_roles").insert([{ 
+              user_id: session.user.id, 
+              role: "user" as any 
+            }]);
+            navigate("/painel");
+          }
           return;
         }
 
-        // Redirect based on role and site config
+        // Redirect based on role
         const destination = getRedirectDestination(roleData?.role);
         navigate(destination);
       }
@@ -253,7 +286,7 @@ const Auth = () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [navigate, from]);
+  }, [navigate]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -279,6 +312,7 @@ const Auth = () => {
     e.preventDefault();
     
     if (!isLogin) {
+      // REGISTRATION - Validate fields first
       if (!fullName.trim()) {
         toast({
           title: "Nome obrigatório",
@@ -322,51 +356,65 @@ const Auth = () => {
         });
         return;
       }
+
+      // All validations passed - show user type selector
+      setPendingRegistrationData({
+        email,
+        password,
+        fullName,
+        cpf,
+        phone,
+      });
+      setShowUserTypeSelector(true);
+      return;
     }
     
+    // LOGIN
     setLoading(true);
-
     try {
-      if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        
-        toast({
-          title: "Login realizado com sucesso!",
-          description: "Bem-vindo de volta.",
-        });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+
+      // Get user role for redirect
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+
+      // Check if admin email but no role
+      if (!roleData?.role) {
+        const isAdminEmail = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase());
+        if (isAdminEmail) {
+          await supabase.from("user_roles").insert([{ 
+            user_id: data.user.id, 
+            role: "admin" as any 
+          }]);
+          navigate("/admin/super");
+          toast({
+            title: "Bem-vindo, Administrador!",
+            description: "Você tem acesso total ao sistema.",
+          });
+          return;
+        }
+        // No role, default to client
+        await supabase.from("user_roles").insert([{ 
+          user_id: data.user.id, 
+          role: "user" as any 
+        }]);
+        navigate("/painel");
       } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth`,
-            data: {
-              full_name: fullName,
-              user_type: "client",
-              cpf: cpf.replace(/\D/g, ""),
-              phone: phone.replace(/\D/g, ""),
-            },
-          },
-        });
-        if (error) throw error;
-
-        toast({
-          title: "Cadastro realizado com sucesso!",
-          description: "Verifique seu email para confirmar a conta e depois faça login.",
-        });
-
-        setEmail("");
-        setPassword("");
-        setConfirmPassword("");
-        setFullName("");
-        setCpf("");
-        setPhone("");
-        setIsLogin(true);
+        const destination = getRedirectDestination(roleData.role);
+        navigate(destination);
       }
+      
+      toast({
+        title: "Login realizado com sucesso!",
+        description: "Bem-vindo de volta.",
+      });
     } catch (error: any) {
       let message = error.message;
       if (error.message.includes("User already registered")) {
@@ -686,7 +734,7 @@ const Auth = () => {
               ) : isLogin ? (
                 "Entrar"
               ) : (
-                "Criar conta"
+                "Continuar"
               )}
             </Button>
           </form>
