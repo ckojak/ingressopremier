@@ -79,7 +79,7 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  // User type selector - shown during REGISTRATION
+  // User type selector - shown during REGISTRATION or OAuth first login
   const [showUserTypeSelector, setShowUserTypeSelector] = useState(false);
   const [pendingRegistrationData, setPendingRegistrationData] = useState<{
     email: string;
@@ -89,6 +89,7 @@ const Auth = () => {
     phone: string;
   } | null>(null);
   const [userTypeSelectorLoading, setUserTypeSelectorLoading] = useState(false);
+  const [pendingOAuthUser, setPendingOAuthUser] = useState<{ id: string; email: string } | null>(null);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -134,22 +135,52 @@ const Auth = () => {
     return "/painel"; // Client goes to Client Dashboard
   };
 
-  // Handle user type selection during REGISTRATION
+  // Handle user type selection during REGISTRATION or OAuth first login
   const handleUserTypeSelect = async (userType: "client" | "producer") => {
-    if (!pendingRegistrationData) return;
-    
     setUserTypeSelectorLoading(true);
+    
     try {
+      // Determine role based on selection
+      const role = userType === "producer" ? "organizer" : "user";
+      
+      // Check if this is for OAuth user (pendingOAuthUser) or email registration (pendingRegistrationData)
+      if (pendingOAuthUser) {
+        // OAuth user - just create the role and redirect
+        const isAdminEmail = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(pendingOAuthUser.email.toLowerCase());
+        const finalRole = isAdminEmail ? "admin" : role;
+        
+        const { error: roleError } = await supabase
+          .from("user_roles")
+          .insert([{ user_id: pendingOAuthUser.id, role: finalRole as any }]);
+
+        if (roleError) {
+          console.error("Error creating role:", roleError);
+          throw roleError;
+        }
+
+        setShowUserTypeSelector(false);
+        setPendingOAuthUser(null);
+        
+        const destination = getRedirectDestination(finalRole);
+        navigate(destination);
+        
+        toast({
+          title: isAdminEmail ? "Bem-vindo, Administrador!" : "Login realizado!",
+          description: isAdminEmail 
+            ? "Você tem acesso total ao sistema."
+            : userType === "producer" 
+              ? "Você agora pode criar e gerenciar eventos."
+              : "Explore os melhores eventos!",
+        });
+        return;
+      }
+      
+      // Email registration flow
+      if (!pendingRegistrationData) return;
+      
       // Check if user email is in admin list
       const isAdminEmail = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(pendingRegistrationData.email.toLowerCase());
-      
-      // Determine role: admin if in list, otherwise based on selection
-      let role: string;
-      if (isAdminEmail) {
-        role = "admin";
-      } else {
-        role = userType === "producer" ? "organizer" : "user";
-      }
+      const finalRole = isAdminEmail ? "admin" : role;
 
       // Now create the account with the selected type
       const { data, error } = await supabase.auth.signUp({
@@ -162,7 +193,7 @@ const Auth = () => {
             user_type: userType,
             cpf: pendingRegistrationData.cpf.replace(/\D/g, ""),
             phone: pendingRegistrationData.phone.replace(/\D/g, ""),
-            selected_role: role,
+            selected_role: finalRole,
           },
         },
       });
@@ -174,7 +205,7 @@ const Auth = () => {
         // Create the role in user_roles table
         const { error: roleError } = await supabase
           .from("user_roles")
-          .insert([{ user_id: data.user.id, role: role as any }]);
+          .insert([{ user_id: data.user.id, role: finalRole as any }]);
 
         if (roleError) {
           console.error("Error creating role:", roleError);
@@ -184,7 +215,7 @@ const Auth = () => {
         setPendingRegistrationData(null);
         
         // Redirect based on role
-        const destination = getRedirectDestination(role);
+        const destination = getRedirectDestination(finalRole);
         navigate(destination);
         
         toast({
@@ -252,26 +283,22 @@ const Auth = () => {
           .eq("user_id", session.user.id)
           .maybeSingle();
 
-        // If no role exists, check if this was from OAuth (Google)
+        // If no role exists, show user type selector for OAuth users
         if (!roleData?.role) {
-          // For OAuth users without role, we need to handle this
           // Check if user is admin email
           const isAdminEmail = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(session.user.email?.toLowerCase() || "");
           
           if (isAdminEmail) {
-            // Auto-create admin role
+            // Auto-create admin role for admin emails
             await supabase.from("user_roles").insert([{ 
               user_id: session.user.id, 
               role: "admin" as any 
             }]);
             navigate("/admin/super");
           } else {
-            // For OAuth users, default to client role
-            await supabase.from("user_roles").insert([{ 
-              user_id: session.user.id, 
-              role: "user" as any 
-            }]);
-            navigate("/painel");
+            // Show user type selector for OAuth users without role
+            setPendingOAuthUser({ id: session.user.id, email: session.user.email || "" });
+            setShowUserTypeSelector(true);
           }
           return;
         }
