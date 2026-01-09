@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
-import { Scanner } from "@yudiel/react-qr-scanner";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, X, CheckCircle2, XCircle, Loader2, RefreshCw } from "lucide-react";
+import { Camera, CheckCircle2, XCircle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,7 +15,15 @@ interface QRCodeScannerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   eventId?: string;
-  onSuccess?: (ticketData: any) => void;
+  onSuccess?: (ticketData: TicketData) => void;
+}
+
+interface TicketData {
+  id: string;
+  attendeeName: string;
+  ticketType: string;
+  eventName: string;
+  usedAt?: string | null;
 }
 
 type ScanStatus = "scanning" | "success" | "error" | "processing";
@@ -24,66 +31,98 @@ type ScanStatus = "scanning" | "success" | "error" | "processing";
 const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScannerProps) => {
   const [status, setStatus] = useState<ScanStatus>("scanning");
   const [message, setMessage] = useState("");
-  const [ticketInfo, setTicketInfo] = useState<any>(null);
+  const [ticketInfo, setTicketInfo] = useState<TicketData | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [manualCode, setManualCode] = useState("");
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (open) {
       setStatus("scanning");
       setMessage("");
       setTicketInfo(null);
-      checkCameraPermission();
+      setManualCode("");
+      startCamera();
+    } else {
+      stopCamera();
     }
+    
+    return () => stopCamera();
   }, [open]);
 
-  const checkCameraPermission = async () => {
+  const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach(track => track.stop());
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" } 
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
       setHasPermission(true);
     } catch (err) {
       setHasPermission(false);
     }
   };
 
-  const handleScan = async (result: any) => {
-    if (status !== "scanning") return;
-    
-    const qrCode = result[0]?.rawValue;
-    if (!qrCode) return;
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const processQRCode = async (qrCode: string) => {
+    if (status !== "scanning" || !qrCode.trim()) return;
 
     setStatus("processing");
     
     try {
-      // Look up ticket by QR code
-      const { data: ticket, error: ticketError } = await supabase
+      // Look up ticket by QR code or ticket_code
+      const { data: ticketData, error: ticketError } = await supabase
         .from("tickets")
-        .select("*, ticket_types(name), events(id, title, start_date)")
-        .eq("qr_code", qrCode)
+        .select("id, event_id, ticket_type_id, attendee_name, is_used, used_at")
+        .or(`qr_code.eq.${qrCode},ticket_code.eq.${qrCode}`)
+        .limit(1)
         .single();
 
-      if (ticketError || !ticket) {
+      if (ticketError || !ticketData) {
         setStatus("error");
-        setMessage("Ingresso não encontrado. QR Code inválido.");
+        setMessage("Ingresso não encontrado. Código inválido.");
         return;
       }
 
-      // Check if ticket belongs to the current event (if eventId provided)
-      if (eventId && ticket.event_id !== eventId) {
+      // Check if ticket belongs to the current event
+      if (eventId && ticketData.event_id !== eventId) {
         setStatus("error");
         setMessage("Este ingresso não pertence a este evento.");
         return;
       }
 
+      // Fetch ticket type and event names
+      const { data: typeData } = await supabase
+        .from("ticket_types")
+        .select("name")
+        .eq("id", ticketData.ticket_type_id)
+        .single();
+        
+      const { data: eventData } = await supabase
+        .from("events")
+        .select("title")
+        .eq("id", ticketData.event_id)
+        .single();
+
       // Check if already used
-      if (ticket.is_used) {
+      if (ticketData.is_used) {
         setStatus("error");
         setMessage("Este ingresso já foi utilizado.");
         setTicketInfo({
-          attendeeName: ticket.attendee_name || "N/A",
-          ticketType: (ticket.ticket_types as any)?.name || "N/A",
-          eventName: (ticket.events as any)?.title || "N/A",
-          usedAt: ticket.used_at,
+          id: ticketData.id,
+          attendeeName: ticketData.attendee_name || "N/A",
+          ticketType: typeData?.name || "N/A",
+          eventName: eventData?.title || "N/A",
+          usedAt: ticketData.used_at,
         });
         return;
       }
@@ -92,7 +131,7 @@ const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScanner
       const { error: updateError } = await supabase
         .from("tickets")
         .update({ is_used: true, used_at: new Date().toISOString() })
-        .eq("id", ticket.id);
+        .eq("id", ticketData.id);
 
       if (updateError) {
         setStatus("error");
@@ -100,24 +139,24 @@ const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScanner
         return;
       }
 
-      const ticketData = {
-        id: ticket.id,
-        attendeeName: ticket.attendee_name || "N/A",
-        ticketType: (ticket.ticket_types as any)?.name || "N/A",
-        eventName: (ticket.events as any)?.title || "N/A",
+      const result: TicketData = {
+        id: ticketData.id,
+        attendeeName: ticketData.attendee_name || "N/A",
+        ticketType: typeData?.name || "N/A",
+        eventName: eventData?.title || "N/A",
       };
 
-      setTicketInfo(ticketData);
+      setTicketInfo(result);
       setStatus("success");
       setMessage("Check-in realizado com sucesso!");
       
-      onSuccess?.(ticketData);
+      onSuccess?.(result);
       toast.success("Check-in realizado!");
       
     } catch (err) {
       console.error("Scan error:", err);
       setStatus("error");
-      setMessage("Erro ao processar QR Code. Tente novamente.");
+      setMessage("Erro ao processar código. Tente novamente.");
     }
   };
 
@@ -125,6 +164,14 @@ const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScanner
     setStatus("scanning");
     setMessage("");
     setTicketInfo(null);
+    setManualCode("");
+  };
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (manualCode.trim()) {
+      processQRCode(manualCode.trim());
+    }
   };
 
   return (
@@ -133,7 +180,7 @@ const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScanner
         <DialogHeader className="p-4 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <Camera className="w-5 h-5 text-primary" />
-            Scanner de QR Code
+            Check-in de Ingresso
           </DialogTitle>
         </DialogHeader>
 
@@ -145,13 +192,27 @@ const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScanner
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="aspect-square rounded-lg bg-secondary flex flex-col items-center justify-center p-6 text-center"
+                className="space-y-4"
               >
-                <XCircle className="w-12 h-12 text-destructive mb-4" />
-                <p className="text-foreground font-medium mb-2">Câmera não disponível</p>
-                <p className="text-sm text-muted-foreground">
-                  Permita o acesso à câmera nas configurações do seu navegador para usar o scanner.
-                </p>
+                <div className="aspect-video rounded-lg bg-secondary flex flex-col items-center justify-center p-6 text-center">
+                  <XCircle className="w-12 h-12 text-destructive mb-4" />
+                  <p className="text-foreground font-medium mb-2">Câmera não disponível</p>
+                  <p className="text-sm text-muted-foreground">
+                    Use a entrada manual abaixo para validar o ingresso.
+                  </p>
+                </div>
+                <form onSubmit={handleManualSubmit} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Digite o código do ingresso"
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-foreground"
+                  />
+                  <Button type="submit" disabled={!manualCode.trim()}>
+                    Validar
+                  </Button>
+                </form>
               </motion.div>
             ) : status === "scanning" ? (
               <motion.div
@@ -159,33 +220,35 @@ const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScanner
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="relative aspect-square rounded-lg overflow-hidden"
+                className="space-y-4"
               >
-                <Scanner
-                  onScan={handleScan}
-                  constraints={{ facingMode: "environment" }}
-                  styles={{
-                    container: {
-                      width: "100%",
-                      height: "100%",
-                    },
-                    video: {
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    },
-                  }}
-                />
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute inset-12 border-2 border-primary rounded-2xl" />
-                  <div className="absolute top-12 left-12 w-8 h-8 border-t-4 border-l-4 border-primary rounded-tl-xl" />
-                  <div className="absolute top-12 right-12 w-8 h-8 border-t-4 border-r-4 border-primary rounded-tr-xl" />
-                  <div className="absolute bottom-12 left-12 w-8 h-8 border-b-4 border-l-4 border-primary rounded-bl-xl" />
-                  <div className="absolute bottom-12 right-12 w-8 h-8 border-b-4 border-r-4 border-primary rounded-br-xl" />
+                <div className="relative aspect-video rounded-lg overflow-hidden bg-black">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute inset-8 border-2 border-primary rounded-xl opacity-50" />
+                  </div>
                 </div>
-                <p className="absolute bottom-4 left-0 right-0 text-center text-sm text-white bg-black/50 py-2 mx-4 rounded-lg">
-                  Aponte para o QR Code do ingresso
+                <p className="text-center text-sm text-muted-foreground">
+                  Posicione o QR Code na câmera ou digite o código manualmente
                 </p>
+                <form onSubmit={handleManualSubmit} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Código do ingresso"
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-foreground text-sm"
+                  />
+                  <Button type="submit" size="sm" disabled={!manualCode.trim()}>
+                    Validar
+                  </Button>
+                </form>
               </motion.div>
             ) : status === "processing" ? (
               <motion.div
@@ -193,7 +256,7 @@ const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScanner
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="aspect-square rounded-lg bg-secondary flex flex-col items-center justify-center"
+                className="aspect-video rounded-lg bg-secondary flex flex-col items-center justify-center"
               >
                 <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
                 <p className="text-foreground font-medium">Verificando ingresso...</p>
@@ -204,7 +267,7 @@ const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScanner
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0 }}
-                className="aspect-square rounded-lg bg-green-500/10 border border-green-500/30 flex flex-col items-center justify-center p-6"
+                className="aspect-video rounded-lg bg-green-500/10 border border-green-500/30 flex flex-col items-center justify-center p-6"
               >
                 <motion.div
                   initial={{ scale: 0 }}
@@ -223,7 +286,7 @@ const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScanner
                 )}
                 <Button onClick={handleReset} className="mt-6 gap-2">
                   <RefreshCw className="w-4 h-4" />
-                  Escanear outro
+                  Próximo ingresso
                 </Button>
               </motion.div>
             ) : (
@@ -232,7 +295,7 @@ const QRCodeScanner = ({ open, onOpenChange, eventId, onSuccess }: QRCodeScanner
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0 }}
-                className="aspect-square rounded-lg bg-destructive/10 border border-destructive/30 flex flex-col items-center justify-center p-6"
+                className="aspect-video rounded-lg bg-destructive/10 border border-destructive/30 flex flex-col items-center justify-center p-6"
               >
                 <motion.div
                   initial={{ scale: 0 }}
