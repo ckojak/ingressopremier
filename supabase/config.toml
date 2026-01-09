@@ -1,6 +1,4 @@
-# PremierPass - Projeto Supabase Independente
-# O project_id será extraído da URL configurada nos secrets
-project_id = "premierpass"
+project_id = "gpbwmbwmaqsrfurdbspp"
 
 [functions.send-transfer-email]
 verify_jwt = false
