@@ -378,15 +378,26 @@ const Auth = () => {
       });
       if (error) throw error;
 
-      // Get user role for redirect
-      const { data: roleData } = await supabase
+      // Get ALL user roles for redirect (user may have multiple)
+      const { data: rolesData } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
+        .eq("user_id", data.user.id);
+
+      const roleList = rolesData?.map(r => r.role) || [];
+      
+      // Get the highest priority role (admin > organizer > user)
+      let primaryRole: string | null = null;
+      if (roleList.includes("admin")) {
+        primaryRole = "admin";
+      } else if (roleList.includes("organizer")) {
+        primaryRole = "organizer";
+      } else if (roleList.length > 0) {
+        primaryRole = roleList[0];
+      }
 
       // Check if admin email but no role
-      if (!roleData?.role) {
+      if (!primaryRole) {
         const isAdminEmail = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase());
         if (isAdminEmail) {
           await supabase.from("user_roles").insert([{ 
@@ -406,15 +417,32 @@ const Auth = () => {
           role: "user" as any 
         }]);
         navigate("/painel");
+        toast({
+          title: "Login realizado com sucesso!",
+          description: "Bem-vindo de volta.",
+        });
       } else {
-        const destination = getRedirectDestination(roleData.role);
+        const destination = getRedirectDestination(primaryRole);
         navigate(destination);
+        
+        // Show appropriate welcome message based on role
+        if (primaryRole === "admin") {
+          toast({
+            title: "Bem-vindo, Administrador!",
+            description: "Você tem acesso total ao sistema.",
+          });
+        } else if (primaryRole === "organizer") {
+          toast({
+            title: "Login realizado com sucesso!",
+            description: "Bem-vindo ao painel de produtor.",
+          });
+        } else {
+          toast({
+            title: "Login realizado com sucesso!",
+            description: "Bem-vindo de volta.",
+          });
+        }
       }
-      
-      toast({
-        title: "Login realizado com sucesso!",
-        description: "Bem-vindo de volta.",
-      });
     } catch (error: any) {
       let message = error.message;
       if (error.message.includes("User already registered")) {
