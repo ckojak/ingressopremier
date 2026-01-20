@@ -1,83 +1,17 @@
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Calendar, MapPin, Ticket, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useSiteContext } from "@/hooks/useSiteContext";
-
-type Event = Tables<"events">;
-
-interface EventWithPrice extends Event {
-  min_price?: number;
-}
+import { usePublicEvents, EventWithPrice } from "@/hooks/useEvents";
 
 const FeaturedEvents = () => {
-  const [events, setEvents] = useState<EventWithPrice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { getVisibleSiteIds } = useSiteContext();
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        // Get visible site_ids based on current domain
-        const visibleSiteIds = getVisibleSiteIds();
-        
-        // Fetch ALL published events first, then filter in memory
-        const { data, error } = await supabase
-          .from("events")
-          .select("*")
-          .eq("status", "published")
-          .gte("start_date", new Date().toISOString())
-          .order("start_date", { ascending: true });
-
-        if (error) throw error;
-        
-        // Filter by visible site_ids in memory (avoids type issues)
-        const filteredData = (data || []).filter((event: any) => 
-          visibleSiteIds.includes(event.site_id) || !event.site_id
-        );
-        
-        const eventsData = filteredData.slice(0, 6);
-
-        // Fetch minimum prices for each event
-        if (eventsData.length > 0) {
-          const eventIds = eventsData.map(e => e.id);
-          const { data: ticketPrices } = await supabase
-            .from("ticket_types")
-            .select("event_id, price")
-            .in("event_id", eventIds)
-            .eq("is_active", true);
-
-          const minPriceByEvent: Record<string, number> = {};
-          ticketPrices?.forEach(ticket => {
-            const price = Number(ticket.price);
-            if (!minPriceByEvent[ticket.event_id] || price < minPriceByEvent[ticket.event_id]) {
-              minPriceByEvent[ticket.event_id] = price;
-            }
-          });
-
-          const eventsWithPrices = eventsData.map(event => ({
-            ...event,
-            min_price: minPriceByEvent[event.id],
-          }));
-          setEvents(eventsWithPrices);
-        } else {
-          setEvents([]);
-        }
-      } catch (error) {
-        console.error("Error fetching events:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEvents();
-  }, []);
+  const { data: allEvents = [], isLoading: loading } = usePublicEvents();
+  
+  // Take only the first 6 events for featured section
+  const events: EventWithPrice[] = allEvents.slice(0, 6);
 
   if (loading) {
     return (

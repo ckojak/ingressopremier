@@ -41,6 +41,7 @@ import ImageUpload from "@/components/ImageUpload";
 import { useIBGEStates, useIBGECities } from "@/hooks/useIBGE";
 import { EVENT_CATEGORIES } from "@/lib/constants";
 import { useSiteContext, getCurrentSiteConfig } from "@/hooks/useSiteContext";
+import { useInvalidateEvents } from "@/hooks/useEvents";
 
 const eventSchema = z.object({
   title: z.string().min(1, "Título é obrigatório").max(200, "Título deve ter no máximo 200 caracteres"),
@@ -90,6 +91,7 @@ const Events = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
+  const { invalidateAll } = useInvalidateEvents();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -231,6 +233,7 @@ const Events = () => {
       setEditingEvent(null);
       resetForm();
       fetchEvents();
+      invalidateAll(); // Invalidate cache for public pages
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -252,6 +255,7 @@ const Events = () => {
       if (error) throw error;
       toast({ title: "Evento excluído com sucesso!" });
       fetchEvents();
+      invalidateAll(); // Invalidate cache for public pages
     } catch (error: any) {
       toast({
         title: "Erro ao excluir",
@@ -309,6 +313,7 @@ const Events = () => {
       }
       
       fetchEvents();
+      invalidateAll(); // Invalidate cache for public pages
     } catch (error: any) {
       console.error("Error publishing event:", error);
       toast({
