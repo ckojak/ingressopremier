@@ -98,9 +98,13 @@ const AdminLayout = () => {
     const initializeAuth = async () => {
       try {
         // Get current session
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         
         if (!isMounted) return;
+
+        if (sessionError) {
+          console.warn("Session error:", sessionError.message);
+        }
 
         if (!currentSession?.user) {
           setIsInitialized(true);
@@ -112,7 +116,7 @@ const AdminLayout = () => {
         setSession(currentSession);
         setUser(currentSession.user);
 
-        // Fetch user roles (user may have multiple)
+        // Fetch user roles (user may have multiple) - with error handling
         const { data: rolesData, error: roleError } = await supabase
           .from("user_roles")
           .select("role")
@@ -121,8 +125,8 @@ const AdminLayout = () => {
         if (!isMounted) return;
 
         if (roleError) {
-          console.error("Error fetching role:", roleError);
-          toast.error("Erro ao verificar permissões.");
+          console.warn("Error fetching role:", roleError.message);
+          // Don't show error to user, just redirect to home
           setHasAccess(false);
           setIsInitialized(true);
           navigate("/");
@@ -147,7 +151,7 @@ const AdminLayout = () => {
         setUserRole(role ?? null);
 
         if (!role || !["admin", "organizer"].includes(role)) {
-          toast.error("Você não tem permissão para acessar o painel administrativo.");
+          // Silently redirect without error message
           setHasAccess(false);
           setIsInitialized(true);
           navigate("/painel");
@@ -157,7 +161,7 @@ const AdminLayout = () => {
         setHasAccess(true);
         setIsInitialized(true);
       } catch (error) {
-        console.error("Auth initialization error:", error);
+        console.warn("Auth initialization error:", error);
         if (isMounted) {
           setHasAccess(false);
           setIsInitialized(true);

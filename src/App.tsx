@@ -8,6 +8,7 @@ import { AnimatePresence } from "framer-motion";
 import { HelmetProvider } from "react-helmet-async";
 import LoadingScreen from "@/components/LoadingScreen";
 import WhatsAppButton from "@/components/WhatsAppButton";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Eager load critical pages
 import Index from "./pages/Index";
@@ -60,6 +61,11 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 5 * 60 * 1000, // 5 minutes
       gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      retry: 2, // Retry failed queries twice
+      refetchOnWindowFocus: false, // Prevent refetch on window focus
+    },
+    mutations: {
+      retry: 1, // Retry failed mutations once
     },
   },
 });
@@ -83,74 +89,78 @@ const App = () => {
   }, []);
 
   return (
-    <HelmetProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <AnimatePresence mode="wait">
-            {isLoading && <LoadingScreen onLoadingComplete={() => setIsLoading(false)} />}
-          </AnimatePresence>
-          {!isLoading && (
-            <BrowserRouter>
-              <Suspense fallback={<PageLoader />}>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/eventos" element={<Events />} />
-                  <Route path="/evento/:id" element={<EventDetails />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/checkout/status" element={<CheckoutStatus />} />
-                  <Route path="/checkout/pix" element={<CheckoutPix />} />
-                  <Route path="/pagamento-sucesso" element={<PaymentSuccessMercadoPago />} />
-                  <Route path="/pagamento-sucesso-stripe" element={<PaymentSuccessStripe />} />
-                  <Route path="/meus-ingressos" element={<MyTickets />} />
-                  <Route path="/carrinho" element={<Cart />} />
-                  <Route path="/perfil" element={<Profile />} />
-                  <Route path="/painel" element={<ClientDashboard />} />
-                  
-                  {/* Institutional Pages */}
-                  <Route path="/sobre" element={<About />} />
-                  <Route path="/suporte" element={<Support />} />
-                  <Route path="/termos" element={<TermsOfService />} />
-                  <Route path="/privacidade" element={<Privacy />} />
-                  <Route path="/meia-entrada" element={<HalfPrice />} />
-                  
-                  {/* Ticket Transfer */}
-                  <Route path="/aceitar-transferencia" element={<AcceptTransfer />} />
-                  
-                  {/* Staff Check-in (public) */}
-                  <Route path="/staff-checkin/:accessCode" element={<StaffCheckin />} />
-                  
-                  {/* Admin Routes */}
-                  <Route path="/admin" element={<AdminLayout />}>
-                    <Route index element={<Dashboard />} />
-                    <Route path="super" element={<SuperAdminDashboard />} />
-                    <Route path="produtor" element={<ProducerDashboard />} />
-                    <Route path="produtor/bem-vindo" element={<ProducerWelcome />} />
-                    <Route path="aprovacoes" element={<EventApprovals />} />
-                    <Route path="eventos" element={<AdminEvents />} />
-                    <Route path="ingressos" element={<Tickets />} />
-                    <Route path="vendas" element={<Sales />} />
-                    <Route path="checkin" element={<CheckIn />} />
-                    <Route path="cupons" element={<Coupons />} />
-                    <Route path="relatorios" element={<Reports />} />
-                    <Route path="usuarios" element={<Users />} />
-                    <Route path="equipe" element={<StaffManagement />} />
-                    <Route path="cortesias" element={<Complimentary />} />
-                    <Route path="webhooks" element={<WebhookLogs />} />
-                    <Route path="pagamentos" element={<PaymentSettings />} />
-                  </Route>
-                  
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-              <WhatsAppButton />
-            </BrowserRouter>
-          )}
-        </TooltipProvider>
-      </QueryClientProvider>
-    </HelmetProvider>
+    <ErrorBoundary>
+      <HelmetProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <AnimatePresence mode="wait">
+              {isLoading && <LoadingScreen onLoadingComplete={() => setIsLoading(false)} />}
+            </AnimatePresence>
+            {!isLoading && (
+              <BrowserRouter>
+                <ErrorBoundary>
+                  <Suspense fallback={<PageLoader />}>
+                    <Routes>
+                      <Route path="/" element={<Index />} />
+                      <Route path="/eventos" element={<Events />} />
+                      <Route path="/evento/:id" element={<EventDetails />} />
+                      <Route path="/auth" element={<Auth />} />
+                      <Route path="/checkout/status" element={<CheckoutStatus />} />
+                      <Route path="/checkout/pix" element={<CheckoutPix />} />
+                      <Route path="/pagamento-sucesso" element={<PaymentSuccessMercadoPago />} />
+                      <Route path="/pagamento-sucesso-stripe" element={<PaymentSuccessStripe />} />
+                      <Route path="/meus-ingressos" element={<MyTickets />} />
+                      <Route path="/carrinho" element={<Cart />} />
+                      <Route path="/perfil" element={<Profile />} />
+                      <Route path="/painel" element={<ClientDashboard />} />
+                      
+                      {/* Institutional Pages */}
+                      <Route path="/sobre" element={<About />} />
+                      <Route path="/suporte" element={<Support />} />
+                      <Route path="/termos" element={<TermsOfService />} />
+                      <Route path="/privacidade" element={<Privacy />} />
+                      <Route path="/meia-entrada" element={<HalfPrice />} />
+                      
+                      {/* Ticket Transfer */}
+                      <Route path="/aceitar-transferencia" element={<AcceptTransfer />} />
+                      
+                      {/* Staff Check-in (public) */}
+                      <Route path="/staff-checkin/:accessCode" element={<StaffCheckin />} />
+                      
+                      {/* Admin Routes */}
+                      <Route path="/admin" element={<AdminLayout />}>
+                        <Route index element={<Dashboard />} />
+                        <Route path="super" element={<SuperAdminDashboard />} />
+                        <Route path="produtor" element={<ProducerDashboard />} />
+                        <Route path="produtor/bem-vindo" element={<ProducerWelcome />} />
+                        <Route path="aprovacoes" element={<EventApprovals />} />
+                        <Route path="eventos" element={<AdminEvents />} />
+                        <Route path="ingressos" element={<Tickets />} />
+                        <Route path="vendas" element={<Sales />} />
+                        <Route path="checkin" element={<CheckIn />} />
+                        <Route path="cupons" element={<Coupons />} />
+                        <Route path="relatorios" element={<Reports />} />
+                        <Route path="usuarios" element={<Users />} />
+                        <Route path="equipe" element={<StaffManagement />} />
+                        <Route path="cortesias" element={<Complimentary />} />
+                        <Route path="webhooks" element={<WebhookLogs />} />
+                        <Route path="pagamentos" element={<PaymentSettings />} />
+                      </Route>
+                      
+                      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </Suspense>
+                </ErrorBoundary>
+                <WhatsAppButton />
+              </BrowserRouter>
+            )}
+          </TooltipProvider>
+        </QueryClientProvider>
+      </HelmetProvider>
+    </ErrorBoundary>
   );
 };
 
