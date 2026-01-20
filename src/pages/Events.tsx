@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -7,9 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Calendar as CalendarIcon, MapPin, Ticket, Search, X } from "lucide-react";
 import { motion } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
-import { format, startOfDay, endOfDay, addDays, addWeeks, addMonths } from "date-fns";
+import { format, startOfDay, endOfDay, addWeeks, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -26,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { EVENT_CATEGORIES } from "@/lib/constants";
 import { useSiteContext, detectSiteFromHostname } from "@/hooks/useSiteContext";
+import { usePublicEvents, EventWithPrice } from "@/hooks/useEvents";
 
 // Site filter options for PremierPass
 const SITE_FILTER_OPTIONS = [
@@ -33,13 +32,6 @@ const SITE_FILTER_OPTIONS = [
   { label: "PremierPass", value: "premierpass" },
   { label: "Quintal", value: "quintal" },
 ];
-
-type Event = Tables<"events">;
-
-interface EventWithPrice extends Event {
-  min_price?: number;
-  total_available?: number;
-}
 
 const categories = ["Todos", ...EVENT_CATEGORIES];
 
@@ -52,86 +44,20 @@ const dateFilters = [
 ];
 
 const Events = () => {
-  const [events, setEvents] = useState<EventWithPrice[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [selectedDateFilter, setSelectedDateFilter] = useState("all");
   const [customDate, setCustomDate] = useState<Date | undefined>();
   const [selectedCity, setSelectedCity] = useState("all");
   const [selectedSite, setSelectedSite] = useState("all");
-  const [cities, setCities] = useState<string[]>([]);
-  const { getVisibleSiteIds, showAllSiteEvents } = useSiteContext();
+  const { showAllSiteEvents } = useSiteContext();
   const currentSite = detectSiteFromHostname();
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        // Get visible site_ids based on current domain
-        const visibleSiteIds = getVisibleSiteIds();
-
-        // Fetch ALL published events, then filter in memory
-        const { data, error } = await supabase
-          .from("events")
-          .select("*")
-          .eq("status", "published")
-          .gte("start_date", new Date().toISOString())
-          .order("start_date", { ascending: true });
-
-        if (error) throw error;
-        
-        // Filter by visible site_ids in memory (avoids type issues)
-        const filteredData = (data || []).filter((event: any) => 
-          visibleSiteIds.includes(event.site_id) || !event.site_id
-        );
-        
-        const eventsData = filteredData;
-
-        // Extract unique cities
-        const uniqueCities = [...new Set(eventsData.map(e => e.city).filter(Boolean))] as string[];
-        setCities(uniqueCities.sort());
-
-        // Fetch ticket prices and availability for each event
-        if (eventsData.length > 0) {
-          const eventIds = eventsData.map(e => e.id);
-          const { data: ticketData } = await supabase
-            .from("ticket_types")
-            .select("event_id, price, quantity_available, quantity_sold")
-            .in("event_id", eventIds)
-            .eq("is_active", true);
-
-          const priceAndAvailabilityByEvent: Record<string, { minPrice: number; totalAvailable: number }> = {};
-          ticketData?.forEach(ticket => {
-            const price = Number(ticket.price);
-            const available = ticket.quantity_available - (ticket.quantity_sold || 0);
-            if (!priceAndAvailabilityByEvent[ticket.event_id]) {
-              priceAndAvailabilityByEvent[ticket.event_id] = { minPrice: price, totalAvailable: available };
-            } else {
-              if (price < priceAndAvailabilityByEvent[ticket.event_id].minPrice) {
-                priceAndAvailabilityByEvent[ticket.event_id].minPrice = price;
-              }
-              priceAndAvailabilityByEvent[ticket.event_id].totalAvailable += available;
-            }
-          });
-
-          const eventsWithPrices = eventsData.map(event => ({
-            ...event,
-            min_price: priceAndAvailabilityByEvent[event.id]?.minPrice,
-            total_available: priceAndAvailabilityByEvent[event.id]?.totalAvailable ?? 0,
-          }));
-          setEvents(eventsWithPrices);
-        } else {
-          setEvents([]);
-        }
-      } catch (error) {
-        console.error("Error fetching events:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEvents();
-  }, []);
+  
+  // Use centralized events hook
+  const { data: events = [], isLoading: loading } = usePublicEvents();
+  
+  // Extract unique cities from events
+  const cities = [...new Set(events.map(e => e.city).filter(Boolean))] as string[];
 
   const getDateRange = () => {
     const now = new Date();
