@@ -109,9 +109,12 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="border-t border-border/30 mt-12 pt-10">
+        <div className="border-t border-border/30 mt-12 pt-10 space-y-2">
           <p className="text-muted-foreground/70 text-sm md:text-base text-center font-medium">
             © {new Date().getFullYear()} PremierPass. Todos os direitos reservados.
+          </p>
+          <p className="text-muted-foreground/40 text-xs text-center">
+            feito por KOJAK SOLUÇÕES
           </p>
         </div>
       </div>

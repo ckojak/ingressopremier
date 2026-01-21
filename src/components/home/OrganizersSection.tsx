@@ -25,11 +25,6 @@ const organizers = [
     category: "Eventos",
   },
   {
-    name: "Quintal da Barra",
-    logo: null,
-    category: "Bar & Eventos",
-  },
-  {
     name: "Samba Sunset Festival",
     logo: sambaSunsetLogo,
     category: "Festival",

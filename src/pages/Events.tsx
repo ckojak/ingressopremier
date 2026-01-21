@@ -29,9 +29,8 @@ import { toast } from "sonner";
 
 // Site filter options for PremierPass
 const SITE_FILTER_OPTIONS = [
-  { label: "Todos os sites", value: "all" },
+  { label: "Todos os eventos", value: "all" },
   { label: "PremierPass", value: "premierpass" },
-  { label: "Quintal", value: "quintal" },
 ];
 
 const categories = ["Todos", ...EVENT_CATEGORIES];
@@ -299,9 +298,7 @@ const Events = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredEvents.map((event, index) => {
                 const eventSiteId = (event as any).site_id;
-                const siteBadge = eventSiteId === "quintal" 
-                  ? { label: "Quintal", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" }
-                  : eventSiteId === "premierpass"
+                const siteBadge = eventSiteId === "premierpass"
                   ? { label: "PremierPass", className: "bg-primary/20 text-primary border-primary/30" }
                   : null;
                   

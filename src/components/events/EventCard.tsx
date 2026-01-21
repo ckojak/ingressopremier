@@ -18,10 +18,6 @@ interface EventCardProps {
 
 // Site badge configuration
 const SITE_BADGES: Record<string, { label: string; className: string }> = {
-  quintal: { 
-    label: "Quintal", 
-    className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" 
-  },
   premierpass: { 
     label: "PremierPass", 
     className: "bg-primary/20 text-primary border-primary/30" 

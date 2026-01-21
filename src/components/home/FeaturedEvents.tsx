@@ -103,9 +103,7 @@ const FeaturedEvents = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
           {events.map((event, index) => {
             const eventSiteId = (event as any).site_id;
-            const siteBadge = eventSiteId === "quintal" 
-              ? { label: "Quintal", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" }
-              : eventSiteId === "premierpass"
+            const siteBadge = eventSiteId === "premierpass"
               ? { label: "PremierPass", className: "bg-primary/20 text-primary border-primary/30" }
               : null;
               

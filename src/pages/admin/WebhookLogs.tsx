@@ -56,7 +56,7 @@ const WebhookLogs = () => {
         created_at: order.created_at || new Date().toISOString(),
         payment_id: order.payment_intent_id || 'N/A',
         order_id: order.id,
-        site_id: 'quintal', // Default since site_id might not be in types yet
+        site_id: 'premierpass', // Default to premierpass
         payment_status: order.status === 'paid' ? 'approved' : (order.status || 'pending'),
         event_type: 'payment',
         amount: Number(order.total_amount) || 0,
@@ -150,10 +150,7 @@ const WebhookLogs = () => {
   };
 
   const getSiteBadge = (logSiteId: string) => {
-    if (logSiteId === "premierpass") {
-      return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">PremierPass</Badge>;
-    }
-    return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Quintal</Badge>;
+    return <Badge className="bg-primary/20 text-primary border-primary/30">PremierPass</Badge>;
   };
 
   const filteredLogs = logs.filter((log) => {
@@ -226,7 +223,6 @@ const WebhookLogs = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os sites</SelectItem>
-                <SelectItem value="quintal">Quintal</SelectItem>
                 <SelectItem value="premierpass">PremierPass</SelectItem>
               </SelectContent>
             </Select>

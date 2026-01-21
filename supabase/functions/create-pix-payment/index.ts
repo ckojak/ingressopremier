@@ -27,15 +27,14 @@ interface TicketType {
 
 // Get Mercado Pago credentials based on site_id
 const getMercadoPagoCredentials = (siteId: string) => {
-  if (siteId === 'premierpass') {
-    const token = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
-    if (token) {
-      console.log("Using PremierPass Mercado Pago credentials");
-      return token;
-    }
+  // Use PremierPass credentials
+  const token = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
+  if (token) {
+    console.log("Using PremierPass Mercado Pago credentials");
+    return token;
   }
-  // Default to Quintal credentials
-  console.log("Using Quintal (default) Mercado Pago credentials");
+  // Fallback
+  console.log("Using default Mercado Pago credentials");
   return Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
 };
 
