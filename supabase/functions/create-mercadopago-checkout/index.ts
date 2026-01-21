@@ -33,15 +33,14 @@ const logStep = (step: string, details?: unknown) => {
 
 // Get Mercado Pago credentials based on site_id
 const getMercadoPagoCredentials = (siteId: string) => {
-  if (siteId === 'premierpass') {
-    const token = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
-    if (token) {
-      logStep('Using PremierPass Mercado Pago credentials');
-      return token;
-    }
+  // Use PremierPass credentials
+  const token = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
+  if (token) {
+    logStep('Using PremierPass Mercado Pago credentials');
+    return token;
   }
-  // Default to Quintal credentials
-  logStep('Using Quintal (default) Mercado Pago credentials');
+  // Fallback
+  logStep('Using default Mercado Pago credentials');
   return Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
 };
 
@@ -184,7 +183,7 @@ serve(async (req) => {
     mpItems.push({
       id: 'platform-fee',
       title: 'Taxa da Plataforma (5%)',
-      description: 'Taxa da plataforma Quintal Barra',
+      description: 'Taxa da plataforma PremierPass',
       quantity: 1,
       currency_id: 'BRL',
       unit_price: platformFee
@@ -264,7 +263,7 @@ serve(async (req) => {
       auto_return: 'approved',
       external_reference: order.id,
       notification_url: `${supabaseUrl}/functions/v1/mercadopago-webhook`,
-      statement_descriptor: 'QUINTALBARRA',
+      statement_descriptor: 'PREMIERPASS',
       payment_methods: {
         excluded_payment_types: [
           { id: 'ticket' }, // Exclui boleto

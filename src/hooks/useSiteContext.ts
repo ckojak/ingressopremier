@@ -1,18 +1,10 @@
 import { useMemo } from "react";
 
-export type SiteId = "premierpass" | "quintal";
+export type SiteId = "premierpass";
 
 // Detect current site based on hostname
 export const detectSiteFromHostname = (): SiteId => {
-  if (typeof window === "undefined") return "premierpass";
-  
-  const hostname = window.location.hostname.toLowerCase();
-  
-  if (hostname.includes("quintal")) {
-    return "quintal";
-  }
-  
-  // Default to premierpass for this deployment
+  // Always return premierpass
   return "premierpass";
 };
 
@@ -34,16 +26,7 @@ export const SITE_CONFIG: Record<SiteId, {
     homeRedirect: "/",
     authRedirect: "/auth",
     defaultAdminRedirect: true,
-    showAllSiteEvents: true, // PremierPass shows events from ALL sites (universal marketplace)
-  },
-  quintal: {
-    name: "Quintal",
-    tagline: "Eventos",
-    adminRedirect: "/admin",
-    homeRedirect: "/",
-    authRedirect: "/auth",
-    defaultAdminRedirect: false,
-    showAllSiteEvents: false, // Quintal shows only its own events
+    showAllSiteEvents: true, // PremierPass shows all events
   },
 };
 
@@ -78,10 +61,7 @@ export const useSiteContext = () => {
      * - Quintal: shows ONLY quintal events
      */
     getVisibleSiteIds: (): SiteId[] => {
-      if (config.showAllSiteEvents) {
-        return ["premierpass", "quintal"]; // Universal site shows all
-      }
-      return [siteId]; // Specific site shows only its own
+      return ["premierpass"]; // Only PremierPass
     },
     
     /**
@@ -101,10 +81,7 @@ export const getCurrentSiteConfig = () => {
     siteId, 
     ...SITE_CONFIG[siteId],
     getVisibleSiteIds: (): SiteId[] => {
-      if (SITE_CONFIG[siteId].showAllSiteEvents) {
-        return ["premierpass", "quintal"];
-      }
-      return [siteId];
+      return ["premierpass"];
     },
     getStatsSiteIds: (): SiteId[] => [siteId],
   };

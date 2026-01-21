@@ -81,16 +81,10 @@ async function verifyWebhookSignature(
 
 // Get Mercado Pago credentials based on site_id
 const getMercadoPagoCredentials = (siteId: string) => {
-  if (siteId === 'premierpass') {
-    return {
-      accessToken: Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN'),
-      webhookSecret: Deno.env.get('PREMIERPASS_MERCADOPAGO_WEBHOOK_SECRET')
-    };
-  }
-  // Default to Quintal credentials
+  // Use PremierPass credentials
   return {
-    accessToken: Deno.env.get('MERCADOPAGO_ACCESS_TOKEN'),
-    webhookSecret: Deno.env.get('MERCADOPAGO_WEBHOOK_SECRET')
+    accessToken: Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN') || Deno.env.get('MERCADOPAGO_ACCESS_TOKEN'),
+    webhookSecret: Deno.env.get('PREMIERPASS_MERCADOPAGO_WEBHOOK_SECRET') || Deno.env.get('MERCADOPAGO_WEBHOOK_SECRET')
   };
 };
 
@@ -146,8 +140,8 @@ serve(async (req) => {
       .limit(1)
       .single();
 
-    // Determine site_id from order or default to quintal
-    const siteId = orderByPaymentId?.site_id || 'quintal';
+    // Determine site_id from order or default to premierpass
+    const siteId = orderByPaymentId?.site_id || 'premierpass';
     const credentials = getMercadoPagoCredentials(siteId);
 
     logStep('Site identificado', { siteId, hasCredentials: !!credentials.accessToken });

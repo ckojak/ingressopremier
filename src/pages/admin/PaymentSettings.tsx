@@ -51,14 +51,6 @@ const PaymentSettings = () => {
   const { siteId } = useSiteContext();
   const [sites, setSites] = useState<SiteCredentials[]>([
     {
-      site_id: 'quintal',
-      site_name: 'Quintal',
-      accessTokenSecret: 'MERCADOPAGO_ACCESS_TOKEN',
-      webhookSecretSecret: 'MERCADOPAGO_WEBHOOK_SECRET',
-      validation: null,
-      validating: false
-    },
-    {
       site_id: 'premierpass',
       site_name: 'PremierPass',
       accessTokenSecret: 'PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN',
@@ -69,7 +61,6 @@ const PaymentSettings = () => {
   ]);
 
   const [newTokens, setNewTokens] = useState<Record<string, { accessToken: string; webhookSecret: string }>>({
-    quintal: { accessToken: '', webhookSecret: '' },
     premierpass: { accessToken: '', webhookSecret: '' }
   });
 
@@ -203,13 +194,9 @@ const PaymentSettings = () => {
       </Alert>
 
       {/* Sites Configuration */}
-      <Tabs defaultValue="quintal" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="quintal" className="gap-2">
-            <Building2 className="w-4 h-4" />
-            Quintal
-          </TabsTrigger>
-          <TabsTrigger value="premierpass" className="gap-2">
+      <Tabs defaultValue="premierpass" className="w-full">
+        <TabsList className="w-full">
+          <TabsTrigger value="premierpass" className="gap-2 w-full">
             <Building2 className="w-4 h-4" />
             PremierPass
           </TabsTrigger>

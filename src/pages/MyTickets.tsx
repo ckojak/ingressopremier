@@ -299,7 +299,7 @@ const MyTickets = () => {
             <div className="flex items-start justify-between mb-2">
               <div>
                 <h3 className="font-semibold text-foreground line-clamp-1">
-                  {ticket.event?.title || "Ingresso Quintal Barra"}
+                  {ticket.event?.title || "Ingresso PremierPass"}
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   {ticket.ticket_type?.name || "Ingresso"}
@@ -484,7 +484,7 @@ const MyTickets = () => {
             <div className="space-y-6">
               <div className="text-center">
                 <h3 className="font-semibold text-lg text-foreground mb-1">
-                  {selectedTicket.event?.title || "Ingresso Quintal Barra"}
+                  {selectedTicket.event?.title || "Ingresso PremierPass"}
                 </h3>
                 {selectedTicket.ticket_type?.name && (
                   <p className="text-sm text-muted-foreground">
