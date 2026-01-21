@@ -85,6 +85,7 @@ const Events = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
@@ -284,9 +285,10 @@ const Events = () => {
 
       if (error) throw error;
       
+      const event = events.find(e => e.id === eventId);
+      
       if (newStatus === "pending") {
         // Send notification to admins
-        const event = events.find(e => e.id === eventId);
         if (event) {
           try {
             await supabase.functions.invoke("send-notification", {
@@ -309,6 +311,31 @@ const Events = () => {
           description: "Seus dados serão verificados e o evento será publicado em até 2 horas.",
         });
       } else {
+        // Event was published - send push notifications to users
+        if (event) {
+          try {
+            const response = await supabase.functions.invoke("send-push-notification", {
+              body: {
+                type: "new_event",
+                eventId: event.id,
+                eventTitle: event.title,
+                eventDate: event.start_date,
+                eventImage: event.image_url,
+              },
+            });
+            
+            // Also trigger a browser notification if user has permission
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('🎉 Novo Evento Publicado!', {
+                body: `${event.title} está disponível! Garanta seu ingresso.`,
+                icon: '/favicon.ico',
+              });
+            }
+          } catch (pushError) {
+            console.error("Error sending push notification:", pushError);
+          }
+        }
+        
         toast({ title: "Evento publicado com sucesso!" });
       }
       
@@ -366,9 +393,11 @@ const Events = () => {
     });
   };
 
-  const filteredEvents = events.filter((event) =>
-    event.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredEvents = events.filter((event) => {
+    const matchesSearch = event.title.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === "all" || event.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   // Check if user is organizer (not admin) to show pending notice
   const isOrganizer = userRole === "organizer";
@@ -412,6 +441,51 @@ const Events = () => {
             Novo Evento
           </Button>
         </DialogTrigger>
+        
+    {/* Status Filter + Search */}
+    <div className="flex flex-col sm:flex-row gap-3 items-center">
+      <div className="relative flex-1 sm:flex-none w-full sm:w-64">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar eventos..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+      <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <SelectTrigger className="w-full sm:w-48">
+          <SelectValue placeholder="Filtrar por status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os status</SelectItem>
+          <SelectItem value="draft">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-muted-foreground" />
+              Rascunhos
+            </span>
+          </SelectItem>
+          <SelectItem value="pending">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-yellow-400" />
+              Pendentes
+            </span>
+          </SelectItem>
+          <SelectItem value="published">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-400" />
+              Publicados
+            </span>
+          </SelectItem>
+          <SelectItem value="cancelled">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-destructive" />
+              Cancelados
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
           <DialogContent 
             className="max-w-2xl max-h-[90vh] overflow-y-auto"
             onInteractOutside={(e) => e.preventDefault()}

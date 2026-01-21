@@ -5,7 +5,7 @@ import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalendarIcon, MapPin, Ticket, Search, X } from "lucide-react";
+import { Calendar as CalendarIcon, MapPin, Ticket, Search, X, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { format, startOfDay, endOfDay, addWeeks, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -24,7 +24,8 @@ import {
 } from "@/components/ui/select";
 import { EVENT_CATEGORIES } from "@/lib/constants";
 import { useSiteContext, detectSiteFromHostname } from "@/hooks/useSiteContext";
-import { usePublicEvents, EventWithPrice } from "@/hooks/useEvents";
+import { usePublicEvents, EventWithPrice, useInvalidateEvents } from "@/hooks/useEvents";
+import { toast } from "sonner";
 
 // Site filter options for PremierPass
 const SITE_FILTER_OPTIONS = [
@@ -52,9 +53,16 @@ const Events = () => {
   const [selectedSite, setSelectedSite] = useState("all");
   const { showAllSiteEvents } = useSiteContext();
   const currentSite = detectSiteFromHostname();
+  const { invalidatePublic } = useInvalidateEvents();
   
   // Use centralized events hook
-  const { data: events = [], isLoading: loading } = usePublicEvents();
+  const { data: events = [], isLoading: loading, isFetching } = usePublicEvents();
+  
+  // Manual refresh function
+  const handleRefresh = () => {
+    invalidatePublic();
+    toast.success("Lista de eventos atualizada!");
+  };
   
   // Extract unique cities from events
   const cities = [...new Set(events.map(e => e.city).filter(Boolean))] as string[];
@@ -257,9 +265,21 @@ const Events = () => {
             </div>
           </motion.div>
 
-          {/* Results Count */}
-          <div className="mb-6 text-muted-foreground">
-            {loading ? "Carregando..." : `${filteredEvents.length} eventos encontrados`}
+          {/* Results Count + Refresh Button */}
+          <div className="mb-6 flex items-center justify-between">
+            <span className="text-muted-foreground">
+              {loading ? "Carregando..." : `${filteredEvents.length} eventos encontrados`}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isFetching}
+              className="gap-2 glass-premium border-border/40 hover:border-primary/40 hover:bg-primary/5 rounded-xl transition-all"
+            >
+              <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+              Atualizar
+            </Button>
           </div>
 
           {/* Events Grid */}
