@@ -98,8 +98,8 @@ serve(async (req) => {
 
     logStep('Evento encontrado', { title: event.title });
 
-    // Determine site_id from event or request and get credentials
-    const effectiveSiteId = site_id || event.site_id || 'quintal';
+    // Determine site_id from event or request - default to premierpass
+    const effectiveSiteId = site_id || event.site_id || 'premierpass';
     const mercadopagoAccessToken = getMercadoPagoCredentials(effectiveSiteId);
     
     if (!mercadopagoAccessToken) {
@@ -241,7 +241,7 @@ serve(async (req) => {
       .eq('id', user.id)
       .single();
 
-    const origin = req.headers.get('origin') || 'https://quintalbarra.com.br';
+    const origin = req.headers.get('origin') || 'https://adminpremierpass.lovable.app';
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 
     // Criar preferência no Mercado Pago
