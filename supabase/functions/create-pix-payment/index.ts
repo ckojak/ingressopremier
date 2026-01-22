@@ -89,8 +89,8 @@ serve(async (req) => {
 
     console.log("Event found:", event.title);
 
-    // Determine site_id from event or request
-    const effectiveSiteId = site_id || event.site_id || 'quintal';
+    // Determine site_id from event or request - default to premierpass
+    const effectiveSiteId = site_id || event.site_id || 'premierpass';
     const mpAccessToken = getMercadoPagoCredentials(effectiveSiteId);
     
     if (!mpAccessToken) {
