@@ -198,6 +198,19 @@ const EventDetails = () => {
         return;
       }
 
+      // Verificar se o usuário tem telefone cadastrado
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("phone")
+        .eq("id", session.user.id)
+        .single();
+
+      if (!profile?.phone) {
+        toast.error("Por favor, cadastre seu telefone no perfil antes de comprar");
+        navigate("/perfil", { state: { from: `/evento/${id}`, requirePhone: true } });
+        return;
+      }
+
       const checkoutPayload = {
         event_id: id,
         site_id: siteId, // Send site_id for multi-tenant payment isolation
@@ -279,6 +292,19 @@ const EventDetails = () => {
         }));
         toast.info("Faça login para continuar com a compra");
         navigate("/auth", { state: { from: `/evento/${id}` } });
+        return;
+      }
+
+      // Verificar se o usuário tem telefone cadastrado
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("phone")
+        .eq("id", session.user.id)
+        .single();
+
+      if (!profile?.phone) {
+        toast.error("Por favor, cadastre seu telefone no perfil antes de comprar");
+        navigate("/perfil", { state: { from: `/evento/${id}`, requirePhone: true } });
         return;
       }
 
@@ -576,7 +602,7 @@ const EventDetails = () => {
                           </span>
                         </div>
 
-                        <div className="space-y-3 pt-2">
+                        <div className="space-y-3 pt-2 relative z-20">
                           <Button
                             className="w-full gap-2 border-primary/50 hover:bg-primary/10 hover:text-primary"
                             variant="outline"

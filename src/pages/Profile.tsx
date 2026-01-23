@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { User, Mail, Phone, Save, Camera, ShoppingBag, Calendar, MapPin, Ticket } from "lucide-react";
+import { User, Mail, Phone, Save, Camera, ShoppingBag, Calendar, MapPin, Ticket, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,18 +33,35 @@ interface OrderWithDetails {
   };
 }
 
+interface LocationState {
+  from?: string;
+  requirePhone?: boolean;
+}
+
 const Profile = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as LocationState | null;
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [orders, setOrders] = useState<OrderWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [requirePhone, setRequirePhone] = useState(false);
+  const [returnPath, setReturnPath] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
     phone: "",
   });
+
+  useEffect(() => {
+    // Check if we need to require phone (coming from checkout)
+    if (locationState?.requirePhone) {
+      setRequirePhone(true);
+      setReturnPath(locationState.from || null);
+    }
+  }, [locationState]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -95,6 +113,12 @@ const Profile = () => {
   const handleSave = async () => {
     if (!user) return;
 
+    // Validar telefone se obrigatório
+    if (requirePhone && !formData.phone) {
+      toast.error("Por favor, informe seu telefone para continuar");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -109,6 +133,12 @@ const Profile = () => {
       if (error) throw error;
 
       toast.success("Perfil atualizado com sucesso!");
+
+      // Se veio do checkout, redirecionar de volta
+      if (returnPath && formData.phone) {
+        toast.info("Retornando ao checkout...");
+        setTimeout(() => navigate(returnPath), 1000);
+      }
     } catch (error: any) {
       toast.error(error.message || "Erro ao atualizar perfil");
     } finally {
@@ -181,6 +211,15 @@ const Profile = () => {
               </TabsList>
 
               <TabsContent value="profile">
+                {requirePhone && (
+                  <Alert className="mb-4 border-primary/50 bg-primary/10">
+                    <AlertCircle className="h-4 w-4 text-primary" />
+                    <AlertTitle className="text-primary">Telefone Obrigatório</AlertTitle>
+                    <AlertDescription className="text-primary/80">
+                      Para continuar com sua compra, precisamos do seu número de telefone/WhatsApp para contato.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <Card className="bg-card border-border">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -240,15 +279,19 @@ const Profile = () => {
                             value={formData.phone}
                             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                             placeholder="(11) 99999-9999"
-                            className="pl-10"
+                            className={`pl-10 ${requirePhone && !formData.phone ? 'border-primary ring-1 ring-primary' : ''}`}
+                            required={requirePhone}
                           />
                         </div>
+                        {requirePhone && !formData.phone && (
+                          <p className="text-xs text-primary">* Campo obrigatório para continuar</p>
+                        )}
                       </div>
                     </div>
 
                     <Button onClick={handleSave} disabled={saving} className="gap-2">
                       <Save className="w-4 h-4" />
-                      {saving ? "Salvando..." : "Salvar Alterações"}
+                      {saving ? "Salvando..." : requirePhone ? "Salvar e Continuar Compra" : "Salvar Alterações"}
                     </Button>
                   </CardContent>
                 </Card>
