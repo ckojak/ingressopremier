@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CheckCircle, Ticket, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle, Ticket, ArrowRight, Loader2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Header from "@/components/layout/Header";
@@ -35,14 +35,12 @@ const PaymentSuccessMercadoPago = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<OrderDetails | null>(null);
-  const [processing, setProcessing] = useState(false);
 
   const orderId = searchParams.get("order_id");
   const paymentStatus = searchParams.get("status");
-  const paymentId = searchParams.get("payment_id");
 
   useEffect(() => {
-    const processPayment = async () => {
+    const fetchOrder = async () => {
       if (!orderId) {
         toast.error("ID do pedido não encontrado");
         navigate("/");
@@ -50,7 +48,7 @@ const PaymentSuccessMercadoPago = () => {
       }
 
       try {
-        // Buscar detalhes do pedido
+        // Buscar detalhes do pedido - NÃO processar aqui, o webhook cuida disso
         const { data: orderData, error: orderError } = await supabase
           .from("orders")
           .select(`
@@ -73,97 +71,82 @@ const PaymentSuccessMercadoPago = () => {
           order_items: orderData.order_items,
         });
 
-        // Se o pagamento foi aprovado e o pedido ainda está pendente, processar
-        if (paymentStatus === "approved" && orderData.status === "pending") {
-          setProcessing(true);
-
-          // Atualizar status do pedido
-          const { error: updateError } = await supabase
-            .from("orders")
-            .update({ 
-              status: "paid",
-              payment_intent_id: paymentId 
-            })
-            .eq("id", orderId);
-
-          if (updateError) throw updateError;
-
-          // Gerar ingressos
-          const { data: orderItems } = await supabase
-            .from("order_items")
-            .select("*")
-            .eq("order_id", orderId);
-
-          if (orderItems) {
-            for (const item of orderItems) {
-              for (let i = 0; i < item.quantity; i++) {
-                const ticketCode = generateTicketCode();
-                await supabase.from("tickets").insert({
-                  order_item_id: item.id,
-                  user_id: orderData.user_id,
-                  event_id: orderData.event_id,
-                  ticket_type_id: item.ticket_type_id,
-                  ticket_code: ticketCode,
-                });
-              }
-
-              // Atualizar quantidade vendida
-              const { data: ticketType } = await supabase
-                .from("ticket_types")
-                .select("quantity_sold")
-                .eq("id", item.ticket_type_id)
-                .single();
-
-              await supabase
-                .from("ticket_types")
-                .update({ quantity_sold: (ticketType?.quantity_sold || 0) + item.quantity })
-                .eq("id", item.ticket_type_id);
-            }
-          }
-
-          // Enviar email de confirmação
-          try {
-            await supabase.functions.invoke("send-ticket-email", {
-              body: { orderId },
-            });
-          } catch (emailError) {
-            console.error("Error sending email:", emailError);
-          }
-
-          setOrder(prev => prev ? { ...prev, status: "paid" } : null);
+        // Se ainda estiver pendente, mostrar que está aguardando confirmação
+        if (orderData.status === "pending" && paymentStatus === "approved") {
+          toast.info("Aguardando confirmação do pagamento...");
+        } else if (orderData.status === "paid") {
           toast.success("Pagamento confirmado com sucesso!");
         }
       } catch (error) {
-        console.error("Error processing payment:", error);
-        toast.error("Erro ao processar pagamento");
+        console.error("Error fetching order:", error);
+        toast.error("Erro ao buscar pedido");
       } finally {
         setLoading(false);
-        setProcessing(false);
       }
     };
 
-    processPayment();
-  }, [orderId, paymentStatus, paymentId, navigate]);
+    fetchOrder();
+  }, [orderId, paymentStatus, navigate]);
 
-  const generateTicketCode = (): string => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let result = "";
-    for (let i = 0; i < 12; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-  };
+  // Escutar atualizações em tempo real do pedido
+  useEffect(() => {
+    if (!orderId) return;
 
-  if (loading || processing) {
+    const channel = supabase
+      .channel(`order-success-${orderId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `id=eq.${orderId}`
+        },
+        (payload) => {
+          console.log('Order update received:', payload);
+          const newStatus = payload.new?.status;
+          if (newStatus === 'paid') {
+            setOrder(prev => prev ? { ...prev, status: 'paid' } : null);
+            toast.success("Pagamento confirmado! Seus ingressos estão prontos.");
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orderId]);
+
+  // Polling como fallback para garantir atualização
+  useEffect(() => {
+    if (!orderId || order?.status === 'paid') return;
+
+    const checkStatus = async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', orderId)
+        .single();
+      
+      if (data?.status === 'paid') {
+        setOrder(prev => prev ? { ...prev, status: 'paid' } : null);
+        toast.success("Pagamento confirmado!");
+      }
+    };
+
+    const pollInterval = setInterval(checkStatus, 3000);
+    return () => clearInterval(pollInterval);
+  }, [orderId, order?.status]);
+
+  if (loading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
         <main className="pt-24 pb-16 min-h-[70vh] flex items-center justify-center">
           <div className="text-center space-y-4">
             <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
-            <p className="text-muted-foreground">
-              {processing ? "Processando seu pagamento..." : "Carregando..."}
-            </p>
+            <p className="text-muted-foreground">Carregando...</p>
           </div>
         </main>
         <Footer />
@@ -171,7 +154,8 @@ const PaymentSuccessMercadoPago = () => {
     );
   }
 
-  const isPaid = order?.status === "paid" || paymentStatus === "approved";
+  const isPaid = order?.status === "paid";
+  const isPending = order?.status === "pending";
 
   return (
     <div className="min-h-screen bg-background">
@@ -196,16 +180,32 @@ const PaymentSuccessMercadoPago = () => {
                   Seus ingressos foram gerados e enviados para seu email.
                 </p>
               </>
+            ) : isPending ? (
+              <>
+                <div className="w-20 h-20 rounded-full bg-yellow-500/20 flex items-center justify-center mx-auto mb-6">
+                  <Clock className="w-12 h-12 text-yellow-500 animate-pulse" />
+                </div>
+                <h1 className="text-3xl font-bold text-foreground mb-2">
+                  Aguardando Confirmação
+                </h1>
+                <p className="text-muted-foreground">
+                  Estamos processando seu pagamento. Isso pode levar alguns instantes.
+                </p>
+                <div className="flex items-center justify-center gap-2 mt-4 text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Atualizando automaticamente...</span>
+                </div>
+              </>
             ) : (
               <>
                 <div className="w-20 h-20 rounded-full bg-yellow-500/20 flex items-center justify-center mx-auto mb-6">
-                  <Loader2 className="w-12 h-12 text-yellow-500" />
+                  <Loader2 className="w-12 h-12 text-yellow-500 animate-spin" />
                 </div>
                 <h1 className="text-3xl font-bold text-foreground mb-2">
-                  Pagamento Pendente
+                  Processando Pagamento
                 </h1>
                 <p className="text-muted-foreground">
-                  Aguardando confirmação do pagamento.
+                  Aguarde enquanto confirmamos seu pagamento.
                 </p>
               </>
             )}
@@ -249,7 +249,7 @@ const PaymentSuccessMercadoPago = () => {
                   </div>
 
                   <div className="pt-4 space-y-3">
-                    <Button asChild className="w-full gap-2">
+                    <Button asChild className="w-full gap-2" disabled={!isPaid}>
                       <Link to="/meus-ingressos">
                         Ver Meus Ingressos
                         <ArrowRight className="w-4 h-4" />
