@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
 
 type OrderStatus = 'pending' | 'paid' | 'cancelled' | 'failed' | 'processing';
@@ -21,7 +22,7 @@ interface OrderData {
   };
 }
 
-const CheckoutStatus = () => {
+const CheckoutStatusContent = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get("order_id");
@@ -79,8 +80,6 @@ const CheckoutStatus = () => {
   useEffect(() => {
     if (!orderId) return;
 
-    console.log("[CheckoutStatus] Setting up realtime listener for order:", orderId);
-
     const channel = supabase
       .channel(`order-status-${orderId}`)
       .on(
@@ -92,7 +91,6 @@ const CheckoutStatus = () => {
           filter: `id=eq.${orderId}`
         },
         (payload) => {
-          console.log("[CheckoutStatus] Order update received:", payload);
           const newStatus = payload.new.status as OrderStatus;
           setCurrentStatus(newStatus);
           
@@ -104,12 +102,9 @@ const CheckoutStatus = () => {
           }
         }
       )
-      .subscribe((status) => {
-        console.log("[CheckoutStatus] Subscription status:", status);
-      });
+      .subscribe();
 
     return () => {
-      console.log("[CheckoutStatus] Cleaning up realtime listener");
       supabase.removeChannel(channel);
     };
   }, [orderId, navigate]);
@@ -297,6 +292,17 @@ const CheckoutStatus = () => {
       </main>
       <Footer />
     </div>
+  );
+};
+
+const CheckoutStatus = () => {
+  return (
+    <PaymentErrorBoundary
+      fallbackTitle="Erro ao verificar pagamento"
+      fallbackMessage="Não foi possível verificar o status do seu pagamento. Verifique 'Meus Ingressos' ou tente novamente."
+    >
+      <CheckoutStatusContent />
+    </PaymentErrorBoundary>
   );
 };
 

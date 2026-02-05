@@ -55,9 +55,8 @@ const PendingTransfers = ({ onTransferHandled }: PendingTransfersProps) => {
           completed_at: new Date().toISOString(),
         })
         .eq("id", transferId);
-      console.log(`Cleaned up orphaned transfer: ${transferId}`);
     } catch (error) {
-      console.error("Error cleaning up orphaned transfer:", error);
+      // Silent failure - orphaned transfer cleanup is non-critical
     }
   };
 

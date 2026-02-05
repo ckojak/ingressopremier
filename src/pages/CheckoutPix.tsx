@@ -8,6 +8,7 @@ import { Copy, Check, Clock, Loader2, QrCode, AlertTriangle } from "lucide-react
 import { motion } from "framer-motion";
 import { format, parseISO, differenceInSeconds } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
 
 interface PixData {
   order_id: string;
@@ -20,7 +21,7 @@ interface PixData {
   is_sandbox: boolean;
 }
 
-export default function CheckoutPix() {
+function CheckoutPixContent() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -87,7 +88,6 @@ export default function CheckoutPix() {
           filter: `id=eq.${orderId}`
         },
         (payload) => {
-          console.log('Order update received:', payload);
           const newStatus = payload.new?.status;
           if (newStatus) {
             setPaymentStatus(newStatus);
@@ -336,5 +336,16 @@ export default function CheckoutPix() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function CheckoutPix() {
+  return (
+    <PaymentErrorBoundary
+      fallbackTitle="Erro no pagamento PIX"
+      fallbackMessage="Ocorreu um erro ao processar o pagamento PIX. Tente novamente ou escolha outra forma de pagamento."
+    >
+      <CheckoutPixContent />
+    </PaymentErrorBoundary>
   );
 }

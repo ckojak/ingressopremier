@@ -654,7 +654,7 @@ const Cart = () => {
 
                       <div className="space-y-3 pt-2">
                         <Button
-                          className="w-full gap-2 bg-secondary hover:bg-secondary/80"
+                          className="w-full gap-2 bg-secondary hover:bg-secondary/80 min-h-[48px] text-base"
                           size="lg"
                           onClick={handlePixCheckout}
                           disabled={processing || processingPix}
@@ -665,7 +665,7 @@ const Cart = () => {
                         </Button>
 
                         <Button
-                          className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow"
+                          className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow min-h-[52px] text-base font-semibold"
                           size="lg"
                           onClick={handleCheckout}
                           disabled={processing || processingPix}
