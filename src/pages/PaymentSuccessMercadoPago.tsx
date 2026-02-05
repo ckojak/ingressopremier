@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -30,7 +31,7 @@ interface OrderDetails {
   order_items: OrderItem[];
 }
 
-const PaymentSuccessMercadoPago = () => {
+const PaymentSuccessMercadoPagoContent = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -103,7 +104,6 @@ const PaymentSuccessMercadoPago = () => {
           filter: `id=eq.${orderId}`
         },
         (payload) => {
-          console.log('Order update received:', payload);
           const newStatus = payload.new?.status;
           if (newStatus === 'paid') {
             setOrder(prev => prev ? { ...prev, status: 'paid' } : null);
@@ -267,6 +267,17 @@ const PaymentSuccessMercadoPago = () => {
       </main>
       <Footer />
     </div>
+  );
+};
+
+const PaymentSuccessMercadoPago = () => {
+  return (
+    <PaymentErrorBoundary
+      fallbackTitle="Erro ao confirmar pagamento"
+      fallbackMessage="Não foi possível verificar o status do seu pagamento. Verifique 'Meus Ingressos' ou entre em contato com o suporte."
+    >
+      <PaymentSuccessMercadoPagoContent />
+    </PaymentErrorBoundary>
   );
 };
 

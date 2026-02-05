@@ -9,6 +9,8 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
+import EventDetailsSkeleton from "@/components/skeletons/EventDetailsSkeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
@@ -222,19 +224,12 @@ const EventDetails = () => {
       };
 
       // Try Mercado Pago first
-      console.log("[Checkout] Tentando Mercado Pago...", { site_id: siteId });
       const { data: mpData, error: mpError } = await supabase.functions.invoke("create-mercadopago-checkout", {
         body: checkoutPayload,
       });
 
       // Check if Mercado Pago succeeded
       if (!mpError && (mpData?.checkout_url || mpData?.sandbox_url)) {
-        console.log("[Checkout] Mercado Pago sucesso", {
-          is_sandbox: mpData.is_sandbox,
-          checkout_url: mpData.checkout_url,
-          sandbox_url: mpData.sandbox_url
-        });
-        
         // Se estiver em sandbox, mostra indicador
         if (mpData.is_sandbox) {
           setIsSandboxMode(true);
@@ -247,20 +242,15 @@ const EventDetails = () => {
       }
 
       // Mercado Pago failed, try Stripe as fallback
-      console.log("[Checkout] Mercado Pago falhou, tentando Stripe...", mpError);
       toast.info("Processando pagamento alternativo...");
 
       const { data: stripeData, error: stripeError } = await supabase.functions.invoke("create-stripe-checkout", {
         body: checkoutPayload,
       });
 
-      if (stripeError) {
-        console.error("[Checkout] Stripe também falhou:", stripeError);
-        throw new Error("Não foi possível processar o pagamento. Tente novamente.");
-      }
+      if (stripeError) throw new Error("Não foi possível processar o pagamento. Tente novamente.");
 
       if (stripeData?.checkout_url) {
-        console.log("[Checkout] Stripe sucesso, redirecionando...");
         window.location.href = stripeData.checkout_url;
       }
     } catch (error: any) {
@@ -317,19 +307,15 @@ const EventDetails = () => {
         })),
       };
 
-      console.log("[PIX Checkout] Criando pagamento PIX...", { site_id: siteId });
       const { data, error } = await supabase.functions.invoke("create-pix-payment", {
         body: checkoutPayload,
       });
 
       if (error) {
-        console.error("[PIX Checkout] Erro:", error);
         throw new Error("Não foi possível gerar o PIX. Tente novamente.");
       }
 
       if (data?.success) {
-        console.log("[PIX Checkout] Sucesso, redirecionando para página PIX...");
-        
         // Store PIX data in sessionStorage
         sessionStorage.setItem('pix_checkout_data', JSON.stringify(data));
         
@@ -347,20 +333,7 @@ const EventDetails = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="pt-24 pb-16">
-          <div className="container mx-auto px-4">
-            <div className="animate-pulse space-y-8">
-              <div className="h-64 bg-muted rounded-2xl" />
-              <div className="h-8 bg-muted rounded w-1/2" />
-              <div className="h-4 bg-muted rounded w-1/3" />
-            </div>
-          </div>
-        </main>
-      </div>
-    );
+    return <EventDetailsSkeleton />;
   }
 
   if (!event) {
@@ -368,6 +341,10 @@ const EventDetails = () => {
   }
 
   return (
+    <PaymentErrorBoundary
+      fallbackTitle="Erro ao carregar evento"
+      fallbackMessage="Não foi possível carregar os detalhes do evento. Tente novamente."
+    >
     <div className="min-h-screen bg-background">
       <Header />
       <main className="pt-24 pb-16">
@@ -604,7 +581,7 @@ const EventDetails = () => {
 
                         <div className="space-y-3 pt-2 relative z-20">
                           <Button
-                            className="w-full gap-2 border-primary/50 hover:bg-primary/10 hover:text-primary"
+                            className="w-full gap-2 border-primary/50 hover:bg-primary/10 hover:text-primary min-h-[48px] text-base"
                             variant="outline"
                             size="lg"
                             onClick={handleAddToCart}
@@ -615,7 +592,7 @@ const EventDetails = () => {
                           </Button>
                           
                           <Button
-                            className="w-full gap-2 bg-secondary hover:bg-secondary/80"
+                            className="w-full gap-2 bg-secondary hover:bg-secondary/80 min-h-[48px] text-base"
                             size="lg"
                             onClick={handlePixCheckout}
                             disabled={processingPix || processing}
@@ -626,7 +603,7 @@ const EventDetails = () => {
                           </Button>
 
                           <Button
-                            className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow"
+                            className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow min-h-[52px] text-base font-semibold"
                             size="lg"
                             onClick={handleCheckout}
                             disabled={processing || processingPix}
@@ -645,6 +622,7 @@ const EventDetails = () => {
       </main>
       <Footer />
     </div>
+    </PaymentErrorBoundary>
   );
 };
 

@@ -26,6 +26,8 @@ import { EVENT_CATEGORIES } from "@/lib/constants";
 import { useSiteContext, detectSiteFromHostname } from "@/hooks/useSiteContext";
 import { usePublicEvents, EventWithPrice, useInvalidateEvents } from "@/hooks/useEvents";
 import { toast } from "sonner";
+import EventCardSkeleton from "@/components/skeletons/EventCardSkeleton";
+import ApiErrorFallback from "@/components/ApiErrorFallback";
 
 // Site filter options for PremierPass
 const SITE_FILTER_OPTIONS = [
@@ -55,7 +57,7 @@ const Events = () => {
   const { invalidatePublic } = useInvalidateEvents();
   
   // Use centralized events hook
-  const { data: events = [], isLoading: loading, isFetching } = usePublicEvents();
+  const { data: events = [], isLoading: loading, isFetching, isError, refetch } = usePublicEvents();
   
   // Manual refresh function
   const handleRefresh = () => {
@@ -282,16 +284,18 @@ const Events = () => {
           </div>
 
           {/* Events Grid */}
-          {loading ? (
+          {isError ? (
+            <ApiErrorFallback
+              title="Erro ao carregar eventos"
+              message="Não foi possível buscar os eventos. Verifique sua conexão e tente novamente."
+              onRetry={() => refetch()}
+              isLoading={isFetching}
+              type="network"
+            />
+          ) : loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {[...Array(8)].map((_, i) => (
-                <div key={i} className="animate-pulse">
-                  <div className="bg-muted rounded-2xl h-64" />
-                  <div className="mt-4 space-y-2">
-                    <div className="h-4 bg-muted rounded w-3/4" />
-                    <div className="h-4 bg-muted rounded w-1/2" />
-                  </div>
-                </div>
+                <EventCardSkeleton key={i} />
               ))}
             </div>
           ) : (

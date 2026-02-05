@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
+import TicketCardSkeleton from "@/components/skeletons/TicketCardSkeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -52,7 +54,7 @@ interface TicketWithDetails {
   } | null;
 }
 
-const MyTickets = () => {
+const MyTicketsContent = () => {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<TicketWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -409,10 +411,8 @@ const MyTickets = () => {
 
           {loading ? (
             <div className="space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="animate-pulse">
-                  <div className="bg-muted rounded-xl h-32" />
-                </div>
+              {[1, 2, 3].map((i) => (
+                <TicketCardSkeleton key={i} />
               ))}
             </div>
           ) : tickets.length === 0 ? (
@@ -538,6 +538,17 @@ const MyTickets = () => {
       </Dialog>
 
     </div>
+  );
+};
+
+const MyTickets = () => {
+  return (
+    <PaymentErrorBoundary
+      fallbackTitle="Erro ao carregar ingressos"
+      fallbackMessage="Não foi possível carregar seus ingressos. Verifique sua conexão e tente novamente."
+    >
+      <MyTicketsContent />
+    </PaymentErrorBoundary>
   );
 };
 

@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { usePublicEvents, EventWithPrice } from "@/hooks/useEvents";
+import EventCardSkeleton from "@/components/skeletons/EventCardSkeleton";
 
 const FeaturedEvents = () => {
   const { data: allEvents = [], isLoading: loading } = usePublicEvents();
@@ -17,19 +18,26 @@ const FeaturedEvents = () => {
     return (
       <section id="eventos" className="py-20 bg-background">
         <div className="container mx-auto px-4">
-          <div className="mb-12 text-center">
-            <div className="h-8 bg-muted rounded w-64 animate-pulse mx-auto mb-3" />
-            <div className="h-4 bg-muted rounded w-96 animate-pulse mx-auto" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="bg-muted rounded-2xl h-64" />
-                <div className="mt-4 space-y-2">
-                  <div className="h-4 bg-muted rounded w-3/4" />
-                  <div className="h-4 bg-muted rounded w-1/2" />
-                </div>
-              </div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-16"
+          >
+            <div className="flex items-center justify-center gap-2.5 mb-5">
+              <Sparkles className="w-5 h-5 text-accent animate-pulse" />
+              <span className="text-sm tracking-[0.2em] text-accent uppercase font-semibold">Destaques</span>
+              <Sparkles className="w-5 h-5 text-accent animate-pulse" />
+            </div>
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold text-foreground mb-5">
+              Próximos <span className="text-gradient">Eventos</span>
+            </h2>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+              Garanta seu ingresso e viva experiências únicas
+            </p>
+          </motion.div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
+            {[1, 2, 3].map((i) => (
+              <EventCardSkeleton key={i} />
             ))}
           </div>
         </div>
