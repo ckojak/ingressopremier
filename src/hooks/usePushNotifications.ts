@@ -30,7 +30,7 @@ export function usePushNotifications() {
   const checkExistingSubscription = async () => {
     try {
       const registration = await navigator.serviceWorker.ready;
-      const existingSubscription = await registration.pushManager.getSubscription();
+      const existingSubscription = await (registration as any).pushManager.getSubscription();
       setSubscription(existingSubscription);
     } catch (error) {
       console.error('Error checking subscription:', error);
@@ -58,7 +58,7 @@ export function usePushNotifications() {
       }
 
       // Subscribe to push
-      const newSubscription = await registration.pushManager.subscribe({
+      const newSubscription = await (registration as any).pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });

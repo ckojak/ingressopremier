@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode } from "lucide-react";
+import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useSiteContext } from "@/hooks/useSiteContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type Event = Tables<"events">;
 type TicketType = Tables<"ticket_types">;
@@ -26,10 +27,23 @@ interface CartItem {
   quantity: number;
 }
 
+const isOnlineEvent = (event: Event) => {
+  const titleLower = event.title?.toLowerCase() || "";
+  const descLower = event.description?.toLowerCase() || "";
+  const categoryLower = event.category?.toLowerCase() || "";
+  return (
+    categoryLower.includes("online") ||
+    titleLower.includes("online") ||
+    descLower.includes("100% online") ||
+    descLower.includes("acesso exclusivo via")
+  );
+};
+
 const EventDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { siteId } = useSiteContext();
+  const isMobile = useIsMobile();
   const [event, setEvent] = useState<Event | null>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -43,7 +57,6 @@ const EventDetails = () => {
       if (!id) return;
 
       try {
-        // Fetch event
         const { data: eventData, error: eventError } = await supabase
           .from("events")
           .select("*")
@@ -54,7 +67,6 @@ const EventDetails = () => {
         if (eventError) throw eventError;
         setEvent(eventData);
 
-        // Fetch ticket types
         const { data: ticketsData, error: ticketsError } = await supabase
           .from("ticket_types")
           .select("*")
@@ -65,7 +77,6 @@ const EventDetails = () => {
         if (ticketsError) throw ticketsError;
         setTicketTypes(ticketsData || []);
 
-        // Restore cart from localStorage if returning from login
         const pendingCart = localStorage.getItem("pendingCart");
         if (pendingCart) {
           const parsed = JSON.parse(pendingCart);
@@ -131,7 +142,7 @@ const EventDetails = () => {
     return cart.find(item => item.ticketType.id === ticketTypeId)?.quantity || 0;
   };
 
-  const SERVICE_FEE_PERCENTAGE = 0.08; // 8% taxa de serviço
+  const SERVICE_FEE_PERCENTAGE = 0.08;
 
   const subtotal = cart.reduce(
     (sum, item) => sum + Number(item.ticketType.price) * item.quantity,
@@ -140,7 +151,6 @@ const EventDetails = () => {
 
   const serviceFee = subtotal * SERVICE_FEE_PERCENTAGE;
   const totalAmount = subtotal + serviceFee;
-
   const totalTickets = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleAddToCart = () => {
@@ -149,11 +159,9 @@ const EventDetails = () => {
       return;
     }
 
-    // Get existing cart from localStorage
     const existingCart = localStorage.getItem("cart");
     let cartData = existingCart ? JSON.parse(existingCart) : { items: [] };
 
-    // Add or update items
     cart.forEach(item => {
       const existingIndex = cartData.items.findIndex(
         (i: any) => i.ticketTypeId === item.ticketType.id
@@ -172,7 +180,7 @@ const EventDetails = () => {
     localStorage.setItem("cart", JSON.stringify(cartData));
     window.dispatchEvent(new Event("cartUpdated"));
     toast.success(`${totalTickets} ingresso(s) adicionado(s) ao carrinho!`);
-    setCart([]); // Clear selection after adding
+    setCart([]);
   };
 
   const handleCheckout = async () => {
@@ -187,7 +195,6 @@ const EventDetails = () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
-        // Save cart to localStorage before redirecting
         localStorage.setItem("pendingCart", JSON.stringify({
           eventId: id,
           items: cart.map(item => ({
@@ -200,7 +207,6 @@ const EventDetails = () => {
         return;
       }
 
-      // Verificar se o usuário tem telefone cadastrado
       const { data: profile } = await supabase
         .from("profiles")
         .select("phone")
@@ -215,7 +221,7 @@ const EventDetails = () => {
 
       const checkoutPayload = {
         event_id: id,
-        site_id: siteId, // Send site_id for multi-tenant payment isolation
+        site_id: siteId,
         items: cart.map(item => ({
           ticket_type_id: item.ticketType.id,
           quantity: item.quantity,
@@ -223,25 +229,19 @@ const EventDetails = () => {
         })),
       };
 
-      // Try Mercado Pago first
       const { data: mpData, error: mpError } = await supabase.functions.invoke("create-mercadopago-checkout", {
         body: checkoutPayload,
       });
 
-      // Check if Mercado Pago succeeded
       if (!mpError && (mpData?.checkout_url || mpData?.sandbox_url)) {
-        // Se estiver em sandbox, mostra indicador
         if (mpData.is_sandbox) {
           setIsSandboxMode(true);
           toast.info("Modo de teste ativo - use cartões de teste");
         }
-        
-        // Use a URL retornada pela edge function (já trata sandbox vs produção)
         window.location.href = mpData.checkout_url;
         return;
       }
 
-      // Mercado Pago failed, try Stripe as fallback
       toast.info("Processando pagamento alternativo...");
 
       const { data: stripeData, error: stripeError } = await supabase.functions.invoke("create-stripe-checkout", {
@@ -285,7 +285,6 @@ const EventDetails = () => {
         return;
       }
 
-      // Verificar se o usuário tem telefone cadastrado
       const { data: profile } = await supabase
         .from("profiles")
         .select("phone")
@@ -300,7 +299,7 @@ const EventDetails = () => {
 
       const checkoutPayload = {
         event_id: id,
-        site_id: siteId, // Send site_id for multi-tenant payment isolation
+        site_id: siteId,
         items: cart.map(item => ({
           ticket_type_id: item.ticketType.id,
           quantity: item.quantity,
@@ -316,10 +315,7 @@ const EventDetails = () => {
       }
 
       if (data?.success) {
-        // Store PIX data in sessionStorage
         sessionStorage.setItem('pix_checkout_data', JSON.stringify(data));
-        
-        // Navigate to PIX page
         navigate(`/checkout/pix?order_id=${data.order_id}`);
       } else {
         throw new Error(data?.error || "Erro ao gerar pagamento PIX");
@@ -340,6 +336,8 @@ const EventDetails = () => {
     return null;
   }
 
+  const online = isOnlineEvent(event);
+
   return (
     <PaymentErrorBoundary
       fallbackTitle="Erro ao carregar evento"
@@ -347,7 +345,38 @@ const EventDetails = () => {
     >
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="pt-24 pb-16">
+      <main className={`pt-24 ${isMobile && cart.length > 0 ? 'pb-44' : 'pb-16'}`}>
+        {/* Mobile: Full-width hero image */}
+        {isMobile && (
+          <div className="relative w-full aspect-[16/9] overflow-hidden mb-4">
+            {event.image_url ? (
+              <img
+                src={event.image_url}
+                alt={event.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-primary/30 via-accent/20 to-secondary/30 flex items-center justify-center">
+                <Ticket className="w-20 h-20 text-primary/50" />
+              </div>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+            <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+              {event.category && (
+                <Badge className="bg-primary text-primary-foreground shadow-lg text-xs">
+                  {event.category}
+                </Badge>
+              )}
+              {online && (
+                <Badge className="bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 text-xs font-bold animate-pulse">
+                  <Globe className="w-3 h-3 mr-1" />
+                  100% Online
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="container mx-auto px-4">
           <Button
             variant="ghost"
@@ -366,26 +395,36 @@ const EventDetails = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                {/* Event Image */}
-                <div className="relative aspect-video rounded-2xl overflow-hidden mb-6 shadow-2xl shadow-primary/10">
-                  {event.image_url ? (
-                    <img
-                      src={event.image_url}
-                      alt={event.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-primary/30 via-accent/20 to-secondary/30 flex items-center justify-center">
-                      <Ticket className="w-24 h-24 text-primary/50" />
+                {/* Desktop: Event Image with badges */}
+                {!isMobile && (
+                  <div className="relative aspect-video rounded-2xl overflow-hidden mb-6 shadow-2xl shadow-primary/10">
+                    {event.image_url ? (
+                      <img
+                        src={event.image_url}
+                        alt={event.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-primary/30 via-accent/20 to-secondary/30 flex items-center justify-center">
+                        <Ticket className="w-24 h-24 text-primary/50" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
+                    <div className="absolute top-4 left-4 flex flex-wrap gap-2">
+                      {event.category && (
+                        <Badge className="bg-primary text-primary-foreground shadow-lg">
+                          {event.category}
+                        </Badge>
+                      )}
+                      {online && (
+                        <Badge className="bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 font-bold animate-pulse">
+                          <Globe className="w-3.5 h-3.5 mr-1" />
+                          100% Online
+                        </Badge>
+                      )}
                     </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
-                  {event.category && (
-                    <Badge className="absolute top-4 left-4 bg-primary text-primary-foreground shadow-lg">
-                      {event.category}
-                    </Badge>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Event Info */}
                 <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
@@ -407,7 +446,12 @@ const EventDetails = () => {
                       {format(new Date(event.start_date), "HH:mm", { locale: ptBR })}
                     </span>
                   </div>
-                  {event.city && (
+                  {online ? (
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-5 h-5 text-emerald-500" />
+                      <span className="text-emerald-500 font-medium">Acesso Online Exclusivo</span>
+                    </div>
+                  ) : event.city ? (
                     <div className="flex items-center gap-2">
                       <MapPin className="w-5 h-5 text-primary" />
                       <span>
@@ -415,7 +459,7 @@ const EventDetails = () => {
                         {event.city}, {event.state}
                       </span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
                 {event.short_description && (
@@ -433,7 +477,7 @@ const EventDetails = () => {
                   </div>
                 )}
 
-                {event.venue_address && (
+                {!online && event.venue_address && (
                   <div className="mt-6">
                     <h2 className="text-xl font-semibold text-foreground mb-2">Local</h2>
                     <p className="text-muted-foreground">
@@ -448,15 +492,14 @@ const EventDetails = () => {
               </motion.div>
             </div>
 
-            {/* Ticket Selection & Cart */}
-            <div className="space-y-6">
+            {/* Ticket Selection & Cart - Desktop */}
+            <div className={`space-y-6 ${isMobile ? '' : ''}`}>
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
               >
                 <Card className="bg-card/80 backdrop-blur-sm border-border sticky top-24 shadow-xl shadow-primary/5">
-                  {/* Indicador de modo sandbox/teste */}
                   {isSandboxMode && (
                     <Alert className="m-4 mb-0 border-yellow-500/50 bg-yellow-500/10">
                       <AlertTriangle className="h-4 w-4 text-yellow-500" />
@@ -481,6 +524,7 @@ const EventDetails = () => {
                       ticketTypes.map(ticket => {
                         const available = ticket.quantity_available - (ticket.quantity_sold || 0);
                         const quantity = getCartQuantity(ticket.id);
+                        const isUrgent = available > 0 && available <= 15;
 
                         return (
                         <div
@@ -492,6 +536,12 @@ const EventDetails = () => {
                                 <h3 className="font-semibold text-foreground">{ticket.name}</h3>
                                 {ticket.description && (
                                   <p className="text-sm text-muted-foreground">{ticket.description}</p>
+                                )}
+                                {isUrgent && (
+                                  <p className="text-xs text-orange-400 font-semibold mt-1 flex items-center gap-1">
+                                    <Flame className="w-3 h-3" />
+                                    Restam apenas {available} acessos!
+                                  </p>
                                 )}
                               </div>
                               <span className="text-lg font-bold text-primary">
@@ -540,7 +590,8 @@ const EventDetails = () => {
                       })
                     )}
 
-                    {cart.length > 0 && (
+                    {/* Desktop cart summary (hidden on mobile when sticky is active) */}
+                    {cart.length > 0 && !isMobile && (
                       <>
                         <Separator />
                         
@@ -564,7 +615,7 @@ const EventDetails = () => {
                             <span className="text-muted-foreground">Subtotal</span>
                             <span className="text-foreground">R$ {subtotal.toFixed(2)}</span>
                           </div>
-                        <div className="flex justify-between text-sm">
+                          <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Taxa de serviço (8%)</span>
                             <span className="text-foreground">R$ {serviceFee.toFixed(2)}</span>
                           </div>
@@ -620,6 +671,55 @@ const EventDetails = () => {
           </div>
         </div>
       </main>
+
+      {/* Mobile Sticky Footer - Purchase CTA */}
+      {isMobile && cart.length > 0 && (
+        <motion.div
+          initial={{ y: 100 }}
+          animate={{ y: 0 }}
+          className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border shadow-[0_-4px_30px_rgba(0,0,0,0.5)]"
+        >
+          <div className="px-4 py-3 space-y-2">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-xs text-muted-foreground">{totalTickets} ingresso(s) · Taxa 8%</p>
+                <p className="text-xl font-bold text-gradient">
+                  R$ {totalAmount.toFixed(2)}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 border-primary/50 min-h-[40px]"
+                onClick={handleAddToCart}
+                disabled={processing || processingPix}
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Carrinho
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 gap-1 bg-secondary hover:bg-secondary/80 min-h-[48px] text-sm font-semibold"
+                onClick={handlePixCheckout}
+                disabled={processingPix || processing}
+                variant="secondary"
+              >
+                <QrCode className="w-4 h-4" />
+                {processingPix ? "PIX..." : "PIX"}
+              </Button>
+              <Button
+                className="flex-[2] gap-1 gradient-primary shadow-lg shadow-primary/20 min-h-[48px] text-sm font-bold"
+                onClick={handleCheckout}
+                disabled={processing || processingPix}
+              >
+                {processing ? "Processando..." : "🔒 Garantir Acesso"}
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       <Footer />
     </div>
     </PaymentErrorBoundary>
