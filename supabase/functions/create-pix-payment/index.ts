@@ -1,161 +1,160 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, Flame } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
+import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
+import EventDetailsSkeleton from "@/components/skeletons/EventDetailsSkeleton";
+import { supabase } from "@/integrations/supabase/client";
+import { Tables } from "@/integrations/supabase/types";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
+import { useSiteContext } from "@/hooks/useSiteContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+type Event = Tables<"events">;
+type TicketType = Tables<"ticket_types">;
 
-interface CheckoutItem {
-  ticket_type_id: string;
+interface CartItem {
+  ticketType: TicketType;
   quantity: number;
 }
 
-interface CheckoutRequest {
-  event_id: string;
-  items: CheckoutItem[];
-  site_id?: string;
-  customer_name?: string; // Novo campo recebido do site
-  customer_cpf?: string;  // Novo campo recebido do site
-}
-
-interface TicketType {
-  id: string;
-  name: string;
-  price: number;
-  quantity_available: number;
-  quantity_sold: number;
-}
-
-const getMercadoPagoCredentials = () => {
-  // Prioriza o token que você adicionou (MERCADOPAGO_ACCESS_TOKEN)
-  return Deno.env.get('MERCADOPAGO_ACCESS_TOKEN') || Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
+const isOnlineEvent = (event: Event) => {
+  const titleLower = event.title?.toLowerCase() || "";
+  const descLower = event.description?.toLowerCase() || "";
+  const categoryLower = event.category?.toLowerCase() || "";
+  return categoryLower.includes("online") || titleLower.includes("online") || descLower.includes("100% online");
 };
 
-serve(async (req) => {
-  console.log("=== Create PIX Payment Function Started ===");
+const EventDetails = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { siteId } = useSiteContext();
+  const isMobile = useIsMobile();
+  const [event, setEvent] = useState<Event | null>(null);
+  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [processingPix, setProcessingPix] = useState(false);
   
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  // DADOS DO COMPRADOR NA TELA
+  const [customerName, setCustomerName] = useState("");
+  const [customerCpf, setCustomerCpf] = useState("");
 
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) throw new Error('Authorization header required');
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) throw new Error('Authentication failed');
-
-    const body: CheckoutRequest = await req.json();
-    const { event_id, items, site_id, customer_name, customer_cpf } = body;
-
-    if (!event_id || !items || items.length === 0) {
-      throw new Error('Invalid request: event_id and items required');
-    }
-
-    const { data: event, error: eventError } = await supabase
-      .from('events')
-      .select('*')
-      .eq('id', event_id)
-      .single();
-
-    if (eventError || !event) throw new Error('Event not found');
-
-    const mpAccessToken = getMercadoPagoCredentials();
-    if (!mpAccessToken) throw new Error('Mercado Pago access token not configured');
-
-    const ticketTypeIds = items.map(item => item.ticket_type_id);
-    const { data: ticketTypes } = await supabase.from('ticket_types').select('*').in('id', ticketTypeIds);
-
-    let subtotal = 0;
-    const orderItems: any[] = [];
-
-    for (const item of items) {
-      const ticketType = ticketTypes?.find((tt: any) => tt.id === item.ticket_type_id);
-      if (!ticketType) throw new Error(`Ticket type ${item.ticket_type_id} not found`);
-      subtotal += ticketType.price * item.quantity;
-      orderItems.push({ ticket_type_id: item.ticket_type_id, quantity: item.quantity, unit_price: ticketType.price });
-    }
-
-    const serviceFee = Math.round(subtotal * 0.08 * 100) / 100;
-    const totalAmount = subtotal + serviceFee;
-
-    // Tenta pegar do banco, mas usa o da TELA como prioridade
-    const { data: profile } = await supabase.from('profiles').select('full_name, cpf').eq('id', user.id).single();
-    
-    const finalName = customer_name || profile?.full_name || 'Cliente';
-    const finalCpf = customer_cpf || profile?.cpf;
-
-    const { data: order, error: orderError } = await supabase.from('orders').insert({
-      user_id: user.id,
-      event_id: event_id,
-      site_id: site_id || 'premierpass',
-      status: 'pending',
-      total_amount: totalAmount
-    }).select().single();
-
-    if (orderError) throw new Error(`Failed to create order: ${orderError.message}`);
-
-    const paymentData = {
-      transaction_amount: totalAmount,
-      payment_method_id: "pix",
-      payer: {
-        email: user.email,
-        first_name: finalName.split(' ')[0],
-        last_name: finalName.split(' ').slice(1).join(' ') || ' ',
-        identification: finalCpf ? {
-          type: "CPF",
-          number: finalCpf.replace(/\D/g, '')
-        } : undefined
-      },
-      description: `Ingressos - ${event.title}`,
-      external_reference: order.id,
-      notification_url: `${supabaseUrl}/functions/v1/mercadopago-webhook`
+  useEffect(() => {
+    const fetchEventDetails = async () => {
+      if (!id) return;
+      try {
+        const { data: eventData } = await supabase.from("events").select("*").eq("id", id).eq("status", "published").single();
+        if (eventData) setEvent(eventData);
+        const { data: ticketsData } = await supabase.from("ticket_types").select("*").eq("event_id", id).eq("is_active", true).order("price", { ascending: true });
+        setTicketTypes(ticketsData || []);
+      } catch (error) {
+        toast.error("Erro ao carregar evento");
+      } finally {
+        setLoading(false);
+      }
     };
+    fetchEventDetails();
+  }, [id]);
 
-    console.log("Sending to Mercado Pago:", JSON.stringify(paymentData));
+  const subtotal = cart.reduce((sum, item) => sum + Number(item.ticketType.price) * item.quantity, 0);
+  const serviceFee = subtotal * 0.08;
+  const totalAmount = subtotal + serviceFee;
 
-    const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${mpAccessToken}`,
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': order.id
-      },
-      body: JSON.stringify(paymentData)
-    });
+  const handlePixCheckout = async () => {
+    if (cart.length === 0) return toast.error("Adicione ingressos");
+    if (!customerName || customerCpf.length < 11) return toast.error("Preencha Nome e CPF corretamente!");
 
-    const mpResult = await mpResponse.json();
+    setProcessingPix(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return navigate("/auth");
 
-    if (!mpResponse.ok) {
-      console.error("MP Error:", mpResult);
-      throw new Error(`Payment failed: ${mpResult.message || 'Check MP Token'}`);
+      const { data, error } = await supabase.functions.invoke("create-pix-payment", {
+        body: {
+          event_id: id,
+          site_id: siteId,
+          customer_name: customerName,
+          customer_cpf: customerCpf.replace(/\D/g, ""),
+          items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
+        },
+      });
+
+      if (data?.success) {
+        sessionStorage.setItem('pix_checkout_data', JSON.stringify(data));
+        navigate(`/checkout/pix?order_id=${data.order_id}`);
+      } else {
+        throw new Error(data?.error || "Falha no PIX");
+      }
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setProcessingPix(false);
     }
+  };
 
-    const pixData = mpResult.point_of_interaction?.transaction_data;
+  if (loading) return <EventDetailsSkeleton />;
+  if (!event) return null;
 
-    return new Response(JSON.stringify({
-      success: true,
-      order_id: order.id,
-      pix_qr_code: pixData.qr_code,
-      pix_copy_paste: pixData.qr_code,
-      pix_qr_code_base64: pixData.qr_code_base64,
-      total_amount: totalAmount
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="pt-24 pb-16 container mx-auto px-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2">
+            <h1 className="text-3xl font-bold mb-4">{event.title}</h1>
+            <p className="text-muted-foreground">{event.description}</p>
+          </div>
 
-  } catch (error: any) {
-    console.error("Error:", error.message);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
-});
+          <div className="space-y-6">
+            <Card className="bg-card/80 backdrop-blur-sm border-border">
+              <CardHeader><CardTitle className="flex items-center gap-2"><Ticket className="w-5 h-5 text-primary" /> Ingressos</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                {ticketTypes.map(ticket => (
+                  <div key={ticket.id} className="p-4 rounded-lg bg-secondary/30 flex justify-between items-center">
+                    <div>
+                      <h3 className="font-semibold">{ticket.name}</h3>
+                      <p className="text-primary font-bold">R$ {Number(ticket.price).toFixed(2)}</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setCart([{ticketType: ticket, quantity: 1}])}>Selecionar</Button>
+                  </div>
+                ))}
+
+                {cart.length > 0 && (
+                  <div className="pt-4 space-y-4 border-t border-border">
+                    <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-3">
+                      <p className="text-xs font-bold text-primary uppercase">Dados do Comprador</p>
+                      <Input placeholder="Nome Completo" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+                      <Input placeholder="CPF (apenas números)" value={customerCpf} maxLength={11} onChange={(e) => setCustomerCpf(e.target.value.replace(/\D/g, ""))} />
+                    </div>
+                    <div className="flex justify-between font-bold text-lg">
+                      <span>Total</span>
+                      <span>R$ {totalAmount.toFixed(2)}</span>
+                    </div>
+                    <Button className="w-full bg-secondary" onClick={handlePixCheckout} disabled={processingPix}>
+                      {processingPix ? "Gerando..." : "Pagar com PIX"}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+};
+
+export default EventDetails;
