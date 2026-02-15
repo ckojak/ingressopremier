@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input"; // Importado para os novos campos
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
@@ -51,6 +52,10 @@ const EventDetails = () => {
   const [processing, setProcessing] = useState(false);
   const [processingPix, setProcessingPix] = useState(false);
   const [isSandboxMode, setIsSandboxMode] = useState(false);
+
+  // NOVOS ESTADOS PARA O CHECKOUT DIRETO
+  const [customerName, setCustomerName] = useState("");
+  const [customerCpf, setCustomerCpf] = useState("");
 
   useEffect(() => {
     const fetchEventDetails = async () => {
@@ -183,9 +188,15 @@ const EventDetails = () => {
     setCart([]);
   };
 
+  // LOGICA ALTERADA PARA CAPTURAR DADOS NA TELA (CARTÃO)
   const handleCheckout = async () => {
     if (cart.length === 0) {
       toast.error("Adicione ingressos ao carrinho");
+      return;
+    }
+
+    if (!customerName || customerCpf.length < 11) {
+      toast.error("Preencha seu nome e CPF completo para continuar");
       return;
     }
 
@@ -207,21 +218,11 @@ const EventDetails = () => {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("phone")
-        .eq("id", session.user.id)
-        .single();
-
-      if (!profile?.phone) {
-        toast.error("Por favor, cadastre seu telefone no perfil antes de comprar");
-        navigate("/perfil", { state: { from: `/evento/${id}`, requirePhone: true } });
-        return;
-      }
-
       const checkoutPayload = {
         event_id: id,
         site_id: siteId,
+        customer_name: customerName,
+        customer_cpf: customerCpf,
         items: cart.map(item => ({
           ticket_type_id: item.ticketType.id,
           quantity: item.quantity,
@@ -261,9 +262,15 @@ const EventDetails = () => {
     }
   };
 
+  // LOGICA ALTERADA PARA CAPTURAR DADOS NA TELA (PIX)
   const handlePixCheckout = async () => {
     if (cart.length === 0) {
       toast.error("Adicione ingressos ao carrinho");
+      return;
+    }
+
+    if (!customerName || customerCpf.length < 11) {
+      toast.error("Nome e CPF são obrigatórios para gerar o PIX");
       return;
     }
 
@@ -285,21 +292,11 @@ const EventDetails = () => {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("phone")
-        .eq("id", session.user.id)
-        .single();
-
-      if (!profile?.phone) {
-        toast.error("Por favor, cadastre seu telefone no perfil antes de comprar");
-        navigate("/perfil", { state: { from: `/evento/${id}`, requirePhone: true } });
-        return;
-      }
-
       const checkoutPayload = {
         event_id: id,
         site_id: siteId,
+        customer_name: customerName,
+        customer_cpf: customerCpf,
         items: cart.map(item => ({
           ticket_type_id: item.ticketType.id,
           quantity: item.quantity,
@@ -388,14 +385,12 @@ const EventDetails = () => {
           </Button>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Event Details */}
             <div className="lg:col-span-2 space-y-6">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                {/* Desktop: Event Image with badges */}
                 {!isMobile && (
                   <div className="relative aspect-video rounded-2xl overflow-hidden mb-6 shadow-2xl shadow-primary/10">
                     {event.image_url ? (
@@ -426,7 +421,6 @@ const EventDetails = () => {
                   </div>
                 )}
 
-                {/* Event Info */}
                 <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
                   {event.title.split(' ').map((word, i) => 
                     i === 0 ? <span key={i}>{word} </span> : <span key={i} className="text-gradient">{word} </span>
@@ -492,7 +486,6 @@ const EventDetails = () => {
               </motion.div>
             </div>
 
-            {/* Ticket Selection & Cart - Desktop */}
             <div className={`space-y-6 ${isMobile ? '' : ''}`}>
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
@@ -505,7 +498,7 @@ const EventDetails = () => {
                       <AlertTriangle className="h-4 w-4 text-yellow-500" />
                       <AlertTitle className="text-yellow-500">Modo de Teste</AlertTitle>
                       <AlertDescription className="text-yellow-500/80 text-sm">
-                        Use cartões de teste do Mercado Pago. Pagamentos não são reais.
+                        Use cartões de teste do Mercado Pago.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -518,7 +511,7 @@ const EventDetails = () => {
                   <CardContent className="space-y-4">
                     {ticketTypes.length === 0 ? (
                       <p className="text-muted-foreground text-center py-4">
-                        Ingressos não disponíveis no momento
+                        Ingressos não disponíveis
                       </p>
                     ) : (
                       ticketTypes.map(ticket => {
@@ -536,12 +529,6 @@ const EventDetails = () => {
                                 <h3 className="font-semibold text-foreground">{ticket.name}</h3>
                                 {ticket.description && (
                                   <p className="text-sm text-muted-foreground">{ticket.description}</p>
-                                )}
-                                {isUrgent && (
-                                  <p className="text-xs text-orange-400 font-semibold mt-1 flex items-center gap-1">
-                                    <Flame className="w-3 h-3" />
-                                    Restam apenas {available} acessos!
-                                  </p>
                                 )}
                               </div>
                               <span className="text-lg font-bold text-primary">
@@ -590,11 +577,32 @@ const EventDetails = () => {
                       })
                     )}
 
-                    {/* Desktop cart summary (hidden on mobile when sticky is active) */}
-                    {cart.length > 0 && !isMobile && (
+                    {cart.length > 0 && (
                       <>
                         <Separator />
                         
+                        {/* NOVOS CAMPOS DE DADOS PARA O MERCADO PAGO */}
+                        <div className="space-y-4 py-2">
+                          <p className="text-xs font-bold text-primary uppercase tracking-wider">Dados para o Ingresso</p>
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="Seu Nome Completo"
+                              value={customerName}
+                              onChange={(e) => setCustomerName(e.target.value)}
+                              className="bg-secondary/50 border-border"
+                            />
+                            <Input
+                              placeholder="Seu CPF (Somente números)"
+                              value={customerCpf}
+                              maxLength={11}
+                              onChange={(e) => setCustomerCpf(e.target.value.replace(/\D/g, ""))}
+                              className="bg-secondary/50 border-border"
+                            />
+                          </div>
+                        </div>
+
+                        <Separator />
+
                         <div className="space-y-2">
                           {cart.map(item => (
                             <div key={item.ticketType.id} className="flex justify-between text-sm">
@@ -632,18 +640,18 @@ const EventDetails = () => {
 
                         <div className="space-y-3 pt-2 relative z-20">
                           <Button
-                            className="w-full gap-2 border-primary/50 hover:bg-primary/10 hover:text-primary min-h-[48px] text-base"
+                            className="w-full gap-2 border-primary/50 hover:bg-primary/10 hover:text-primary min-h-[48px]"
                             variant="outline"
                             size="lg"
                             onClick={handleAddToCart}
                             disabled={processing || processingPix}
                           >
                             <ShoppingCart className="w-5 h-5" />
-                            Adicionar ao carrinho
+                            Carrinho
                           </Button>
                           
                           <Button
-                            className="w-full gap-2 bg-secondary hover:bg-secondary/80 min-h-[48px] text-base"
+                            className="w-full gap-2 bg-secondary hover:bg-secondary/80 min-h-[48px]"
                             size="lg"
                             onClick={handlePixCheckout}
                             disabled={processingPix || processing}
@@ -654,7 +662,7 @@ const EventDetails = () => {
                           </Button>
 
                           <Button
-                            className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow min-h-[52px] text-base font-semibold"
+                            className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 min-h-[52px] text-base font-semibold"
                             size="lg"
                             onClick={handleCheckout}
                             disabled={processing || processingPix}
@@ -672,7 +680,6 @@ const EventDetails = () => {
         </div>
       </main>
 
-      {/* Mobile Sticky Footer - Purchase CTA */}
       {isMobile && cart.length > 0 && (
         <motion.div
           initial={{ y: 100 }}
@@ -687,16 +694,6 @@ const EventDetails = () => {
                   R$ {totalAmount.toFixed(2)}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1 border-primary/50 min-h-[40px]"
-                onClick={handleAddToCart}
-                disabled={processing || processingPix}
-              >
-                <ShoppingCart className="w-4 h-4" />
-                Carrinho
-              </Button>
             </div>
             <div className="flex gap-2">
               <Button
