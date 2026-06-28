@@ -29,13 +29,15 @@ interface UserWithRole {
 const roleLabels: Record<AppRole, string> = {
   admin: "Administrador",
   organizer: "Organizador",
-  user: "Usuário",
+  producer: "Produtor",
+  client: "Cliente",
 };
 
 const roleBadgeColors: Record<AppRole, string> = {
   admin: "bg-red-500/20 text-red-400",
   organizer: "bg-primary/20 text-primary",
-  user: "bg-muted text-muted-foreground",
+  producer: "bg-primary/20 text-primary",
+  client: "bg-muted text-muted-foreground",
 };
 
 const Users = () => {

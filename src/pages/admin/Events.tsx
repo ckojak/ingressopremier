@@ -365,7 +365,7 @@ const Events = () => {
       image_url: event.image_url || "",
       website: (event as any).website || "",
       contact: (event as any).contact || "",
-      status: event.status || "draft",
+      status: (event.status === "rejected" ? "draft" : event.status) || "draft",
     });
     setDialogOpen(true);
   };
