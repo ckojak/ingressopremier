@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           access_code: string | null
           created_at: string
+          created_by: string | null
           email: string | null
           event_id: string
           id: string
@@ -29,6 +30,7 @@ export type Database = {
         Insert: {
           access_code?: string | null
           created_at?: string
+          created_by?: string | null
           email?: string | null
           event_id: string
           id?: string
@@ -40,6 +42,7 @@ export type Database = {
         Update: {
           access_code?: string | null
           created_at?: string
+          created_by?: string | null
           email?: string | null
           event_id?: string
           id?: string
@@ -122,6 +125,7 @@ export type Database = {
           banner_url: string | null
           category: string | null
           city: string | null
+          contact: string | null
           created_at: string
           description: string | null
           end_date: string | null
@@ -146,6 +150,7 @@ export type Database = {
           banner_url?: string | null
           category?: string | null
           city?: string | null
+          contact?: string | null
           created_at?: string
           description?: string | null
           end_date?: string | null
@@ -170,6 +175,7 @@ export type Database = {
           banner_url?: string | null
           category?: string | null
           city?: string | null
+          contact?: string | null
           created_at?: string
           description?: string | null
           end_date?: string | null
