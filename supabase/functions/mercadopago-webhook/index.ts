@@ -132,16 +132,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // First, try to find the order by mp_payment_id to determine site_id
-    const { data: orderByPaymentId } = await supabaseClient
-      .from('orders')
-      .select('site_id')
-      .or(`mp_payment_id.eq.${paymentId},payment_intent_id.eq.${paymentId}`)
-      .limit(1)
-      .single();
-
-    // Determine site_id from order or default to premierpass
-    const siteId = orderByPaymentId?.site_id || 'premierpass';
+    // Plataforma single-tenant (PremierPass)
+    const siteId = 'premierpass';
     const credentials = getMercadoPagoCredentials(siteId);
 
     logStep('Site identificado', { siteId, hasCredentials: !!credentials.accessToken });

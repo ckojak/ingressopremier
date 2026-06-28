@@ -202,9 +202,6 @@ const Events = () => {
         if (error) throw error;
         toast({ title: "Evento atualizado com sucesso!" });
       } else {
-        // Get current site_id from context
-        const { siteId } = getCurrentSiteConfig();
-        
         const { error } = await supabase
           .from("events")
           .insert([{
@@ -223,7 +220,6 @@ const Events = () => {
             contact: validatedData.contact || null,
             status: validatedData.status as any,
             organizer_id: user.id,
-            site_id: siteId, // Set site_id based on current domain
           }]);
 
         if (error) throw error;
