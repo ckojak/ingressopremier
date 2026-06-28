@@ -51,14 +51,14 @@ serve(async (req) => {
     const serviceFee = Math.round(subtotal * 0.08 * 100) / 100;
     const totalAmount = Math.round((subtotal + serviceFee) * 100) / 100;
 
-    // Cria o pedido
+    // Cria o pedido (somente colunas existentes em orders)
     const { data: order, error: orderErr } = await supabase.from('orders').insert({
       user_id: user.id,
       event_id,
       status: 'pending',
       total_amount: totalAmount,
-      site_id: site_id || 'premierpass',
-      payment_method: 'pix',
+      customer_name,
+      customer_email: user.email,
     }).select().single();
     if (orderErr || !order) throw new Error(`Erro criando pedido: ${orderErr?.message}`);
 
@@ -108,9 +108,8 @@ serve(async (req) => {
     const pixData = mpResult.point_of_interaction?.transaction_data;
     if (!pixData) throw new Error('Mercado Pago não retornou dados PIX');
 
-    // Persistir mp_payment_id para idempotência do webhook
+    // Persistir payment_intent_id para idempotência do webhook
     await supabase.from('orders').update({
-      mp_payment_id: String(mpResult.id),
       payment_intent_id: String(mpResult.id),
     }).eq('id', order.id);
 
