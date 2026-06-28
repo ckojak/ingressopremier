@@ -16,22 +16,37 @@ export type Database = {
     Tables: {
       checkin_staff: {
         Row: {
+          access_code: string | null
           created_at: string
+          email: string | null
           event_id: string
           id: string
-          user_id: string
+          is_active: boolean
+          last_access_at: string | null
+          name: string | null
+          user_id: string | null
         }
         Insert: {
+          access_code?: string | null
           created_at?: string
+          email?: string | null
           event_id: string
           id?: string
-          user_id: string
+          is_active?: boolean
+          last_access_at?: string | null
+          name?: string | null
+          user_id?: string | null
         }
         Update: {
+          access_code?: string | null
           created_at?: string
+          email?: string | null
           event_id?: string
           id?: string
-          user_id?: string
+          is_active?: boolean
+          last_access_at?: string | null
+          name?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -54,6 +69,7 @@ export type Database = {
           is_active: boolean
           max_uses: number | null
           min_purchase_amount: number | null
+          organizer_id: string | null
           updated_at: string
           used_count: number
           valid_from: string | null
@@ -69,6 +85,7 @@ export type Database = {
           is_active?: boolean
           max_uses?: number | null
           min_purchase_amount?: number | null
+          organizer_id?: string | null
           updated_at?: string
           used_count?: number
           valid_from?: string | null
@@ -84,6 +101,7 @@ export type Database = {
           is_active?: boolean
           max_uses?: number | null
           min_purchase_amount?: number | null
+          organizer_id?: string | null
           updated_at?: string
           used_count?: number
           valid_from?: string | null
@@ -122,6 +140,7 @@ export type Database = {
           updated_at: string
           venue_address: string | null
           venue_name: string | null
+          website: string | null
         }
         Insert: {
           banner_url?: string | null
@@ -145,6 +164,7 @@ export type Database = {
           updated_at?: string
           venue_address?: string | null
           venue_name?: string | null
+          website?: string | null
         }
         Update: {
           banner_url?: string | null
@@ -168,6 +188,7 @@ export type Database = {
           updated_at?: string
           venue_address?: string | null
           venue_name?: string | null
+          website?: string | null
         }
         Relationships: []
       }
@@ -322,7 +343,7 @@ export type Database = {
           id: string
           status: string
           ticket_id: string
-          to_email: string
+          to_email: string | null
           to_user_email: string | null
           to_user_id: string | null
           transfer_code: string | null
@@ -334,7 +355,7 @@ export type Database = {
           id?: string
           status?: string
           ticket_id: string
-          to_email: string
+          to_email?: string | null
           to_user_email?: string | null
           to_user_id?: string | null
           transfer_code?: string | null
@@ -346,7 +367,7 @@ export type Database = {
           id?: string
           status?: string
           ticket_id?: string
-          to_email?: string
+          to_email?: string | null
           to_user_email?: string | null
           to_user_id?: string | null
           transfer_code?: string | null
@@ -540,6 +561,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_ticket_code: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -550,7 +572,13 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "producer" | "client" | "organizer"
-      event_status: "draft" | "pending" | "published" | "rejected" | "cancelled"
+      event_status:
+        | "draft"
+        | "pending"
+        | "published"
+        | "rejected"
+        | "cancelled"
+        | "completed"
       order_status: "pending" | "paid" | "failed" | "refunded" | "cancelled"
       ticket_status: "active" | "used" | "cancelled" | "transferred"
     }
@@ -681,7 +709,14 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "producer", "client", "organizer"],
-      event_status: ["draft", "pending", "published", "rejected", "cancelled"],
+      event_status: [
+        "draft",
+        "pending",
+        "published",
+        "rejected",
+        "cancelled",
+        "completed",
+      ],
       order_status: ["pending", "paid", "failed", "refunded", "cancelled"],
       ticket_status: ["active", "used", "cancelled", "transferred"],
     },
