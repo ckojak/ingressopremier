@@ -53,6 +53,7 @@ export type Database = {
           id: string
           is_active: boolean
           max_uses: number | null
+          min_purchase_amount: number | null
           updated_at: string
           used_count: number
           valid_from: string | null
@@ -67,6 +68,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           max_uses?: number | null
+          min_purchase_amount?: number | null
           updated_at?: string
           used_count?: number
           valid_from?: string | null
@@ -81,6 +83,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           max_uses?: number | null
+          min_purchase_amount?: number | null
           updated_at?: string
           used_count?: number
           valid_from?: string | null
@@ -320,7 +323,9 @@ export type Database = {
           status: string
           ticket_id: string
           to_email: string
+          to_user_email: string | null
           to_user_id: string | null
+          transfer_code: string | null
         }
         Insert: {
           completed_at?: string | null
@@ -330,7 +335,9 @@ export type Database = {
           status?: string
           ticket_id: string
           to_email: string
+          to_user_email?: string | null
           to_user_id?: string | null
+          transfer_code?: string | null
         }
         Update: {
           completed_at?: string | null
@@ -340,7 +347,9 @@ export type Database = {
           status?: string
           ticket_id?: string
           to_email?: string
+          to_user_email?: string | null
           to_user_id?: string | null
+          transfer_code?: string | null
         }
         Relationships: [
           {
@@ -360,10 +369,12 @@ export type Database = {
           id: string
           is_active: boolean
           is_complimentary: boolean
+          max_per_order: number
           name: string
           position: number
           price: number
           quantity: number
+          quantity_available: number
           quantity_sold: number
           sale_end: string | null
           sale_start: string | null
@@ -376,10 +387,12 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_complimentary?: boolean
+          max_per_order?: number
           name: string
           position?: number
           price?: number
           quantity?: number
+          quantity_available?: number
           quantity_sold?: number
           sale_end?: string | null
           sale_start?: string | null
@@ -392,10 +405,12 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_complimentary?: boolean
+          max_per_order?: number
           name?: string
           position?: number
           price?: number
           quantity?: number
+          quantity_available?: number
           quantity_sold?: number
           sale_end?: string | null
           sale_start?: string | null
@@ -413,10 +428,14 @@ export type Database = {
       }
       tickets: {
         Row: {
+          attendee_email: string | null
+          attendee_name: string | null
           checked_in_at: string | null
           created_at: string
+          event_id: string | null
           id: string
           is_complimentary: boolean
+          is_used: boolean
           order_item_id: string | null
           qr_code: string | null
           recipient_email: string | null
@@ -424,14 +443,20 @@ export type Database = {
           status: Database["public"]["Enums"]["ticket_status"]
           ticket_code: string
           ticket_type_id: string | null
+          transfer_status: string
           updated_at: string
+          used_at: string | null
           user_id: string | null
         }
         Insert: {
+          attendee_email?: string | null
+          attendee_name?: string | null
           checked_in_at?: string | null
           created_at?: string
+          event_id?: string | null
           id?: string
           is_complimentary?: boolean
+          is_used?: boolean
           order_item_id?: string | null
           qr_code?: string | null
           recipient_email?: string | null
@@ -439,14 +464,20 @@ export type Database = {
           status?: Database["public"]["Enums"]["ticket_status"]
           ticket_code?: string
           ticket_type_id?: string | null
+          transfer_status?: string
           updated_at?: string
+          used_at?: string | null
           user_id?: string | null
         }
         Update: {
+          attendee_email?: string | null
+          attendee_name?: string | null
           checked_in_at?: string | null
           created_at?: string
+          event_id?: string | null
           id?: string
           is_complimentary?: boolean
+          is_used?: boolean
           order_item_id?: string | null
           qr_code?: string | null
           recipient_email?: string | null
@@ -454,10 +485,19 @@ export type Database = {
           status?: Database["public"]["Enums"]["ticket_status"]
           ticket_code?: string
           ticket_type_id?: string | null
+          transfer_status?: string
           updated_at?: string
+          used_at?: string | null
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tickets_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tickets_order_item_id_fkey"
             columns: ["order_item_id"]
@@ -509,7 +549,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "producer" | "client"
+      app_role: "admin" | "producer" | "client" | "organizer"
       event_status: "draft" | "pending" | "published" | "rejected" | "cancelled"
       order_status: "pending" | "paid" | "failed" | "refunded" | "cancelled"
       ticket_status: "active" | "used" | "cancelled" | "transferred"
@@ -640,7 +680,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "producer", "client"],
+      app_role: ["admin", "producer", "client", "organizer"],
       event_status: ["draft", "pending", "published", "rejected", "cancelled"],
       order_status: ["pending", "paid", "failed", "refunded", "cancelled"],
       ticket_status: ["active", "used", "cancelled", "transferred"],
