@@ -73,6 +73,7 @@ export type Database = {
           max_uses: number | null
           min_purchase_amount: number | null
           organizer_id: string | null
+          site_id: string
           updated_at: string
           used_count: number
           valid_from: string | null
@@ -89,6 +90,7 @@ export type Database = {
           max_uses?: number | null
           min_purchase_amount?: number | null
           organizer_id?: string | null
+          site_id?: string
           updated_at?: string
           used_count?: number
           valid_from?: string | null
@@ -105,6 +107,7 @@ export type Database = {
           max_uses?: number | null
           min_purchase_amount?: number | null
           organizer_id?: string | null
+          site_id?: string
           updated_at?: string
           used_count?: number
           valid_from?: string | null
@@ -136,6 +139,7 @@ export type Database = {
           online_url: string | null
           organizer_id: string
           short_description: string | null
+          site_id: string
           slug: string | null
           start_date: string
           state: string | null
@@ -161,6 +165,7 @@ export type Database = {
           online_url?: string | null
           organizer_id: string
           short_description?: string | null
+          site_id?: string
           slug?: string | null
           start_date: string
           state?: string | null
@@ -186,6 +191,7 @@ export type Database = {
           online_url?: string | null
           organizer_id?: string
           short_description?: string | null
+          site_id?: string
           slug?: string | null
           start_date?: string
           state?: string | null
@@ -256,6 +262,7 @@ export type Database = {
           pix_qr_code: string | null
           pix_qr_code_base64: string | null
           service_fee: number
+          site_id: string
           status: Database["public"]["Enums"]["order_status"]
           total_amount: number
           updated_at: string
@@ -276,6 +283,7 @@ export type Database = {
           pix_qr_code?: string | null
           pix_qr_code_base64?: string | null
           service_fee?: number
+          site_id?: string
           status?: Database["public"]["Enums"]["order_status"]
           total_amount?: number
           updated_at?: string
@@ -296,6 +304,7 @@ export type Database = {
           pix_qr_code?: string | null
           pix_qr_code_base64?: string | null
           service_fee?: number
+          site_id?: string
           status?: Database["public"]["Enums"]["order_status"]
           total_amount?: number
           updated_at?: string
@@ -405,6 +414,7 @@ export type Database = {
           quantity_sold: number
           sale_end: string | null
           sale_start: string | null
+          site_id: string
           updated_at: string
         }
         Insert: {
@@ -423,6 +433,7 @@ export type Database = {
           quantity_sold?: number
           sale_end?: string | null
           sale_start?: string | null
+          site_id?: string
           updated_at?: string
         }
         Update: {
@@ -441,6 +452,7 @@ export type Database = {
           quantity_sold?: number
           sale_end?: string | null
           sale_start?: string | null
+          site_id?: string
           updated_at?: string
         }
         Relationships: [
@@ -467,6 +479,7 @@ export type Database = {
           qr_code: string | null
           recipient_email: string | null
           recipient_name: string | null
+          site_id: string
           status: Database["public"]["Enums"]["ticket_status"]
           ticket_code: string
           ticket_type_id: string | null
@@ -488,6 +501,7 @@ export type Database = {
           qr_code?: string | null
           recipient_email?: string | null
           recipient_name?: string | null
+          site_id?: string
           status?: Database["public"]["Enums"]["ticket_status"]
           ticket_code?: string
           ticket_type_id?: string | null
@@ -509,6 +523,7 @@ export type Database = {
           qr_code?: string | null
           recipient_email?: string | null
           recipient_name?: string | null
+          site_id?: string
           status?: Database["public"]["Enums"]["ticket_status"]
           ticket_code?: string
           ticket_type_id?: string | null
@@ -561,6 +576,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      webhook_logs: {
+        Row: {
+          amount: number | null
+          created_at: string
+          details: Json | null
+          event_type: string
+          id: string
+          is_sandbox: boolean | null
+          order_id: string | null
+          payer_email: string | null
+          payment_id: string
+          payment_status: string
+          site_id: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          id?: string
+          is_sandbox?: boolean | null
+          order_id?: string | null
+          payer_email?: string | null
+          payment_id: string
+          payment_status: string
+          site_id?: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          id?: string
+          is_sandbox?: boolean | null
+          order_id?: string | null
+          payer_email?: string | null
+          payment_id?: string
+          payment_status?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_logs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
