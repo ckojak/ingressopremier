@@ -415,7 +415,7 @@ const Auth = () => {
             user_id: data.user.id, 
             role: "admin" as any 
           }]);
-          navigate("/admin/super");
+          navigate(getNextPath() ?? "/admin/super");
           toast({
             title: "Bem-vindo, Administrador!",
             description: "Você tem acesso total ao sistema.",
@@ -427,7 +427,7 @@ const Auth = () => {
           user_id: data.user.id, 
           role: "user" as any 
         }]);
-        navigate("/painel");
+        navigate(getNextPath() ?? "/painel");
         toast({
           title: "Login realizado com sucesso!",
           description: "Bem-vindo de volta.",
