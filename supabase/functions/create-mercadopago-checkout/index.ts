@@ -9,7 +9,7 @@ const corsHeaders = {
 interface CheckoutItem {
   ticket_type_id: string;
   quantity: number;
-  unit_price: number;
+  unit_price?: number; // ignorado: o preço é sempre buscado no banco
 }
 
 interface CheckoutRequest {
@@ -22,8 +22,12 @@ interface TicketType {
   id: string;
   name: string;
   description: string | null;
+  price: number;
   quantity_available: number;
   quantity_sold: number;
+  max_per_order: number | null;
+  is_active: boolean;
+  event_id: string;
 }
 
 const logStep = (step: string, details?: unknown) => {
@@ -131,8 +135,16 @@ serve(async (req) => {
       if (!ticketType) {
         throw new Error(`Tipo de ingresso ${item.ticket_type_id} não encontrado`);
       }
-      const available = ticketType.quantity_available - (ticketType.quantity_sold || 0);
-      if (item.quantity > available) {
+      if (ticketType.event_id !== event_id || !ticketType.is_active) {
+        throw new Error(`Ingresso indisponível: ${ticketType.name}`);
+      }
+      const maxPerOrder = ticketType.max_per_order || 10;
+      if (item.quantity > maxPerOrder) {
+        throw new Error(`Máximo de ${maxPerOrder} ingressos por pedido: ${ticketType.name}`);
+      }
+      const stock = Number(ticketType.quantity_available || 0);
+      const available = stock - (ticketType.quantity_sold || 0);
+      if (stock > 0 && item.quantity > available) {
         throw new Error(`Quantidade insuficiente para ${ticketType.name}. Disponível: ${available}`);
       }
     }
@@ -152,7 +164,9 @@ serve(async (req) => {
       const ticketType = ticketTypes.find((tt: TicketType) => tt.id === item.ticket_type_id);
       if (!ticketType) continue;
 
-      const itemTotal = item.unit_price * item.quantity;
+      // Preço autoritativo vindo do banco (nunca confiar no cliente)
+      const unitPrice = Number(ticketType.price);
+      const itemTotal = unitPrice * item.quantity;
       subtotal += itemTotal;
 
       mpItems.push({
@@ -161,16 +175,15 @@ serve(async (req) => {
         description: ticketType.description || `Ingresso para ${event.title}`,
         quantity: item.quantity,
         currency_id: 'BRL',
-        unit_price: item.unit_price
+        unit_price: unitPrice
       });
     }
 
-    // Taxas: 8% taxa de serviço + 5% taxa da plataforma
+    // Taxa de serviço: 8% (igual ao exibido no frontend e no PIX)
     const serviceFee = Math.round(subtotal * 0.08 * 100) / 100;
-    const platformFee = Math.round(subtotal * 0.05 * 100) / 100;
-    const totalAmount = subtotal + serviceFee + platformFee;
+    const totalAmount = Math.round((subtotal + serviceFee) * 100) / 100;
+    if (totalAmount <= 0) throw new Error('Valor inválido para pagamento');
 
-    // Adicionar taxas como itens
     mpItems.push({
       id: 'service-fee',
       title: 'Taxa de Serviço (8%)',
@@ -180,16 +193,14 @@ serve(async (req) => {
       unit_price: serviceFee
     });
 
-    mpItems.push({
-      id: 'platform-fee',
-      title: 'Taxa da Plataforma (5%)',
-      description: 'Taxa da plataforma PremierPass',
-      quantity: 1,
-      currency_id: 'BRL',
-      unit_price: platformFee
-    });
+    logStep('Totais calculados', { subtotal, serviceFee, totalAmount });
 
-    logStep('Totais calculados', { subtotal, serviceFee, platformFee, totalAmount });
+    // Buscar perfil do usuário (dados do comprador)
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name, email, phone')
+      .eq('id', user.id)
+      .maybeSingle();
 
     // Criar pedido pendente no Supabase com site_id para isolamento multi-tenant
     const { data: order, error: orderError } = await supabaseAdmin
@@ -199,7 +210,12 @@ serve(async (req) => {
         event_id: event_id,
         site_id: effectiveSiteId,
         total_amount: totalAmount,
+        service_fee: serviceFee,
         status: 'pending',
+        payment_method: 'mercadopago',
+        customer_name: profile?.full_name || user.email,
+        customer_email: user.email,
+        customer_phone: profile?.phone || null,
         payment_intent_id: null
       })
       .select()
@@ -219,7 +235,7 @@ serve(async (req) => {
         order_id: order.id,
         ticket_type_id: item.ticket_type_id,
         quantity: item.quantity,
-        unit_price: item.unit_price
+        unit_price: Number(ticketType?.price ?? 0)
       };
     });
 
@@ -234,13 +250,6 @@ serve(async (req) => {
 
     logStep('Itens do pedido criados');
 
-    // Buscar perfil do usuário
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('full_name, email, cpf, phone')
-      .eq('id', user.id)
-      .single();
-
     const origin = req.headers.get('origin') || 'https://adminpremierpass.lovable.app';
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 
@@ -250,10 +259,6 @@ serve(async (req) => {
       payer: {
         email: user.email,
         name: profile?.full_name || user.email,
-        identification: profile?.cpf ? {
-          type: 'CPF',
-          number: profile.cpf.replace(/\D/g, '')
-        } : undefined
       },
       back_urls: {
         success: `${origin}/checkout/status?order_id=${order.id}&status=success`,
