@@ -66,6 +66,15 @@ const isValidPhone = (phone: string): boolean => {
 // List of admin emails that should be auto-assigned admin role
 const ADMIN_EMAILS = ["bmw.reta@hotmail.com"];
 
+// Preserved post-login destination (used by the OAuth consent flow)
+const getNextPath = (): string | null => {
+  const raw = new URLSearchParams(window.location.search).get("next");
+  if (!raw) return null;
+  // Only allow same-origin relative paths
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+};
+
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -125,6 +134,8 @@ const Auth = () => {
 
   // Helper function to determine redirect destination based on role
   const getRedirectDestination = (role: string | null | undefined): string => {
+    const next = getNextPath();
+    if (next) return next;
     if (role === "admin") {
       return "/admin/super"; // Admin goes to SuperAdmin Dashboard
     }
@@ -156,7 +167,7 @@ const Auth = () => {
         email: pendingRegistrationData.email,
         password: pendingRegistrationData.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth`,
+          emailRedirectTo: `${window.location.origin}/auth${getNextPath() ? `?next=${encodeURIComponent(getNextPath()!)}` : ""}`,
           data: {
             full_name: pendingRegistrationData.fullName,
             user_type: userType,
@@ -264,14 +275,14 @@ const Auth = () => {
               user_id: session.user.id, 
               role: "admin" as any 
             }]);
-            navigate("/admin/super");
+            navigate(getNextPath() ?? "/admin/super");
           } else {
             // For OAuth users, default to client role
             await supabase.from("user_roles").insert([{ 
               user_id: session.user.id, 
               role: "user" as any 
             }]);
-            navigate("/painel");
+            navigate(getNextPath() ?? "/painel");
           }
           return;
         }
@@ -294,7 +305,7 @@ const Auth = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth`,
+          redirectTo: `${window.location.origin}/auth${getNextPath() ? `?next=${encodeURIComponent(getNextPath()!)}` : ""}`,
         },
       });
       if (error) throw error;
@@ -404,7 +415,7 @@ const Auth = () => {
             user_id: data.user.id, 
             role: "admin" as any 
           }]);
-          navigate("/admin/super");
+          navigate(getNextPath() ?? "/admin/super");
           toast({
             title: "Bem-vindo, Administrador!",
             description: "Você tem acesso total ao sistema.",
@@ -416,7 +427,7 @@ const Auth = () => {
           user_id: data.user.id, 
           role: "user" as any 
         }]);
-        navigate("/painel");
+        navigate(getNextPath() ?? "/painel");
         toast({
           title: "Login realizado com sucesso!",
           description: "Bem-vindo de volta.",
