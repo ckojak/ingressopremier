@@ -125,6 +125,7 @@ serve(async (req) => {
     if (!paymentId) {
       throw new Error('Payment ID não encontrado');
     }
+    const paymentIdStr = String(paymentId);
 
     // Create Supabase client to look up order and determine site_id
     const supabaseClient = createClient(
@@ -239,6 +240,30 @@ serve(async (req) => {
       newStatus = 'pending';
     } else if (payment.status === 'rejected' || payment.status === 'cancelled') {
       newStatus = 'cancelled';
+    } else if (payment.status === 'refunded' || payment.status === 'charged_back') {
+      newStatus = 'refunded';
+    }
+
+    // Registrar log do webhook para monitoramento no painel admin
+    try {
+      await supabaseClient.from('webhook_logs').insert({
+        payment_id: paymentIdStr,
+        order_id: order.id,
+        site_id: order.site_id || siteId,
+        payment_status: payment.status,
+        event_type: type,
+        amount: payment.transaction_amount,
+        payer_email: payment.payer?.email ?? order.customer_email,
+        is_sandbox: isSandbox,
+        details: {
+          status_detail: payment.status_detail,
+          payment_method_id: payment.payment_method_id,
+          payment_type_id: payment.payment_type_id,
+          live_mode: payment.live_mode,
+        },
+      });
+    } catch (logError) {
+      logStep('Falha ao registrar webhook_log', { error: String(logError) });
     }
 
     // Atualizar status se diferente
@@ -247,7 +272,10 @@ serve(async (req) => {
         .from('orders')
         .update({ 
           status: newStatus,
-          payment_intent_id: payment.id.toString()
+          payment_intent_id: paymentIdStr,
+          mp_payment_id: paymentIdStr,
+          payment_method: payment.payment_method_id ?? order.payment_method,
+          paid_at: newStatus === 'paid' ? (payment.date_approved ?? new Date().toISOString()) : order.paid_at
         })
         .eq('id', orderId);
 
