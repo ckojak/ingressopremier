@@ -30,8 +30,8 @@ serve(async (req) => {
     let { customer_name, customer_cpf, customer_phone } = body;
 
     const mpAccessToken =
-      Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN') || Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-    if (!mpAccessToken) throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado');
+      Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
+    if (!mpAccessToken) throw new Error('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN não configurado');
 
     if (!event_id) throw new Error('Evento não informado');
     if (!Array.isArray(items) || items.length === 0) throw new Error('Carrinho vazio');

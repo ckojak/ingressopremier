@@ -35,18 +35,8 @@ const logStep = (step: string, details?: unknown) => {
   console.log(`[MERCADOPAGO-CHECKOUT] ${step}${detailsStr}`);
 };
 
-// Get Mercado Pago credentials based on site_id
-const getMercadoPagoCredentials = (siteId: string) => {
-  // Use PremierPass credentials
-  const token = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
-  if (token) {
-    logStep('Using PremierPass Mercado Pago credentials');
-    return token;
-  }
-  // Fallback
-  logStep('Using default Mercado Pago credentials');
-  return Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-};
+// Credenciais exclusivas da conta PremierPass (sem fallback para contas legadas)
+const getMercadoPagoCredentials = () => Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -103,8 +93,8 @@ serve(async (req) => {
     logStep('Evento encontrado', { title: event.title });
 
     // Determine site_id from event or request - default to premierpass
-    const effectiveSiteId = site_id || event.site_id || 'premierpass';
-    const mercadopagoAccessToken = getMercadoPagoCredentials(effectiveSiteId);
+    const effectiveSiteId = 'premierpass';
+    const mercadopagoAccessToken = getMercadoPagoCredentials();
     
     if (!mercadopagoAccessToken) {
       throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado para o site: ' + effectiveSiteId);
