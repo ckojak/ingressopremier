@@ -79,14 +79,11 @@ async function verifyWebhookSignature(
   }
 }
 
-// Get Mercado Pago credentials based on site_id
-const getMercadoPagoCredentials = (siteId: string) => {
-  // Use PremierPass credentials
-  return {
-    accessToken: Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN') || Deno.env.get('MERCADOPAGO_ACCESS_TOKEN'),
-    webhookSecret: Deno.env.get('PREMIERPASS_MERCADOPAGO_WEBHOOK_SECRET') || Deno.env.get('MERCADOPAGO_WEBHOOK_SECRET')
-  };
-};
+// Credenciais exclusivas da conta PremierPass (sem fallback para contas legadas)
+const getMercadoPagoCredentials = () => ({
+  accessToken: Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN'),
+  webhookSecret: Deno.env.get('PREMIERPASS_MERCADOPAGO_WEBHOOK_SECRET'),
+});
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -135,7 +132,7 @@ serve(async (req) => {
 
     // Plataforma single-tenant (PremierPass)
     const siteId = 'premierpass';
-    const credentials = getMercadoPagoCredentials(siteId);
+    const credentials = getMercadoPagoCredentials();
 
     logStep('Site identificado', { siteId, hasCredentials: !!credentials.accessToken });
 
@@ -323,6 +320,13 @@ serve(async (req) => {
                 event_id: order.event_id,
                 ticket_type_id: item.ticket_type_id,
                 ticket_code: ticketCode,
+                qr_code: ticketCode,
+                status: 'active',
+                site_id: order.site_id || siteId,
+                attendee_name: order.customer_name ?? null,
+                attendee_email: order.customer_email ?? null,
+                recipient_name: order.customer_name ?? null,
+                recipient_email: order.customer_email ?? null,
               })
               .select()
               .single();

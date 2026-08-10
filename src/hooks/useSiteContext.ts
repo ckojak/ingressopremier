@@ -57,8 +57,7 @@ export const useSiteContext = () => {
     
     /**
      * Returns array of site_ids to include in event queries
-     * - PremierPass (universal): shows ALL events (premierpass + quintal)
-     * - Quintal: shows ONLY quintal events
+     * Plataforma nacional single-tenant: sempre 'premierpass'
      */
     getVisibleSiteIds: (): SiteId[] => {
       return ["premierpass"]; // Only PremierPass

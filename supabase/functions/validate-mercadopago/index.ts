@@ -53,12 +53,8 @@ serve(async (req) => {
     let tokenToValidate = access_token;
     
     if (!tokenToValidate) {
-      // Use stored credentials
-      if (site_id === 'premierpass') {
-        tokenToValidate = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
-      } else {
-        tokenToValidate = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-      }
+      // Plataforma single-tenant: sempre credenciais PremierPass
+      tokenToValidate = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
     }
 
     if (!tokenToValidate) {

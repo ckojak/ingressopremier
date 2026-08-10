@@ -65,12 +65,10 @@ const PaymentSettings = () => {
   });
 
   const [showTokens, setShowTokens] = useState<Record<string, boolean>>({
-    quintal: false,
     premierpass: false
   });
 
   const [saving, setSaving] = useState<Record<string, boolean>>({
-    quintal: false,
     premierpass: false
   });
 
