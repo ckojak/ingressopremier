@@ -14,6 +14,18 @@ const logStep = (step: string, details?: any) => {
   console.log(`[SEND-TICKET-EMAIL] ${step}${detailsStr}`);
 };
 
+// Renders a real, scannable QR code image inside the email body.
+// The payload matches what the app/scanner expects: PREMIERPASS-<ticket_code>
+const qrImageHtml = (ticketCode: string) => {
+  const payload = encodeURIComponent(`PREMIERPASS-${ticketCode}`);
+  const src = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&ecc=H&format=png&data=${payload}`;
+  return `
+    <div style="background-color: #ffffff; border-radius: 12px; padding: 12px; margin: 0 auto 14px auto; width: 200px;">
+      <img src="${src}" alt="QR Code do ingresso ${ticketCode}" width="200" height="200" style="display: block; width: 200px; height: 200px; border: 0;" />
+    </div>
+  `;
+};
+
 interface TicketEmailRequest {
   orderId?: string;
   type?: "purchase" | "complimentary";
