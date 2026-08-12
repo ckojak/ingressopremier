@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { normalizeTicketCode } from "@/lib/ticket-code";
 
 interface QRCodeScannerProps {
   open?: boolean;
