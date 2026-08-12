@@ -396,6 +396,42 @@ const EventApprovals = () => {
                         </p>
                       </div>
 
+                      <div className="mb-3">
+                        {(() => {
+                          const v = verifications[event.organizer_id];
+                          if (!v) {
+                            return (
+                              <Badge variant="outline" className="bg-destructive/15 text-destructive border-destructive/30">
+                                <ShieldAlert className="w-3 h-3 mr-1" />
+                                Documento não enviado
+                              </Badge>
+                            );
+                          }
+                          if (v.status === "verified") {
+                            return (
+                              <Badge variant="outline" className="bg-green-500/15 text-green-500 border-green-500/30">
+                                <ShieldCheck className="w-3 h-3 mr-1" />
+                                Identidade verificada
+                              </Badge>
+                            );
+                          }
+                          if (v.status === "rejected") {
+                            return (
+                              <Badge variant="outline" className="bg-destructive/15 text-destructive border-destructive/30">
+                                <ShieldAlert className="w-3 h-3 mr-1" />
+                                Documento recusado
+                              </Badge>
+                            );
+                          }
+                          return (
+                            <Badge variant="outline" className="bg-yellow-500/15 text-yellow-500 border-yellow-500/30">
+                              <ShieldQuestion className="w-3 h-3 mr-1" />
+                              Documento aguardando verificação
+                            </Badge>
+                          );
+                        })()}
+                      </div>
+
                       <div className="flex flex-wrap gap-2">
                         <Button 
                           size="sm" 
@@ -412,7 +448,7 @@ const EventApprovals = () => {
                           size="sm" 
                           className="bg-green-600 hover:bg-green-700"
                           onClick={() => handleApprove(event.id)}
-                          disabled={processing}
+                          disabled={processing || verifications[event.organizer_id]?.status !== "verified"}
                         >
                           <CheckCircle2 className="w-4 h-4 mr-1" />
                           Aprovar
