@@ -277,9 +277,63 @@ const ProducerDashboard = () => {
               Os eventos criados passam por aprovação
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Seus dados serão verificados e o evento será publicado em até 2 horas após a aprovação.
+              Seu evento será analisado pela nossa equipe em até 4 horas.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Pending approval banner */}
+      {pendingEventTitles.length > 0 && (
+        <Card className="bg-yellow-500/10 border-yellow-500/30">
+          <CardContent className="p-4 flex items-start gap-3">
+            <Clock className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-yellow-500">
+                {pendingEventTitles.length === 1
+                  ? "Seu evento está em análise"
+                  : `${pendingEventTitles.length} eventos em análise`}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Seu evento será analisado pela nossa equipe em até <strong>4 horas</strong>.
+                Você receberá um aviso assim que for aprovado.
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {pendingEventTitles.join(" • ")}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Identity verification (KYC) */}
+      <OrganizerVerificationCard />
+
+      {/* Net revenue + withdrawal */}
+      <Card className="bg-card border-border">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-foreground text-lg">
+            <Wallet className="w-5 h-5 text-primary" />
+            Receita líquida a receber
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <p className="text-3xl font-bold text-green-500">
+              {loading ? "..." : formatBRL(stats.netRevenue)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Faturamento bruto {formatBRL(stats.totalRevenue)} menos a taxa de serviço de 8%.
+            </p>
+          </div>
+          <Button
+            onClick={handleWithdrawal}
+            disabled={loading || stats.netRevenue <= 0}
+            className="gap-2 gradient-primary"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Solicitar saque
+          </Button>
         </CardContent>
       </Card>
 
