@@ -58,7 +58,7 @@ const HeroSection = () => {
           >
             <img 
               src={premierpassLogo} 
-              alt="PremierPass" 
+              alt="PremierPass — plataforma de ingressos para eventos" 
               className="w-32 h-32 md:w-40 md:h-40 mx-auto rounded-3xl object-cover shadow-premium hover-glow"
             />
             <motion.div
@@ -94,6 +94,9 @@ const HeroSection = () => {
             className="text-6xl md:text-7xl lg:text-8xl font-display font-bold text-foreground mb-6 leading-[1.05]"
           >
             Premier<span className="text-gradient">Pass</span>
+            <span className="block text-2xl md:text-3xl lg:text-4xl mt-4 font-semibold text-muted-foreground">
+              Ingressos para os melhores eventos do Brasil
+            </span>
           </motion.h1>
 
           <motion.p
@@ -152,6 +155,7 @@ const HeroSection = () => {
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2 }}
         onClick={scrollToEvents}
+        aria-label="Rolar para a lista de eventos"
         className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 text-muted-foreground hover:text-primary transition-all duration-300 group"
       >
         <div className="flex flex-col items-center gap-3">
