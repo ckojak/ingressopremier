@@ -11,13 +11,16 @@ import {
   AlertTriangle,
   BarChart3,
   ArrowUpRight,
-  Eye
+  Eye,
+  Wallet,
+  MessageCircle
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
+import OrganizerVerificationCard from "@/components/OrganizerVerificationCard";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -28,6 +31,7 @@ interface ProducerStats {
   publishedEvents: number;
   totalTicketsSold: number;
   totalRevenue: number;
+  netRevenue: number;
 }
 
 interface ProducerEvent {
@@ -38,6 +42,9 @@ interface ProducerEvent {
   image_url: string | null;
   tickets_sold: number;
 }
+
+const SERVICE_FEE_RATE = 0.08;
+const WITHDRAWAL_WHATSAPP = "5521979934676";
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any }> = {
   pending: { label: "Aguardando aprovação", variant: "outline", icon: Clock },
@@ -54,16 +61,26 @@ const ProducerDashboard = () => {
     publishedEvents: 0,
     totalTicketsSold: 0,
     totalRevenue: 0,
+    netRevenue: 0,
   });
   const [recentEvents, setRecentEvents] = useState<ProducerEvent[]>([]);
   const [salesData, setSalesData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [producerName, setProducerName] = useState<string>("");
+  const [pendingEventTitles, setPendingEventTitles] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchProducerData = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name, email")
+          .eq("id", user.id)
+          .maybeSingle();
+        setProducerName(profile?.full_name || profile?.email || user.email || "Produtor");
 
         // Fetch events
         const { data: events } = await supabase
@@ -78,6 +95,7 @@ const ProducerDashboard = () => {
         // Fetch tickets for these events
         let ticketsCount = 0;
         let revenue = 0;
+        let netRevenue = 0;
 
         if (eventIds.length > 0) {
           const { count } = await supabase
@@ -90,20 +108,31 @@ const ProducerDashboard = () => {
           // Get revenue from orders
           const { data: orders } = await supabase
             .from("orders")
-            .select("total_amount")
+            .select("total_amount, service_fee")
             .eq("status", "paid")
             .in("event_id", eventIds);
             
           revenue = orders?.reduce((acc, o) => acc + Number(o.total_amount || 0), 0) || 0;
+          netRevenue =
+            orders?.reduce((acc, o) => {
+              const total = Number(o.total_amount || 0);
+              const fee = Number(o.service_fee || 0) || total * SERVICE_FEE_RATE;
+              return acc + Math.max(total - fee, 0);
+            }, 0) || 0;
         }
 
         setStats({
           totalEvents: eventsData.length,
-          pendingEvents: eventsData.filter(e => e.status === "draft").length,
+          pendingEvents: eventsData.filter(e => e.status === "pending").length,
           publishedEvents: eventsData.filter(e => e.status === "published").length,
           totalTicketsSold: ticketsCount,
           totalRevenue: revenue,
+          netRevenue,
         });
+
+        setPendingEventTitles(
+          eventsData.filter((e: any) => e.status === "pending").map((e: any) => e.title)
+        );
 
         // Get recent events with ticket counts
         const recentEventsWithTickets = await Promise.all(
@@ -190,13 +219,37 @@ const ProducerDashboard = () => {
       bgColor: "bg-accent/10",
     },
     {
-      title: "Faturamento",
+      title: "Faturamento bruto",
       value: `R$ ${stats.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
       icon: DollarSign,
       color: "text-green-500",
       bgColor: "bg-green-500/10",
     },
   ];
+
+  const formatBRL = (value: number) =>
+    `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const withdrawalMessage = () => {
+    const eventsList = recentEvents.length
+      ? recentEvents.map(e => `- ${e.title} (${e.tickets_sold} ingressos)`).join("\n")
+      : "- (sem eventos listados)";
+    return (
+      `Olá! Sou ${producerName} e gostaria de solicitar o saque da minha receita no PremierPass.\n\n` +
+      `Eventos:\n${eventsList}\n\n` +
+      `Ingressos vendidos: ${stats.totalTicketsSold}\n` +
+      `Faturamento bruto: ${formatBRL(stats.totalRevenue)}\n` +
+      `Valor líquido a receber (já descontada a taxa de serviço de 8%): ${formatBRL(stats.netRevenue)}`
+    );
+  };
+
+  const handleWithdrawal = () => {
+    window.open(
+      `https://wa.me/${WITHDRAWAL_WHATSAPP}?text=${encodeURIComponent(withdrawalMessage())}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
 
   return (
     <div className="space-y-8">
