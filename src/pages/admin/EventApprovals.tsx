@@ -11,7 +11,11 @@ import {
   User,
   Mail,
   Phone,
-  AlertTriangle
+  AlertTriangle,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldQuestion,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +67,16 @@ interface PendingEvent {
   };
 }
 
+interface OrganizerVerificationRow {
+  id: string;
+  user_id: string;
+  document_type: string;
+  document_number: string | null;
+  document_path: string;
+  status: string;
+  rejection_reason: string | null;
+}
+
 const EventApprovals = () => {
   const [events, setEvents] = useState<PendingEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +86,9 @@ const EventApprovals = () => {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [verifications, setVerifications] = useState<Record<string, OrganizerVerificationRow>>({});
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  const [loadingDocument, setLoadingDocument] = useState(false);
 
   const fetchPendingEvents = async () => {
     try {
@@ -100,6 +117,22 @@ const EventApprovals = () => {
       );
       
       setEvents(eventsWithOrganizers as PendingEvent[]);
+
+      const organizerIds = Array.from(new Set(pendingEvents.map((e: any) => e.organizer_id)));
+      if (organizerIds.length > 0) {
+        const { data: verificationRows } = await supabase
+          .from("organizer_verifications")
+          .select("*")
+          .in("user_id", organizerIds);
+
+        const map: Record<string, OrganizerVerificationRow> = {};
+        (verificationRows || []).forEach((row: any) => {
+          map[row.user_id] = row as OrganizerVerificationRow;
+        });
+        setVerifications(map);
+      } else {
+        setVerifications({});
+      }
     } catch (error) {
       console.error("Error fetching pending events:", error);
       toast.error("Erro ao carregar solicitações");
@@ -115,7 +148,19 @@ const EventApprovals = () => {
   const handleApprove = async (eventId: string) => {
     const eventToApprove = events.find(e => e.id === eventId);
     if (!eventToApprove) return;
-    
+
+    const verification = verifications[eventToApprove.organizer_id];
+    if (verification?.status !== "verified") {
+      toast.error(
+        verification
+          ? "Verifique o documento do produtor antes de publicar o evento."
+          : "O produtor ainda não enviou o documento de identificação."
+      );
+      setSelectedEvent(eventToApprove);
+      setViewDialogOpen(true);
+      return;
+    }
+
     setProcessing(true);
     try {
       const { error } = await supabase
