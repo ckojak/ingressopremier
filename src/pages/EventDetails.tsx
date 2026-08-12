@@ -161,18 +161,49 @@ const EventDetails = () => {
 
                 {cart.length > 0 && (
                   <div className="pt-4 space-y-4 border-t border-border">
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold text-primary uppercase">Forma de Pagamento</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("pix")}
+                          className={`p-3 rounded-xl border text-left transition-all ${paymentMethod === "pix" ? "border-primary bg-primary/10" : "border-border bg-secondary/30 hover:bg-secondary/50"}`}
+                        >
+                          <QrCode className="w-5 h-5 mb-1 text-primary" />
+                          <span className="block text-sm font-semibold">Pix</span>
+                          <span className="block text-xs text-muted-foreground">Aprovação imediata</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("card")}
+                          className={`p-3 rounded-xl border text-left transition-all ${paymentMethod === "card" ? "border-primary bg-primary/10" : "border-border bg-secondary/30 hover:bg-secondary/50"}`}
+                        >
+                          <CreditCard className="w-5 h-5 mb-1 text-primary" />
+                          <span className="block text-sm font-semibold">Cartão</span>
+                          <span className="block text-xs text-muted-foreground">Crédito ou débito</span>
+                        </button>
+                      </div>
+                    </div>
+                    {paymentMethod === "pix" && (
                     <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-3">
                       <p className="text-xs font-bold text-primary uppercase">Dados do Comprador</p>
                       <Input placeholder="Nome Completo" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
                       <Input placeholder="CPF (apenas números)" value={customerCpf} maxLength={11} onChange={(e) => setCustomerCpf(e.target.value.replace(/\D/g, ""))} />
                     </div>
+                    )}
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total</span>
                       <span>R$ {totalAmount.toFixed(2)}</span>
                     </div>
+                    {paymentMethod === "pix" ? (
                     <Button className="w-full bg-secondary" onClick={handlePixCheckout} disabled={processingPix}>
                       {processingPix ? "Gerando..." : "Pagar com PIX"}
                     </Button>
+                    ) : (
+                    <Button className="w-full" onClick={handleCardCheckout} disabled={processing}>
+                      {processing ? "Redirecionando..." : "Pagar com Cartão"}
+                    </Button>
+                    )}
                   </div>
                 )}
               </CardContent>
