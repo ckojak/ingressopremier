@@ -46,6 +46,7 @@ const EventDetails = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [processingPix, setProcessingPix] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix");
   
   // DADOS DO COMPRADOR NA TELA
   const [customerName, setCustomerName] = useState("");
@@ -101,6 +102,33 @@ const EventDetails = () => {
       toast.error(error.message);
     } finally {
       setProcessingPix(false);
+    }
+  };
+
+  const handleCardCheckout = async () => {
+    if (cart.length === 0) return toast.error("Adicione ingressos");
+
+    setProcessing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return navigate("/auth");
+
+      const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
+        body: {
+          event_id: id,
+          site_id: siteId,
+          items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
+        },
+      });
+
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      if (!data?.checkout_url) throw new Error("Não foi possível iniciar o pagamento com cartão");
+
+      window.location.href = data.checkout_url;
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao processar pagamento");
+      setProcessing(false);
     }
   };
 
