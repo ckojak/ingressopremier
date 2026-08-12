@@ -93,6 +93,15 @@ const Support = () => {
         title="Suporte"
         description="Central de ajuda e suporte da Premier Pass. Tire suas dúvidas sobre compra de ingressos."
         url="https://premierpass.com.br/suporte"
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: faqs.map((faq) => ({
+            "@type": "Question",
+            name: faq.question,
+            acceptedAnswer: { "@type": "Answer", text: faq.answer },
+          })),
+        }}
       />
       <Header />
       <main className="pt-24 pb-16">

@@ -10,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import SEO from "@/components/SEO";
 import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
 import EventDetailsSkeleton from "@/components/skeletons/EventDetailsSkeleton";
 import { supabase } from "@/integrations/supabase/client";
@@ -135,8 +136,58 @@ const EventDetails = () => {
   if (loading) return <EventDetailsSkeleton />;
   if (!event) return null;
 
+  const eventUrl = `https://premierpass.com.br/evento/${event.id}`;
+  const metaDescription = (event.description || `Compre ingressos para ${event.title} no PremierPass com segurança e entrega digital imediata.`).slice(0, 155);
+  const lowestPrice = ticketTypes.length
+    ? Math.min(...ticketTypes.map((t) => Number(t.price)))
+    : undefined;
+  const eventSchema = {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: event.title,
+    description: metaDescription,
+    startDate: (event as any).start_date || (event as any).event_date || undefined,
+    endDate: (event as any).end_date || undefined,
+    eventStatus: "https://schema.org/EventScheduled",
+    eventAttendanceMode: isOnlineEvent(event)
+      ? "https://schema.org/OnlineEventAttendanceMode"
+      : "https://schema.org/OfflineEventAttendanceMode",
+    image: (event as any).image_url ? [(event as any).image_url] : undefined,
+    url: eventUrl,
+    location: isOnlineEvent(event)
+      ? { "@type": "VirtualLocation", url: eventUrl }
+      : {
+          "@type": "Place",
+          name: (event as any).venue_name || (event as any).location || event.title,
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: (event as any).city || undefined,
+            addressRegion: (event as any).state || undefined,
+            addressCountry: "BR",
+          },
+        },
+    organizer: { "@type": "Organization", name: "PremierPass", url: "https://premierpass.com.br" },
+    offers: ticketTypes.map((t) => ({
+      "@type": "Offer",
+      name: t.name,
+      price: Number(t.price),
+      priceCurrency: "BRL",
+      availability: t.is_active ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
+      url: eventUrl,
+    })),
+    ...(lowestPrice !== undefined ? { lowPrice: lowestPrice } : {}),
+  };
+
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={event.title}
+        description={metaDescription}
+        url={eventUrl}
+        type="event"
+        image={(event as any).image_url || undefined}
+        schema={eventSchema}
+      />
       <Header />
       <main className="pt-24 pb-16 container mx-auto px-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
