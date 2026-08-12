@@ -70,9 +70,11 @@ serve(async (req) => {
       const ticketCodesHtml = ticketCodes.map(code => `
         <div style="background-color: #27272a; padding: 20px; border-radius: 12px; margin: 12px 0; text-align: center; border: 1px solid #3f3f46;">
           <p style="margin: 0 0 8px 0; color: #a1a1aa; font-size: 14px;">${ticketTypeName || 'Ingresso Cortesia'}</p>
+          ${qrImageHtml(code)}
           <p style="margin: 0; font-family: 'Courier New', monospace; font-size: 20px; font-weight: bold; color: #06b6d4; letter-spacing: 2px;">
             ${code}
           </p>
+          <p style="margin: 8px 0 0 0; color: #71717a; font-size: 12px;">Escaneie este QR Code na entrada</p>
         </div>
       `).join("");
 
@@ -213,9 +215,11 @@ serve(async (req) => {
     const ticketCodesHtml = tickets?.map(ticket => `
       <div style="background-color: #27272a; padding: 20px; border-radius: 12px; margin: 12px 0; text-align: center; border: 1px solid #3f3f46;">
         <p style="margin: 0 0 8px 0; color: #a1a1aa; font-size: 14px;">${(ticket.ticket_types as any)?.name || 'Ingresso'}</p>
+        ${qrImageHtml(ticket.ticket_code)}
         <p style="margin: 0; font-family: 'Courier New', monospace; font-size: 20px; font-weight: bold; color: #06b6d4; letter-spacing: 2px;">
           ${ticket.ticket_code}
         </p>
+        <p style="margin: 8px 0 0 0; color: #71717a; font-size: 12px;">Escaneie este QR Code na entrada</p>
       </div>
     `).join("") || "";
 
