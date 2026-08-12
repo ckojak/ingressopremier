@@ -1,252 +1,154 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-interface CheckoutItem {
-  ticket_type_id: string;
-  quantity: number;
-}
-
-interface CheckoutRequest {
-  event_id: string;
-  items: CheckoutItem[];
-}
-
-interface TicketType {
-  id: string;
-  name: string;
-  price: number;
-  quantity_available: number;
-  quantity_sold: number;
-}
+const SERVICE_FEE = 0.08;
+const log = (step: string, details?: unknown) =>
+  console.log(`[CREATE-PIX] ${step}${details ? `: ${JSON.stringify(details)}` : ''}`);
 
 serve(async (req) => {
-  console.log("=== Create PIX Payment Function Started ===");
-  
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const mpAccessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-    if (!mpAccessToken) {
-      console.error("MERCADOPAGO_ACCESS_TOKEN not configured");
-      throw new Error('Mercado Pago access token not configured');
-    }
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      { auth: { persistSession: false } }
+    );
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) throw new Error('Não autenticado');
+    const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
+    if (userErr || !user) throw new Error('Não autenticado');
 
-    // Get user from auth header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('Authorization header required');
-    }
+    const body = await req.json();
+    const { event_id, items, site_id } = body;
+    let { customer_name, customer_cpf, customer_phone } = body;
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      console.error("Auth error:", authError);
-      throw new Error('Authentication failed');
-    }
+    const mpAccessToken =
+      Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
+    if (!mpAccessToken) throw new Error('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN não configurado');
 
-    console.log("User authenticated:", user.id);
+    if (!event_id) throw new Error('Evento não informado');
+    if (!Array.isArray(items) || items.length === 0) throw new Error('Carrinho vazio');
 
-    const body: CheckoutRequest = await req.json();
-    const { event_id, items } = body;
-
-    console.log("Request body:", JSON.stringify(body));
-
-    if (!event_id || !items || items.length === 0) {
-      throw new Error('Invalid request: event_id and items required');
-    }
-
-    // Get event details
-    const { data: event, error: eventError } = await supabase
-      .from('events')
-      .select('*')
-      .eq('id', event_id)
-      .single();
-
-    if (eventError || !event) {
-      console.error("Event error:", eventError);
-      throw new Error('Event not found');
-    }
-
-    console.log("Event found:", event.title);
-
-    // Get ticket types and validate availability
-    const ticketTypeIds = items.map(item => item.ticket_type_id);
-    const { data: ticketTypes, error: ticketError } = await supabase
-      .from('ticket_types')
-      .select('*')
-      .in('id', ticketTypeIds);
-
-    if (ticketError || !ticketTypes) {
-      console.error("Ticket types error:", ticketError);
-      throw new Error('Ticket types not found');
-    }
-
-    // Calculate totals
-    let subtotal = 0;
-    const orderItems: { ticket_type_id: string; quantity: number; unit_price: number }[] = [];
-
-    for (const item of items) {
-      const ticketType = ticketTypes.find((tt: TicketType) => tt.id === item.ticket_type_id);
-      if (!ticketType) {
-        throw new Error(`Ticket type ${item.ticket_type_id} not found`);
-      }
-
-      const available = ticketType.quantity_available - ticketType.quantity_sold;
-      if (item.quantity > available) {
-        throw new Error(`Not enough tickets available for ${ticketType.name}`);
-      }
-
-      subtotal += ticketType.price * item.quantity;
-      orderItems.push({
-        ticket_type_id: item.ticket_type_id,
-        quantity: item.quantity,
-        unit_price: ticketType.price
-      });
-    }
-
-    // Calculate fees (8% service fee)
-    const serviceFeePercentage = 0.08;
-    const serviceFee = Math.round(subtotal * serviceFeePercentage * 100) / 100;
-    const totalAmount = subtotal + serviceFee;
-
-    console.log("Order totals - Subtotal:", subtotal, "Service Fee:", serviceFee, "Total:", totalAmount);
-
-    // Get user profile for payer info
+    // Completar dados do comprador pelo perfil quando não enviados
     const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, cpf')
-      .eq('id', user.id)
-      .single();
+      .from('profiles').select('full_name, email, phone').eq('id', user.id).maybeSingle();
+    customer_name = customer_name || profile?.full_name || user.email;
+    customer_phone = customer_phone || profile?.phone || null;
+    customer_cpf = (customer_cpf || '').replace(/\D/g, '') || null;
+    if (!customer_name) throw new Error('Nome do comprador obrigatório');
 
-    // Create pending order
-    console.log("Creating order with data:", {
+    const ticketTypeIds = items.map((i: any) => i.ticket_type_id);
+    const [{ data: event }, { data: ticketTypes, error: ttErr }] = await Promise.all([
+      supabase.from('events').select('id, title, site_id').eq('id', event_id).maybeSingle(),
+      supabase
+        .from('ticket_types')
+        .select('id, name, price, event_id, is_active, quantity, quantity_available, quantity_sold, max_per_order')
+        .in('id', ticketTypeIds),
+    ]);
+    if (!event) throw new Error('Evento não encontrado');
+    if (ttErr) throw new Error(`Erro ao buscar ingressos: ${ttErr.message}`);
+    if (!ticketTypes || ticketTypes.length !== ticketTypeIds.length) throw new Error('Ingresso inválido');
+
+    // Preço autoritativo do servidor + validação de estoque
+    let subtotal = 0;
+    const orderItemsPayload: any[] = [];
+    for (const item of items) {
+      const tt = ticketTypes.find((t: any) => t.id === item.ticket_type_id);
+      if (!tt || tt.event_id !== event_id || !tt.is_active) throw new Error('Ingresso indisponível');
+      const qty = Math.max(1, Math.floor(Number(item.quantity) || 0));
+      const maxPerOrder = tt.max_per_order || 10;
+      if (qty > maxPerOrder) throw new Error(`Máximo de ${maxPerOrder} ingressos por pedido: ${tt.name}`);
+      const stock = Number(tt.quantity_available || tt.quantity || 0);
+      if (stock > 0 && (tt.quantity_sold || 0) + qty > stock) throw new Error(`Ingresso esgotado: ${tt.name}`);
+      const unit = Number(tt.price);
+      subtotal += unit * qty;
+      orderItemsPayload.push({ ticket_type_id: tt.id, quantity: qty, unit_price: unit });
+    }
+
+    const serviceFee = Math.round(subtotal * SERVICE_FEE * 100) / 100;
+    const totalAmount = Math.round((subtotal + serviceFee) * 100) / 100;
+    if (totalAmount <= 0) throw new Error('Valor inválido para pagamento PIX');
+
+    const effectiveSiteId = site_id || event.site_id || 'premierpass';
+
+    const { data: order, error: orderErr } = await supabase.from('orders').insert({
       user_id: user.id,
-      event_id: event_id,
+      event_id,
+      site_id: effectiveSiteId,
       status: 'pending',
-      total_amount: totalAmount
-    });
+      payment_method: 'pix',
+      total_amount: totalAmount,
+      service_fee: serviceFee,
+      customer_name,
+      customer_email: user.email,
+      customer_phone,
+      customer_cpf,
+    }).select().single();
+    if (orderErr || !order) throw new Error(`Erro criando pedido: ${orderErr?.message}`);
 
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        user_id: user.id,
-        event_id: event_id,
-        status: 'pending',
-        total_amount: totalAmount
-      })
-      .select()
-      .single();
-
-    if (orderError) {
-      console.error("Order creation error details:", JSON.stringify(orderError));
-      throw new Error(`Failed to create order: ${orderError.message}`);
-    }
-
-    if (!order) {
-      console.error("Order is null after insert");
-      throw new Error('Failed to create order: no data returned');
-    }
-
-    console.log("Order created:", order.id);
-
-    // Create order items
-    const orderItemsToInsert = orderItems.map(item => ({
-      order_id: order.id,
-      ticket_type_id: item.ticket_type_id,
-      quantity: item.quantity,
-      unit_price: item.unit_price
-    }));
-
-    console.log("Creating order items:", JSON.stringify(orderItemsToInsert));
-
-    const { data: createdItems, error: itemsError } = await supabase
+    const { error: itemsErr } = await supabase
       .from('order_items')
-      .insert(orderItemsToInsert)
-      .select();
-
-    if (itemsError) {
-      console.error("Order items error:", JSON.stringify(itemsError));
-      // Don't throw - continue with PIX creation but log the error
-    } else {
-      console.log("Order items created:", JSON.stringify(createdItems));
+      .insert(orderItemsPayload.map((oi) => ({ ...oi, order_id: order.id })));
+    if (itemsErr) {
+      await supabase.from('orders').update({ status: 'failed' }).eq('id', order.id);
+      throw new Error(`Erro criando itens: ${itemsErr.message}`);
     }
 
-    // Create PIX payment via Mercado Pago API
-    const totalCents = Math.round(totalAmount * 100);
-    
-    const paymentData = {
+    const isSandbox = mpAccessToken.startsWith('TEST-');
+    const [firstName, ...rest] = String(customer_name).trim().split(' ');
+    const paymentData: Record<string, unknown> = {
       transaction_amount: totalAmount,
-      payment_method_id: "pix",
+      payment_method_id: 'pix',
       payer: {
         email: user.email,
-        first_name: profile?.full_name?.split(' ')[0] || 'Cliente',
-        last_name: profile?.full_name?.split(' ').slice(1).join(' ') || '',
-        identification: profile?.cpf ? {
-          type: "CPF",
-          number: profile.cpf.replace(/\D/g, '')
-        } : undefined
+        first_name: firstName,
+        last_name: rest.join(' ') || 'Cliente',
+        ...(customer_cpf && customer_cpf.length >= 11
+          ? { identification: { type: 'CPF', number: customer_cpf } }
+          : {}),
       },
-      description: `Ingressos - ${event.title}`,
+      description: `Ingresso: ${event.title}`,
       external_reference: order.id,
-      notification_url: `${supabaseUrl}/functions/v1/mercadopago-webhook`
+      notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago-webhook`,
+      statement_descriptor: 'PREMIERPASS',
+      date_of_expiration: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     };
-
-    console.log("Creating PIX payment:", JSON.stringify(paymentData));
 
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${mpAccessToken}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': order.id
+        'X-Idempotency-Key': `${order.id}`,
       },
-      body: JSON.stringify(paymentData)
+      body: JSON.stringify(paymentData),
     });
 
     const mpResult = await mpResponse.json();
-
     if (!mpResponse.ok) {
-      console.error("Mercado Pago error:", JSON.stringify(mpResult));
-      
-      // Delete the order if payment creation failed
-      await supabase.from('order_items').delete().eq('order_id', order.id);
-      await supabase.from('orders').delete().eq('id', order.id);
-      
-      throw new Error(`Payment creation failed: ${mpResult.message || 'Unknown error'}`);
+      log('Erro Mercado Pago', { status: mpResponse.status, mpResult });
+      await supabase.from('orders').update({ status: 'failed' }).eq('id', order.id);
+      throw new Error(mpResult.message || mpResult.cause?.[0]?.description || 'Erro no Mercado Pago');
     }
 
-    console.log("PIX payment created:", mpResult.id);
-
-    // Update order with payment ID
-    await supabase
-      .from('orders')
-      .update({ 
-        mp_preference_id: mpResult.id.toString(),
-        mp_payment_id: mpResult.id.toString()
-      })
-      .eq('id', order.id);
-
-    // Extract PIX data
     const pixData = mpResult.point_of_interaction?.transaction_data;
-    
-    if (!pixData) {
-      console.error("No PIX data in response:", JSON.stringify(mpResult));
-      throw new Error('PIX data not available');
-    }
+    if (!pixData) throw new Error('Mercado Pago não retornou dados PIX');
 
-    const isSandbox = mpAccessToken.startsWith('TEST-');
+    await supabase.from('orders').update({
+      payment_intent_id: String(mpResult.id),
+      mp_payment_id: String(mpResult.id),
+      pix_qr_code: pixData.qr_code,
+      pix_qr_code_base64: pixData.qr_code_base64,
+    }).eq('id', order.id);
+
+    log('PIX gerado', { orderId: order.id, paymentId: mpResult.id, isSandbox });
 
     return new Response(JSON.stringify({
       success: true,
@@ -257,20 +159,15 @@ serve(async (req) => {
       pix_copy_paste: pixData.qr_code,
       expiration_date: mpResult.date_of_expiration,
       total_amount: totalAmount,
-      is_sandbox: isSandbox
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+      service_fee: serviceFee,
+      is_sandbox: isSandbox,
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-  } catch (error: unknown) {
-    console.error("Error:", error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-    return new Response(JSON.stringify({
-      success: false,
-      error: errorMessage
-    }), {
+  } catch (error: any) {
+    log('erro', { message: error?.message });
+    return new Response(JSON.stringify({ success: false, error: error?.message ?? 'Erro desconhecido' }), {
       status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });

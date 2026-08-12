@@ -1,15 +1,14 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalendarIcon, MapPin, Ticket, Search, X } from "lucide-react";
+import { Calendar as CalendarIcon, MapPin, Ticket, Search, X, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
-import { format, startOfDay, endOfDay, addDays, addWeeks, addMonths } from "date-fns";
+import { format, startOfDay, endOfDay, addWeeks, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -25,13 +24,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EVENT_CATEGORIES } from "@/lib/constants";
+import { useSiteContext, detectSiteFromHostname } from "@/hooks/useSiteContext";
+import { usePublicEvents, EventWithPrice, useInvalidateEvents } from "@/hooks/useEvents";
+import { toast } from "sonner";
+import EventCardSkeleton from "@/components/skeletons/EventCardSkeleton";
+import ApiErrorFallback from "@/components/ApiErrorFallback";
 
-type Event = Tables<"events">;
-
-interface EventWithPrice extends Event {
-  min_price?: number;
-  total_available?: number;
-}
+// Site filter options for PremierPass
+const SITE_FILTER_OPTIONS = [
+  { label: "Todos os eventos", value: "all" },
+  { label: "PremierPass", value: "premierpass" },
+];
 
 const categories = ["Todos", ...EVENT_CATEGORIES];
 
@@ -44,74 +47,27 @@ const dateFilters = [
 ];
 
 const Events = () => {
-  const [events, setEvents] = useState<EventWithPrice[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [selectedDateFilter, setSelectedDateFilter] = useState("all");
   const [customDate, setCustomDate] = useState<Date | undefined>();
   const [selectedCity, setSelectedCity] = useState("all");
-  const [cities, setCities] = useState<string[]>([]);
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("events")
-          .select("*")
-          .eq("status", "published")
-          .gte("start_date", new Date().toISOString())
-          .order("start_date", { ascending: true });
-
-        if (error) throw error;
-        
-        const eventsData = data || [];
-
-        // Extract unique cities
-        const uniqueCities = [...new Set(eventsData.map(e => e.city).filter(Boolean))] as string[];
-        setCities(uniqueCities.sort());
-
-        // Fetch ticket prices and availability for each event
-        if (eventsData.length > 0) {
-          const eventIds = eventsData.map(e => e.id);
-          const { data: ticketData } = await supabase
-            .from("ticket_types")
-            .select("event_id, price, quantity_available, quantity_sold")
-            .in("event_id", eventIds)
-            .eq("is_active", true);
-
-          const priceAndAvailabilityByEvent: Record<string, { minPrice: number; totalAvailable: number }> = {};
-          ticketData?.forEach(ticket => {
-            const price = Number(ticket.price);
-            const available = ticket.quantity_available - (ticket.quantity_sold || 0);
-            if (!priceAndAvailabilityByEvent[ticket.event_id]) {
-              priceAndAvailabilityByEvent[ticket.event_id] = { minPrice: price, totalAvailable: available };
-            } else {
-              if (price < priceAndAvailabilityByEvent[ticket.event_id].minPrice) {
-                priceAndAvailabilityByEvent[ticket.event_id].minPrice = price;
-              }
-              priceAndAvailabilityByEvent[ticket.event_id].totalAvailable += available;
-            }
-          });
-
-          const eventsWithPrices = eventsData.map(event => ({
-            ...event,
-            min_price: priceAndAvailabilityByEvent[event.id]?.minPrice,
-            total_available: priceAndAvailabilityByEvent[event.id]?.totalAvailable ?? 0,
-          }));
-          setEvents(eventsWithPrices);
-        } else {
-          setEvents([]);
-        }
-      } catch (error) {
-        console.error("Error fetching events:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEvents();
-  }, []);
+  const [selectedSite, setSelectedSite] = useState("all");
+  const { showAllSiteEvents } = useSiteContext();
+  const currentSite = detectSiteFromHostname();
+  const { invalidatePublic } = useInvalidateEvents();
+  
+  // Use centralized events hook
+  const { data: events = [], isLoading: loading, isFetching, isError, refetch } = usePublicEvents();
+  
+  // Manual refresh function
+  const handleRefresh = () => {
+    invalidatePublic();
+    toast.success("Lista de eventos atualizada!");
+  };
+  
+  // Extract unique cities from events
+  const cities = [...new Set(events.map(e => e.city).filter(Boolean))] as string[];
 
   const getDateRange = () => {
     const now = new Date();
@@ -154,7 +110,11 @@ const Events = () => {
     // City filter
     const matchesCity = selectedCity === "all" || event.city === selectedCity;
     
-    return matchesSearch && matchesCategory && matchesDate && matchesCity;
+    // Site filter (only for PremierPass which shows all sites)
+    const eventSiteId = (event as any).site_id;
+    const matchesSite = selectedSite === "all" || eventSiteId === selectedSite;
+    
+    return matchesSearch && matchesCategory && matchesDate && matchesCity && matchesSite;
   });
 
   const clearFilters = () => {
@@ -163,12 +123,18 @@ const Events = () => {
     setSelectedDateFilter("all");
     setCustomDate(undefined);
     setSelectedCity("all");
+    setSelectedSite("all");
   };
 
-  const hasActiveFilters = searchTerm || selectedCategory !== "Todos" || selectedDateFilter !== "all" || selectedCity !== "all";
+  const hasActiveFilters = searchTerm || selectedCategory !== "Todos" || selectedDateFilter !== "all" || selectedCity !== "all" || selectedSite !== "all";
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
+      <SEO
+        title="Eventos e Shows"
+        description="Descubra todos os eventos, shows, festivais e festas com ingressos à venda no PremierPass. Filtre por data, cidade e categoria e compre online."
+        url="https://premierpass.com.br/eventos"
+      />
       {/* Background decorations */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[150px] pointer-events-none" />
       <div className="absolute bottom-1/3 left-0 w-[400px] h-[400px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />
@@ -261,6 +227,23 @@ const Events = () => {
                   </SelectContent>
                 </Select>
 
+                {/* Site Filter - only show on PremierPass */}
+                {showAllSiteEvents && (
+                  <Select value={selectedSite} onValueChange={setSelectedSite}>
+                    <SelectTrigger className="h-12 w-full md:w-48 glass-premium border-border/40 rounded-xl">
+                      <Ticket className="w-4 h-4 mr-2 text-primary" />
+                      <SelectValue placeholder="Site" />
+                    </SelectTrigger>
+                    <SelectContent className="glass-strong border-border/40 rounded-xl">
+                      {SITE_FILTER_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
                 {/* Clear Filters */}
                 {hasActiveFilters && (
                   <Button variant="outline" className="h-12 glass-premium border-border/40 hover:border-primary/40 hover:bg-primary/5 rounded-xl transition-all hover-lift" onClick={clearFilters}>
@@ -289,27 +272,47 @@ const Events = () => {
             </div>
           </motion.div>
 
-          {/* Results Count */}
-          <div className="mb-6 text-muted-foreground">
-            {loading ? "Carregando..." : `${filteredEvents.length} eventos encontrados`}
+          {/* Results Count + Refresh Button */}
+          <div className="mb-6 flex items-center justify-between">
+            <span className="text-muted-foreground">
+              {loading ? "Carregando..." : `${filteredEvents.length} eventos encontrados`}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isFetching}
+              className="gap-2 glass-premium border-border/40 hover:border-primary/40 hover:bg-primary/5 rounded-xl transition-all"
+            >
+              <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+              Atualizar
+            </Button>
           </div>
 
           {/* Events Grid */}
-          {loading ? (
+          {isError ? (
+            <ApiErrorFallback
+              title="Erro ao carregar eventos"
+              message="Não foi possível buscar os eventos. Verifique sua conexão e tente novamente."
+              onRetry={() => refetch()}
+              isLoading={isFetching}
+              type="network"
+            />
+          ) : loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {[...Array(8)].map((_, i) => (
-                <div key={i} className="animate-pulse">
-                  <div className="bg-muted rounded-2xl h-64" />
-                  <div className="mt-4 space-y-2">
-                    <div className="h-4 bg-muted rounded w-3/4" />
-                    <div className="h-4 bg-muted rounded w-1/2" />
-                  </div>
-                </div>
+                <EventCardSkeleton key={i} />
               ))}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredEvents.map((event, index) => (
+              {filteredEvents.map((event, index) => {
+                const eventSiteId = (event as any).site_id;
+                const siteBadge = eventSiteId === "premierpass"
+                  ? { label: "PremierPass", className: "bg-primary/20 text-primary border-primary/30" }
+                  : null;
+                  
+                return (
                 <motion.div
                   key={event.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -332,11 +335,18 @@ const Events = () => {
                           </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
-                        {event.category && (
-                          <Badge className="absolute top-4 left-4 gradient-primary text-primary-foreground border-0 font-semibold px-3 py-1 shadow-premium">
-                            {event.category}
-                          </Badge>
-                        )}
+                        <div className="absolute top-4 left-4 flex flex-wrap gap-2">
+                          {event.category && (
+                            <Badge className="gradient-primary text-primary-foreground border-0 font-semibold px-3 py-1 shadow-premium">
+                              {event.category}
+                            </Badge>
+                          )}
+                          {siteBadge && showAllSiteEvents && (
+                            <Badge variant="outline" className={siteBadge.className}>
+                              {siteBadge.label}
+                            </Badge>
+                          )}
+                        </div>
                         {event.total_available === 0 && (
                           <Badge className="absolute top-4 right-4 bg-destructive text-destructive-foreground border-0 font-semibold px-3 py-1">
                             Esgotado
@@ -393,7 +403,8 @@ const Events = () => {
                     </div>
                   </Link>
                 </motion.div>
-              ))}
+              );
+              })}
             </div>
           )}
 

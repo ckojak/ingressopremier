@@ -16,7 +16,7 @@ const Footer = () => {
             <Link to="/" className="flex items-center gap-3 mb-6 group">
               <img 
                 src={premierpassLogo} 
-                alt="PremierPass" 
+                alt="PremierPass Ingressos" 
                 className="w-14 h-14 rounded-xl object-cover transition-all duration-300 group-hover:scale-110 shadow-subtle"
               />
               <div>
@@ -109,9 +109,12 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="border-t border-border/30 mt-12 pt-10">
+        <div className="border-t border-border/30 mt-12 pt-10 space-y-2">
           <p className="text-muted-foreground/70 text-sm md:text-base text-center font-medium">
             © {new Date().getFullYear()} PremierPass. Todos os direitos reservados.
+          </p>
+          <p className="text-muted-foreground/40 text-xs text-center">
+            feito por KOJAK SOLUÇÕES
           </p>
         </div>
       </div>

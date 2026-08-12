@@ -1,91 +1,43 @@
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Calendar, MapPin, Ticket, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
-type Event = Tables<"events">;
-
-interface EventWithPrice extends Event {
-  min_price?: number;
-}
+import { usePublicEvents, EventWithPrice } from "@/hooks/useEvents";
+import EventCardSkeleton from "@/components/skeletons/EventCardSkeleton";
 
 const FeaturedEvents = () => {
-  const [events, setEvents] = useState<EventWithPrice[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("events")
-          .select("*")
-          .eq("status", "published")
-          .gte("start_date", new Date().toISOString())
-          .order("start_date", { ascending: true })
-          .limit(6);
-
-        if (error) throw error;
-        
-        let eventsData = data || [];
-
-        // Fetch minimum prices for each event
-        if (eventsData.length > 0) {
-          const eventIds = eventsData.map(e => e.id);
-          const { data: ticketPrices } = await supabase
-            .from("ticket_types")
-            .select("event_id, price")
-            .in("event_id", eventIds)
-            .eq("is_active", true);
-
-          const minPriceByEvent: Record<string, number> = {};
-          ticketPrices?.forEach(ticket => {
-            const price = Number(ticket.price);
-            if (!minPriceByEvent[ticket.event_id] || price < minPriceByEvent[ticket.event_id]) {
-              minPriceByEvent[ticket.event_id] = price;
-            }
-          });
-
-          const eventsWithPrices = eventsData.map(event => ({
-            ...event,
-            min_price: minPriceByEvent[event.id],
-          }));
-          setEvents(eventsWithPrices);
-        } else {
-          setEvents([]);
-        }
-      } catch (error) {
-        console.error("Error fetching events:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEvents();
-  }, []);
+  const { data: allEvents = [], isLoading: loading } = usePublicEvents();
+  
+  // Take only the first 6 events for featured section
+  const events: EventWithPrice[] = allEvents.slice(0, 6);
 
   if (loading) {
     return (
       <section id="eventos" className="py-20 bg-background">
         <div className="container mx-auto px-4">
-          <div className="mb-12 text-center">
-            <div className="h-8 bg-muted rounded w-64 animate-pulse mx-auto mb-3" />
-            <div className="h-4 bg-muted rounded w-96 animate-pulse mx-auto" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="bg-muted rounded-2xl h-64" />
-                <div className="mt-4 space-y-2">
-                  <div className="h-4 bg-muted rounded w-3/4" />
-                  <div className="h-4 bg-muted rounded w-1/2" />
-                </div>
-              </div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-16"
+          >
+            <div className="flex items-center justify-center gap-2.5 mb-5">
+              <Sparkles className="w-5 h-5 text-accent animate-pulse" />
+              <span className="text-sm tracking-[0.2em] text-accent uppercase font-semibold">Destaques</span>
+              <Sparkles className="w-5 h-5 text-accent animate-pulse" />
+            </div>
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold text-foreground mb-5">
+              Próximos <span className="text-gradient">Eventos</span>
+            </h2>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+              Garanta seu ingresso e viva experiências únicas
+            </p>
+          </motion.div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
+            {[1, 2, 3].map((i) => (
+              <EventCardSkeleton key={i} />
             ))}
           </div>
         </div>
@@ -157,7 +109,13 @@ const FeaturedEvents = () => {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
-          {events.map((event, index) => (
+          {events.map((event, index) => {
+            const eventSiteId = (event as any).site_id;
+            const siteBadge = eventSiteId === "premierpass"
+              ? { label: "PremierPass", className: "bg-primary/20 text-primary border-primary/30" }
+              : null;
+              
+            return (
             <motion.div
               key={event.id}
               initial={{ opacity: 0, y: 30 }}
@@ -181,11 +139,18 @@ const FeaturedEvents = () => {
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
-                    {event.category && (
-                      <Badge className="absolute top-4 left-4 gradient-primary text-primary-foreground border-0 font-semibold px-3 py-1 shadow-premium">
-                        {event.category}
-                      </Badge>
-                    )}
+                    <div className="absolute top-4 left-4 flex flex-wrap gap-2">
+                      {event.category && (
+                        <Badge className="gradient-primary text-primary-foreground border-0 font-semibold px-3 py-1 shadow-premium">
+                          {event.category}
+                        </Badge>
+                      )}
+                      {siteBadge && (
+                        <Badge variant="outline" className={siteBadge.className}>
+                          {siteBadge.label}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   {/* Content */}
@@ -230,7 +195,8 @@ const FeaturedEvents = () => {
                 </div>
               </Link>
             </motion.div>
-          ))}
+          );
+          })}
         </div>
 
         {events.length >= 6 && (

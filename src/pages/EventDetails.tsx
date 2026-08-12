@@ -1,19 +1,25 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode } from "lucide-react";
+import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, Flame, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import SEO from "@/components/SEO";
+import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
+import EventDetailsSkeleton from "@/components/skeletons/EventDetailsSkeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { useSiteContext } from "@/hooks/useSiteContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type Event = Tables<"events">;
 type TicketType = Tables<"ticket_types">;
@@ -23,590 +29,240 @@ interface CartItem {
   quantity: number;
 }
 
+const isOnlineEvent = (event: Event) => {
+  const titleLower = event.title?.toLowerCase() || "";
+  const descLower = event.description?.toLowerCase() || "";
+  const categoryLower = event.category?.toLowerCase() || "";
+  return categoryLower.includes("online") || titleLower.includes("online") || descLower.includes("100% online");
+};
+
 const EventDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { siteId } = useSiteContext();
+  const isMobile = useIsMobile();
   const [event, setEvent] = useState<Event | null>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [processingPix, setProcessingPix] = useState(false);
-  const [isSandboxMode, setIsSandboxMode] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix");
+  
+  // DADOS DO COMPRADOR NA TELA
+  const [customerName, setCustomerName] = useState("");
+  const [customerCpf, setCustomerCpf] = useState("");
 
   useEffect(() => {
     const fetchEventDetails = async () => {
       if (!id) return;
-
       try {
-        // Fetch event
-        const { data: eventData, error: eventError } = await supabase
-          .from("events")
-          .select("*")
-          .eq("id", id)
-          .eq("status", "published")
-          .single();
-
-        if (eventError) throw eventError;
-        setEvent(eventData);
-
-        // Fetch ticket types
-        const { data: ticketsData, error: ticketsError } = await supabase
-          .from("ticket_types")
-          .select("*")
-          .eq("event_id", id)
-          .eq("is_active", true)
-          .order("price", { ascending: true });
-
-        if (ticketsError) throw ticketsError;
+        const { data: eventData } = await supabase.from("events").select("*").eq("id", id).eq("status", "published").single();
+        if (eventData) setEvent(eventData);
+        const { data: ticketsData } = await supabase.from("ticket_types").select("*").eq("event_id", id).eq("is_active", true).order("price", { ascending: true });
         setTicketTypes(ticketsData || []);
-
-        // Restore cart from localStorage if returning from login
-        const pendingCart = localStorage.getItem("pendingCart");
-        if (pendingCart) {
-          const parsed = JSON.parse(pendingCart);
-          if (parsed.eventId === id && ticketsData) {
-            const restoredCart: CartItem[] = [];
-            for (const item of parsed.items) {
-              const ticketType = ticketsData.find(t => t.id === item.ticketTypeId);
-              if (ticketType) {
-                restoredCart.push({ ticketType, quantity: item.quantity });
-              }
-            }
-            if (restoredCart.length > 0) {
-              setCart(restoredCart);
-              toast.success("Seu carrinho foi restaurado!");
-            }
-            localStorage.removeItem("pendingCart");
-          }
-        }
       } catch (error) {
-        console.error("Error fetching event:", error);
-        toast.error("Evento não encontrado");
-        navigate("/eventos");
+        toast.error("Erro ao carregar evento");
       } finally {
         setLoading(false);
       }
     };
-
     fetchEventDetails();
-  }, [id, navigate]);
+  }, [id]);
 
-  const updateCart = (ticketType: TicketType, delta: number) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.ticketType.id === ticketType.id);
-      const available = ticketType.quantity_available - (ticketType.quantity_sold || 0);
-      const maxPerOrder = ticketType.max_per_order || 10;
-
-      if (existing) {
-        const newQuantity = existing.quantity + delta;
-        if (newQuantity <= 0) {
-          return prev.filter(item => item.ticketType.id !== ticketType.id);
-        }
-        if (newQuantity > Math.min(available, maxPerOrder)) {
-          toast.error(`Máximo de ${Math.min(available, maxPerOrder)} ingressos por pedido`);
-          return prev;
-        }
-        return prev.map(item =>
-          item.ticketType.id === ticketType.id
-            ? { ...item, quantity: newQuantity }
-            : item
-        );
-      } else if (delta > 0) {
-        if (delta > Math.min(available, maxPerOrder)) {
-          toast.error(`Máximo de ${Math.min(available, maxPerOrder)} ingressos por pedido`);
-          return prev;
-        }
-        return [...prev, { ticketType, quantity: delta }];
-      }
-      return prev;
-    });
-  };
-
-  const getCartQuantity = (ticketTypeId: string) => {
-    return cart.find(item => item.ticketType.id === ticketTypeId)?.quantity || 0;
-  };
-
-  const SERVICE_FEE_PERCENTAGE = 0.08; // 8% taxa de serviço
-
-  const subtotal = cart.reduce(
-    (sum, item) => sum + Number(item.ticketType.price) * item.quantity,
-    0
-  );
-
-  const serviceFee = subtotal * SERVICE_FEE_PERCENTAGE;
+  const subtotal = cart.reduce((sum, item) => sum + Number(item.ticketType.price) * item.quantity, 0);
+  const serviceFee = subtotal * 0.08;
   const totalAmount = subtotal + serviceFee;
 
-  const totalTickets = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  const handleAddToCart = () => {
-    if (cart.length === 0) {
-      toast.error("Adicione ingressos ao carrinho");
-      return;
-    }
-
-    // Get existing cart from localStorage
-    const existingCart = localStorage.getItem("cart");
-    let cartData = existingCart ? JSON.parse(existingCart) : { items: [] };
-
-    // Add or update items
-    cart.forEach(item => {
-      const existingIndex = cartData.items.findIndex(
-        (i: any) => i.ticketTypeId === item.ticketType.id
-      );
-
-      if (existingIndex >= 0) {
-        cartData.items[existingIndex].quantity += item.quantity;
-      } else {
-        cartData.items.push({
-          ticketTypeId: item.ticketType.id,
-          quantity: item.quantity,
-        });
-      }
-    });
-
-    localStorage.setItem("cart", JSON.stringify(cartData));
-    window.dispatchEvent(new Event("cartUpdated"));
-    toast.success(`${totalTickets} ingresso(s) adicionado(s) ao carrinho!`);
-    setCart([]); // Clear selection after adding
-  };
-
-  const handleCheckout = async () => {
-    if (cart.length === 0) {
-      toast.error("Adicione ingressos ao carrinho");
-      return;
-    }
-
-    setProcessing(true);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        // Save cart to localStorage before redirecting
-        localStorage.setItem("pendingCart", JSON.stringify({
-          eventId: id,
-          items: cart.map(item => ({
-            ticketTypeId: item.ticketType.id,
-            quantity: item.quantity,
-          })),
-        }));
-        toast.info("Faça login para continuar com a compra");
-        navigate("/auth", { state: { from: `/evento/${id}` } });
-        return;
-      }
-
-      const checkoutPayload = {
-        event_id: id,
-        items: cart.map(item => ({
-          ticket_type_id: item.ticketType.id,
-          quantity: item.quantity,
-          unit_price: Number(item.ticketType.price),
-        })),
-      };
-
-      // Try Mercado Pago first
-      console.log("[Checkout] Tentando Mercado Pago...");
-      const { data: mpData, error: mpError } = await supabase.functions.invoke("create-mercadopago-checkout", {
-        body: checkoutPayload,
-      });
-
-      // Check if Mercado Pago succeeded
-      if (!mpError && (mpData?.checkout_url || mpData?.sandbox_url)) {
-        console.log("[Checkout] Mercado Pago sucesso", {
-          is_sandbox: mpData.is_sandbox,
-          checkout_url: mpData.checkout_url,
-          sandbox_url: mpData.sandbox_url
-        });
-        
-        // Se estiver em sandbox, mostra indicador
-        if (mpData.is_sandbox) {
-          setIsSandboxMode(true);
-          toast.info("Modo de teste ativo - use cartões de teste");
-        }
-        
-        // Use a URL retornada pela edge function (já trata sandbox vs produção)
-        window.location.href = mpData.checkout_url;
-        return;
-      }
-
-      // Mercado Pago failed, try Stripe as fallback
-      console.log("[Checkout] Mercado Pago falhou, tentando Stripe...", mpError);
-      toast.info("Processando pagamento alternativo...");
-
-      const { data: stripeData, error: stripeError } = await supabase.functions.invoke("create-stripe-checkout", {
-        body: checkoutPayload,
-      });
-
-      if (stripeError) {
-        console.error("[Checkout] Stripe também falhou:", stripeError);
-        throw new Error("Não foi possível processar o pagamento. Tente novamente.");
-      }
-
-      if (stripeData?.checkout_url) {
-        console.log("[Checkout] Stripe sucesso, redirecionando...");
-        window.location.href = stripeData.checkout_url;
-      }
-    } catch (error: any) {
-      console.error("Checkout error:", error);
-      toast.error(error.message || "Erro ao processar pagamento");
-    } finally {
-      setProcessing(false);
-    }
-  };
-
   const handlePixCheckout = async () => {
-    if (cart.length === 0) {
-      toast.error("Adicione ingressos ao carrinho");
-      return;
-    }
+    if (cart.length === 0) return toast.error("Adicione ingressos");
+    if (!customerName || customerCpf.length < 11) return toast.error("Preencha Nome e CPF corretamente!");
 
     setProcessingPix(true);
-
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        localStorage.setItem("pendingCart", JSON.stringify({
-          eventId: id,
-          items: cart.map(item => ({
-            ticketTypeId: item.ticketType.id,
-            quantity: item.quantity,
-          })),
-        }));
-        toast.info("Faça login para continuar com a compra");
-        navigate("/auth", { state: { from: `/evento/${id}` } });
-        return;
-      }
+      if (!session) return navigate("/auth");
 
-      const checkoutPayload = {
-        event_id: id,
-        items: cart.map(item => ({
-          ticket_type_id: item.ticketType.id,
-          quantity: item.quantity,
-        })),
-      };
-
-      console.log("[PIX Checkout] Criando pagamento PIX...");
       const { data, error } = await supabase.functions.invoke("create-pix-payment", {
-        body: checkoutPayload,
+        body: {
+          event_id: id,
+          site_id: siteId,
+          customer_name: customerName,
+          customer_cpf: customerCpf.replace(/\D/g, ""),
+          items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
+        },
       });
 
-      if (error) {
-        console.error("[PIX Checkout] Erro:", error);
-        throw new Error("Não foi possível gerar o PIX. Tente novamente.");
-      }
-
       if (data?.success) {
-        console.log("[PIX Checkout] Sucesso, redirecionando para página PIX...");
-        
-        // Store PIX data in sessionStorage
         sessionStorage.setItem('pix_checkout_data', JSON.stringify(data));
-        
-        // Navigate to PIX page
         navigate(`/checkout/pix?order_id=${data.order_id}`);
       } else {
-        throw new Error(data?.error || "Erro ao gerar pagamento PIX");
+        throw new Error(data?.error || "Falha no PIX");
       }
     } catch (error: any) {
-      console.error("PIX checkout error:", error);
-      toast.error(error.message || "Erro ao processar pagamento PIX");
+      toast.error(error.message);
     } finally {
       setProcessingPix(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="pt-24 pb-16">
-          <div className="container mx-auto px-4">
-            <div className="animate-pulse space-y-8">
-              <div className="h-64 bg-muted rounded-2xl" />
-              <div className="h-8 bg-muted rounded w-1/2" />
-              <div className="h-4 bg-muted rounded w-1/3" />
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  const handleCardCheckout = async () => {
+    if (cart.length === 0) return toast.error("Adicione ingressos");
+    if (!customerName || customerCpf.length < 11) return toast.error("Preencha Nome e CPF corretamente!");
 
-  if (!event) {
-    return null;
-  }
+    setProcessing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return navigate("/auth");
+
+      const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
+        body: {
+          event_id: id,
+          site_id: siteId,
+          customer_cpf: customerCpf.replace(/\D/g, ""),
+          items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
+        },
+      });
+
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      if (!data?.checkout_url) throw new Error("Não foi possível iniciar o pagamento com cartão");
+
+      window.location.href = data.checkout_url;
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao processar pagamento");
+      setProcessing(false);
+    }
+  };
+
+  if (loading) return <EventDetailsSkeleton />;
+  if (!event) return null;
+
+  const eventUrl = `https://premierpass.com.br/evento/${event.id}`;
+  const metaDescription = (event.description || `Compre ingressos para ${event.title} no PremierPass com segurança e entrega digital imediata.`).slice(0, 155);
+  const lowestPrice = ticketTypes.length
+    ? Math.min(...ticketTypes.map((t) => Number(t.price)))
+    : undefined;
+  const eventSchema = {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: event.title,
+    description: metaDescription,
+    startDate: (event as any).start_date || (event as any).event_date || undefined,
+    endDate: (event as any).end_date || undefined,
+    eventStatus: "https://schema.org/EventScheduled",
+    eventAttendanceMode: isOnlineEvent(event)
+      ? "https://schema.org/OnlineEventAttendanceMode"
+      : "https://schema.org/OfflineEventAttendanceMode",
+    image: (event as any).image_url ? [(event as any).image_url] : undefined,
+    url: eventUrl,
+    location: isOnlineEvent(event)
+      ? { "@type": "VirtualLocation", url: eventUrl }
+      : {
+          "@type": "Place",
+          name: (event as any).venue_name || (event as any).location || event.title,
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: (event as any).city || undefined,
+            addressRegion: (event as any).state || undefined,
+            addressCountry: "BR",
+          },
+        },
+    organizer: { "@type": "Organization", name: "PremierPass", url: "https://premierpass.com.br" },
+    offers: ticketTypes.map((t) => ({
+      "@type": "Offer",
+      name: t.name,
+      price: Number(t.price),
+      priceCurrency: "BRL",
+      availability: t.is_active ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
+      url: eventUrl,
+    })),
+    ...(lowestPrice !== undefined ? { lowPrice: lowestPrice } : {}),
+  };
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={event.title}
+        description={metaDescription}
+        url={eventUrl}
+        type="event"
+        image={(event as any).image_url || undefined}
+        schema={eventSchema}
+      />
       <Header />
-      <main className="pt-24 pb-16">
-        <div className="container mx-auto px-4">
-          <Button
-            variant="ghost"
-            onClick={() => navigate(-1)}
-            className="mb-6 gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Voltar
-          </Button>
+      <main className="pt-24 pb-16 container mx-auto px-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2">
+            <h1 className="text-3xl font-bold mb-4">{event.title}</h1>
+            <p className="text-muted-foreground">{event.description}</p>
+          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Event Details */}
-            <div className="lg:col-span-2 space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                {/* Event Image */}
-                <div className="relative aspect-video rounded-2xl overflow-hidden mb-6">
-                  {event.image_url ? (
-                    <img
-                      src={event.image_url}
-                      alt={event.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-                      <Ticket className="w-24 h-24 text-muted-foreground/50" />
+          <div className="space-y-6">
+            <Card className="bg-card/80 backdrop-blur-sm border-border">
+              <CardHeader><CardTitle className="flex items-center gap-2"><Ticket className="w-5 h-5 text-primary" /> Ingressos</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                {ticketTypes.map(ticket => (
+                  <div key={ticket.id} className="p-4 rounded-lg bg-secondary/30 flex justify-between items-center">
+                    <div>
+                      <h3 className="font-semibold">{ticket.name}</h3>
+                      <p className="text-primary font-bold">R$ {Number(ticket.price).toFixed(2)}</p>
                     </div>
-                  )}
-                  {event.category && (
-                    <Badge className="absolute top-4 left-4 bg-primary text-primary-foreground">
-                      {event.category}
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Event Info */}
-                <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-                  {event.title}
-                </h1>
-
-                <div className="flex flex-wrap gap-4 text-muted-foreground mb-6">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-primary" />
-                    <span>
-                      {format(new Date(event.start_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                    </span>
+                    <Button variant="outline" size="sm" onClick={() => setCart([{ticketType: ticket, quantity: 1}])}>Selecionar</Button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-primary" />
-                    <span>
-                      {format(new Date(event.start_date), "HH:mm", { locale: ptBR })}
-                    </span>
-                  </div>
-                  {event.city && (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-5 h-5 text-primary" />
-                      <span>
-                        {event.venue_name && `${event.venue_name}, `}
-                        {event.city}, {event.state}
-                      </span>
+                ))}
+
+                {cart.length > 0 && (
+                  <div className="pt-4 space-y-4 border-t border-border">
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold text-primary uppercase">Forma de Pagamento</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("pix")}
+                          className={`p-3 rounded-xl border text-left transition-all ${paymentMethod === "pix" ? "border-primary bg-primary/10" : "border-border bg-secondary/30 hover:bg-secondary/50"}`}
+                        >
+                          <QrCode className="w-5 h-5 mb-1 text-primary" />
+                          <span className="block text-sm font-semibold">Pix</span>
+                          <span className="block text-xs text-muted-foreground">Aprovação imediata</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod("card")}
+                          className={`p-3 rounded-xl border text-left transition-all ${paymentMethod === "card" ? "border-primary bg-primary/10" : "border-border bg-secondary/30 hover:bg-secondary/50"}`}
+                        >
+                          <CreditCard className="w-5 h-5 mb-1 text-primary" />
+                          <span className="block text-sm font-semibold">Cartão</span>
+                          <span className="block text-xs text-muted-foreground">Crédito ou débito</span>
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-
-                {event.short_description && (
-                  <p className="text-lg text-muted-foreground mb-4">
-                    {event.short_description}
-                  </p>
-                )}
-
-                {event.description && (
-                  <div className="prose prose-invert max-w-none">
-                    <h2 className="text-xl font-semibold text-foreground mb-2">Sobre o evento</h2>
-                    <p className="text-muted-foreground whitespace-pre-wrap">
-                      {event.description}
-                    </p>
-                  </div>
-                )}
-
-                {event.venue_address && (
-                  <div className="mt-6">
-                    <h2 className="text-xl font-semibold text-foreground mb-2">Local</h2>
-                    <p className="text-muted-foreground">
-                      {event.venue_name && <span className="font-medium">{event.venue_name}</span>}
-                      <br />
-                      {event.venue_address}
-                      <br />
-                      {event.city}, {event.state}
-                    </p>
-                  </div>
-                )}
-              </motion.div>
-            </div>
-
-            {/* Ticket Selection & Cart */}
-            <div className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-              >
-                <Card className="bg-card border-border sticky top-24">
-                  {/* Indicador de modo sandbox/teste */}
-                  {isSandboxMode && (
-                    <Alert className="m-4 mb-0 border-yellow-500/50 bg-yellow-500/10">
-                      <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                      <AlertTitle className="text-yellow-500">Modo de Teste</AlertTitle>
-                      <AlertDescription className="text-yellow-500/80 text-sm">
-                        Use cartões de teste do Mercado Pago. Pagamentos não são reais.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Ticket className="w-5 h-5 text-primary" />
-                      Ingressos
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {ticketTypes.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-4">
-                        Ingressos não disponíveis no momento
-                      </p>
+                    {/* Dados do comprador: agora usado tanto por Pix quanto por Cartão, pois o
+                        Mercado Pago usa Nome+CPF pra reduzir recusa por risco no cartão também */}
+                    {(paymentMethod === "pix" || paymentMethod === "card") && (
+                    <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-3">
+                      <p className="text-xs font-bold text-primary uppercase">Dados do Comprador</p>
+                      <Input placeholder="Nome Completo" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+                      <Input placeholder="CPF (apenas números)" value={customerCpf} maxLength={11} onChange={(e) => setCustomerCpf(e.target.value.replace(/\D/g, ""))} />
+                    </div>
+                    )}
+                    <div className="flex justify-between font-bold text-lg">
+                      <span>Total</span>
+                      <span>R$ {totalAmount.toFixed(2)}</span>
+                    </div>
+                    {paymentMethod === "pix" ? (
+                    <Button className="w-full bg-secondary" onClick={handlePixCheckout} disabled={processingPix}>
+                      {processingPix ? "Gerando..." : "Pagar com PIX"}
+                    </Button>
                     ) : (
-                      ticketTypes.map(ticket => {
-                        const available = ticket.quantity_available - (ticket.quantity_sold || 0);
-                        const quantity = getCartQuantity(ticket.id);
-
-                        return (
-                          <div
-                            key={ticket.id}
-                            className="p-4 rounded-lg bg-secondary/50 space-y-3"
-                          >
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h3 className="font-semibold text-foreground">{ticket.name}</h3>
-                                {ticket.description && (
-                                  <p className="text-sm text-muted-foreground">{ticket.description}</p>
-                                )}
-                              </div>
-                              <span className="text-lg font-bold text-primary">
-                                R$ {Number(ticket.price).toFixed(2)}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              {available > 0 ? (
-                                <>
-                                  <span className="text-sm text-muted-foreground">
-                                    {available} disponíveis
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-8 w-8"
-                                      onClick={() => updateCart(ticket, -1)}
-                                      disabled={quantity === 0}
-                                    >
-                                      <Minus className="w-4 h-4" />
-                                    </Button>
-                                    <span className="w-8 text-center font-medium text-foreground">
-                                      {quantity}
-                                    </span>
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-8 w-8"
-                                      onClick={() => updateCart(ticket, 1)}
-                                      disabled={quantity >= Math.min(available, ticket.max_per_order || 10)}
-                                    >
-                                      <Plus className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                </>
-                              ) : (
-                                <Badge variant="destructive" className="w-full justify-center py-2">
-                                  Esgotado
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
+                    <Button className="w-full" onClick={handleCardCheckout} disabled={processing}>
+                      {processing ? "Redirecionando..." : "Pagar com Cartão"}
+                    </Button>
                     )}
-
-                    {cart.length > 0 && (
-                      <>
-                        <Separator />
-                        
-                        <div className="space-y-2">
-                          {cart.map(item => (
-                            <div key={item.ticketType.id} className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                {item.quantity}x {item.ticketType.name}
-                              </span>
-                              <span className="text-foreground">
-                                R$ {(Number(item.ticketType.price) * item.quantity).toFixed(2)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <Separator />
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Subtotal</span>
-                            <span className="text-foreground">R$ {subtotal.toFixed(2)}</span>
-                          </div>
-                        <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Taxa de serviço (8%)</span>
-                            <span className="text-foreground">R$ {serviceFee.toFixed(2)}</span>
-                          </div>
-                        </div>
-
-                        <Separator />
-
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-foreground">Total</span>
-                          <span className="text-xl font-bold text-primary">
-                            R$ {totalAmount.toFixed(2)}
-                          </span>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Button
-                            className="w-full gap-2"
-                            variant="outline"
-                            size="lg"
-                            onClick={handleAddToCart}
-                            disabled={processing || processingPix}
-                          >
-                            <ShoppingCart className="w-5 h-5" />
-                            Adicionar ao carrinho
-                          </Button>
-                          
-                          <Button
-                            className="w-full gap-2"
-                            size="lg"
-                            onClick={handlePixCheckout}
-                            disabled={processingPix || processing}
-                            variant="secondary"
-                          >
-                            <QrCode className="w-5 h-5" />
-                            {processingPix ? "Gerando PIX..." : "Pagar com PIX"}
-                          </Button>
-
-                          <Button
-                            className="w-full gap-2"
-                            size="lg"
-                            onClick={handleCheckout}
-                            disabled={processing || processingPix}
-                          >
-                            {processing ? "Processando..." : "Comprar com Cartão"}
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>

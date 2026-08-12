@@ -10,43 +10,43 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
       checkin_staff: {
         Row: {
-          access_code: string
-          created_at: string | null
-          created_by: string
-          email: string
+          access_code: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
           event_id: string
           id: string
-          is_active: boolean | null
+          is_active: boolean
           last_access_at: string | null
           name: string | null
           user_id: string | null
         }
         Insert: {
-          access_code: string
-          created_at?: string | null
-          created_by: string
-          email: string
+          access_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
           event_id: string
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           last_access_at?: string | null
           name?: string | null
           user_id?: string | null
         }
         Update: {
-          access_code?: string
-          created_at?: string | null
-          created_by?: string
-          email?: string
+          access_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
           event_id?: string
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           last_access_at?: string | null
           name?: string | null
           user_id?: string | null
@@ -64,49 +64,52 @@ export type Database = {
       coupons: {
         Row: {
           code: string
-          created_at: string | null
+          created_at: string
           discount_type: string
           discount_value: number
-          event_id: string | null
+          event_id: string
           id: string
-          is_active: boolean | null
+          is_active: boolean
           max_uses: number | null
           min_purchase_amount: number | null
-          organizer_id: string
-          updated_at: string | null
-          used_count: number | null
+          organizer_id: string | null
+          site_id: string
+          updated_at: string
+          used_count: number
           valid_from: string | null
           valid_until: string | null
         }
         Insert: {
           code: string
-          created_at?: string | null
-          discount_type: string
-          discount_value: number
-          event_id?: string | null
+          created_at?: string
+          discount_type?: string
+          discount_value?: number
+          event_id: string
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           max_uses?: number | null
           min_purchase_amount?: number | null
-          organizer_id: string
-          updated_at?: string | null
-          used_count?: number | null
+          organizer_id?: string | null
+          site_id?: string
+          updated_at?: string
+          used_count?: number
           valid_from?: string | null
           valid_until?: string | null
         }
         Update: {
           code?: string
-          created_at?: string | null
+          created_at?: string
           discount_type?: string
           discount_value?: number
-          event_id?: string | null
+          event_id?: string
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           max_uses?: number | null
           min_purchase_amount?: number | null
-          organizer_id?: string
-          updated_at?: string | null
-          used_count?: number | null
+          organizer_id?: string | null
+          site_id?: string
+          updated_at?: string
+          used_count?: number
           valid_from?: string | null
           valid_until?: string | null
         }
@@ -122,64 +125,79 @@ export type Database = {
       }
       events: {
         Row: {
+          banner_url: string | null
           category: string | null
           city: string | null
           contact: string | null
-          created_at: string | null
+          created_at: string
           description: string | null
           end_date: string | null
+          highlighted: boolean
           id: string
           image_url: string | null
-          is_featured: boolean | null
+          is_online: boolean
+          online_url: string | null
           organizer_id: string
           short_description: string | null
+          site_id: string
+          slug: string | null
           start_date: string
           state: string | null
-          status: Database["public"]["Enums"]["event_status"] | null
+          status: Database["public"]["Enums"]["event_status"]
           title: string
-          updated_at: string | null
+          updated_at: string
           venue_address: string | null
           venue_name: string | null
           website: string | null
         }
         Insert: {
+          banner_url?: string | null
           category?: string | null
           city?: string | null
           contact?: string | null
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           end_date?: string | null
+          highlighted?: boolean
           id?: string
           image_url?: string | null
-          is_featured?: boolean | null
+          is_online?: boolean
+          online_url?: string | null
           organizer_id: string
           short_description?: string | null
+          site_id?: string
+          slug?: string | null
           start_date: string
           state?: string | null
-          status?: Database["public"]["Enums"]["event_status"] | null
+          status?: Database["public"]["Enums"]["event_status"]
           title: string
-          updated_at?: string | null
+          updated_at?: string
           venue_address?: string | null
           venue_name?: string | null
           website?: string | null
         }
         Update: {
+          banner_url?: string | null
           category?: string | null
           city?: string | null
           contact?: string | null
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           end_date?: string | null
+          highlighted?: boolean
           id?: string
           image_url?: string | null
-          is_featured?: boolean | null
+          is_online?: boolean
+          online_url?: string | null
           organizer_id?: string
           short_description?: string | null
+          site_id?: string
+          slug?: string | null
           start_date?: string
           state?: string | null
-          status?: Database["public"]["Enums"]["event_status"] | null
+          status?: Database["public"]["Enums"]["event_status"]
           title?: string
-          updated_at?: string | null
+          updated_at?: string
           venue_address?: string | null
           venue_name?: string | null
           website?: string | null
@@ -188,27 +206,27 @@ export type Database = {
       }
       order_items: {
         Row: {
-          created_at: string | null
+          created_at: string
           id: string
           order_id: string
           quantity: number
-          ticket_type_id: string | null
+          ticket_type_id: string
           unit_price: number
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           id?: string
           order_id: string
           quantity?: number
-          ticket_type_id?: string | null
-          unit_price: number
+          ticket_type_id: string
+          unit_price?: number
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           id?: string
           order_id?: string
           quantity?: number
-          ticket_type_id?: string | null
+          ticket_type_id?: string
           unit_price?: number
         }
         Relationships: [
@@ -230,58 +248,69 @@ export type Database = {
       }
       orders: {
         Row: {
-          coupon_id: string | null
-          created_at: string | null
+          created_at: string
+          customer_cpf: string | null
           customer_email: string | null
           customer_name: string | null
           customer_phone: string | null
-          discount_amount: number | null
           event_id: string | null
           id: string
+          mp_payment_id: string | null
+          paid_at: string | null
           payment_intent_id: string | null
-          status: Database["public"]["Enums"]["order_status"] | null
+          payment_method: string | null
+          pix_qr_code: string | null
+          pix_qr_code_base64: string | null
+          service_fee: number
+          site_id: string
+          status: Database["public"]["Enums"]["order_status"]
           total_amount: number
-          updated_at: string | null
-          user_id: string | null
+          updated_at: string
+          user_id: string
         }
         Insert: {
-          coupon_id?: string | null
-          created_at?: string | null
+          created_at?: string
+          customer_cpf?: string | null
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
-          discount_amount?: number | null
           event_id?: string | null
           id?: string
+          mp_payment_id?: string | null
+          paid_at?: string | null
           payment_intent_id?: string | null
-          status?: Database["public"]["Enums"]["order_status"] | null
-          total_amount: number
-          updated_at?: string | null
-          user_id?: string | null
+          payment_method?: string | null
+          pix_qr_code?: string | null
+          pix_qr_code_base64?: string | null
+          service_fee?: number
+          site_id?: string
+          status?: Database["public"]["Enums"]["order_status"]
+          total_amount?: number
+          updated_at?: string
+          user_id: string
         }
         Update: {
-          coupon_id?: string | null
-          created_at?: string | null
+          created_at?: string
+          customer_cpf?: string | null
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
-          discount_amount?: number | null
           event_id?: string | null
           id?: string
+          mp_payment_id?: string | null
+          paid_at?: string | null
           payment_intent_id?: string | null
-          status?: Database["public"]["Enums"]["order_status"] | null
+          payment_method?: string | null
+          pix_qr_code?: string | null
+          pix_qr_code_base64?: string | null
+          service_fee?: number
+          site_id?: string
+          status?: Database["public"]["Enums"]["order_status"]
           total_amount?: number
-          updated_at?: string | null
-          user_id?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "orders_coupon_id_fkey"
-            columns: ["coupon_id"]
-            isOneToOne: false
-            referencedRelation: "coupons"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "orders_event_id_fkey"
             columns: ["event_id"]
@@ -294,69 +323,69 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
-          cpf: string | null
-          created_at: string | null
+          created_at: string
           email: string | null
           full_name: string | null
           id: string
           phone: string | null
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
           avatar_url?: string | null
-          cpf?: string | null
-          created_at?: string | null
+          created_at?: string
           email?: string | null
           full_name?: string | null
           id: string
           phone?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
           avatar_url?: string | null
-          cpf?: string | null
-          created_at?: string | null
+          created_at?: string
           email?: string | null
           full_name?: string | null
           id?: string
           phone?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
       ticket_transfers: {
         Row: {
           completed_at: string | null
-          created_at: string | null
-          from_user_id: string
+          created_at: string
+          from_user_id: string | null
           id: string
           status: string
           ticket_id: string
-          to_user_email: string
+          to_email: string | null
+          to_user_email: string | null
           to_user_id: string | null
-          transfer_code: string
+          transfer_code: string | null
         }
         Insert: {
           completed_at?: string | null
-          created_at?: string | null
-          from_user_id: string
+          created_at?: string
+          from_user_id?: string | null
           id?: string
           status?: string
           ticket_id: string
-          to_user_email: string
+          to_email?: string | null
+          to_user_email?: string | null
           to_user_id?: string | null
-          transfer_code: string
+          transfer_code?: string | null
         }
         Update: {
           completed_at?: string | null
-          created_at?: string | null
-          from_user_id?: string
+          created_at?: string
+          from_user_id?: string | null
           id?: string
           status?: string
           ticket_id?: string
-          to_user_email?: string
+          to_email?: string | null
+          to_user_email?: string | null
           to_user_id?: string | null
-          transfer_code?: string
+          transfer_code?: string | null
         }
         Relationships: [
           {
@@ -370,49 +399,61 @@ export type Database = {
       }
       ticket_types: {
         Row: {
-          created_at: string | null
+          created_at: string
           description: string | null
           event_id: string
           id: string
-          is_active: boolean | null
-          max_per_order: number | null
+          is_active: boolean
+          is_complimentary: boolean
+          max_per_order: number
           name: string
+          position: number
           price: number
+          quantity: number
           quantity_available: number
-          quantity_sold: number | null
-          sales_end: string | null
-          sales_start: string | null
-          updated_at: string | null
+          quantity_sold: number
+          sale_end: string | null
+          sale_start: string | null
+          site_id: string
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           event_id: string
           id?: string
-          is_active?: boolean | null
-          max_per_order?: number | null
+          is_active?: boolean
+          is_complimentary?: boolean
+          max_per_order?: number
           name: string
+          position?: number
           price?: number
+          quantity?: number
           quantity_available?: number
-          quantity_sold?: number | null
-          sales_end?: string | null
-          sales_start?: string | null
-          updated_at?: string | null
+          quantity_sold?: number
+          sale_end?: string | null
+          sale_start?: string | null
+          site_id?: string
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           description?: string | null
           event_id?: string
           id?: string
-          is_active?: boolean | null
-          max_per_order?: number | null
+          is_active?: boolean
+          is_complimentary?: boolean
+          max_per_order?: number
           name?: string
+          position?: number
           price?: number
+          quantity?: number
           quantity_available?: number
-          quantity_sold?: number | null
-          sales_end?: string | null
-          sales_start?: string | null
-          updated_at?: string | null
+          quantity_sold?: number
+          sale_end?: string | null
+          sale_start?: string | null
+          site_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -428,42 +469,66 @@ export type Database = {
         Row: {
           attendee_email: string | null
           attendee_name: string | null
-          created_at: string | null
+          checked_in_at: string | null
+          created_at: string
           event_id: string | null
           id: string
-          is_used: boolean | null
-          order_item_id: string
+          is_complimentary: boolean
+          is_used: boolean
+          order_item_id: string | null
+          qr_code: string | null
+          recipient_email: string | null
+          recipient_name: string | null
+          site_id: string
+          status: Database["public"]["Enums"]["ticket_status"]
           ticket_code: string
           ticket_type_id: string | null
-          transfer_status: string | null
+          transfer_status: string
+          updated_at: string
           used_at: string | null
           user_id: string | null
         }
         Insert: {
           attendee_email?: string | null
           attendee_name?: string | null
-          created_at?: string | null
+          checked_in_at?: string | null
+          created_at?: string
           event_id?: string | null
           id?: string
-          is_used?: boolean | null
-          order_item_id: string
-          ticket_code: string
+          is_complimentary?: boolean
+          is_used?: boolean
+          order_item_id?: string | null
+          qr_code?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          site_id?: string
+          status?: Database["public"]["Enums"]["ticket_status"]
+          ticket_code?: string
           ticket_type_id?: string | null
-          transfer_status?: string | null
+          transfer_status?: string
+          updated_at?: string
           used_at?: string | null
           user_id?: string | null
         }
         Update: {
           attendee_email?: string | null
           attendee_name?: string | null
-          created_at?: string | null
+          checked_in_at?: string | null
+          created_at?: string
           event_id?: string | null
           id?: string
-          is_used?: boolean | null
-          order_item_id?: string
+          is_complimentary?: boolean
+          is_used?: boolean
+          order_item_id?: string | null
+          qr_code?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          site_id?: string
+          status?: Database["public"]["Enums"]["ticket_status"]
           ticket_code?: string
           ticket_type_id?: string | null
-          transfer_status?: string | null
+          transfer_status?: string
+          updated_at?: string
           used_at?: string | null
           user_id?: string | null
         }
@@ -493,24 +558,74 @@ export type Database = {
       }
       user_roles: {
         Row: {
-          created_at: string | null
+          created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: []
+      }
+      webhook_logs: {
+        Row: {
+          amount: number | null
+          created_at: string
+          details: Json | null
+          event_type: string
+          id: string
+          is_sandbox: boolean | null
+          order_id: string | null
+          payer_email: string | null
+          payment_id: string
+          payment_status: string
+          site_id: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          id?: string
+          is_sandbox?: boolean | null
+          order_id?: string | null
+          payer_email?: string | null
+          payment_id: string
+          payment_status: string
+          site_id?: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          id?: string
+          is_sandbox?: boolean | null
+          order_id?: string | null
+          payer_email?: string | null
+          payment_id?: string
+          payment_status?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_logs_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -527,9 +642,16 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "organizer" | "user"
-      event_status: "draft" | "published" | "cancelled" | "completed"
-      order_status: "pending" | "paid" | "cancelled" | "refunded"
+      app_role: "admin" | "producer" | "client" | "organizer"
+      event_status:
+        | "draft"
+        | "pending"
+        | "published"
+        | "rejected"
+        | "cancelled"
+        | "completed"
+      order_status: "pending" | "paid" | "failed" | "refunded" | "cancelled"
+      ticket_status: "active" | "used" | "cancelled" | "transferred"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -657,9 +779,17 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "organizer", "user"],
-      event_status: ["draft", "published", "cancelled", "completed"],
-      order_status: ["pending", "paid", "cancelled", "refunded"],
+      app_role: ["admin", "producer", "client", "organizer"],
+      event_status: [
+        "draft",
+        "pending",
+        "published",
+        "rejected",
+        "cancelled",
+        "completed",
+      ],
+      order_status: ["pending", "paid", "failed", "refunded", "cancelled"],
+      ticket_status: ["active", "used", "cancelled", "transferred"],
     },
   },
 } as const

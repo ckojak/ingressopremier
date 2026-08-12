@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.1",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://duasvoeejubywzoyldoa.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "premier-pass",
+      "version": "0.1.0",
+      "title": "Premier pass"
+    },
+    "tools": [
+      {
+        "name": "list_events",
+        "title": "Listar eventos",
+        "description": "Lista eventos publicados da PremierPass, com busca opcional por título, cidade ou categoria.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "search": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Texto para buscar no título do evento."
+            },
+            "city": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Filtrar por cidade."
+            },
+            "category": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Filtrar por categoria."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "Número máximo de eventos retornados."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_event",
+        "title": "Detalhes do evento",
+        "description": "Retorna os detalhes de um evento e os seus tipos de ingresso ativos, por id ou slug.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "event_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID (UUID) do evento."
+            },
+            "slug": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Slug do evento."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_tickets",
+        "title": "Meus ingressos",
+        "description": "Lista os ingressos do usuário autenticado, com o evento correspondente.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "description": "Número máximo de ingressos retornados."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_orders",
+        "title": "Meus pedidos",
+        "description": "Lista os pedidos de compra do usuário autenticado, com status de pagamento e valores.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Filtrar por status do pedido (ex.: pending, paid)."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "description": "Número máximo de pedidos retornados."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_events",
+        "title": "Eventos que eu organizo",
+        "description": "Lista os eventos criados pelo usuário autenticado (produtor/organizador), incluindo rascunhos e pendentes.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Filtrar por status do evento (ex.: draft, pending, published)."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "description": "Número máximo de eventos retornados."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

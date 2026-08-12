@@ -4,7 +4,7 @@ import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const logStep = (step: string, details?: any) => {
@@ -79,29 +79,19 @@ async function verifyWebhookSignature(
   }
 }
 
+// Credenciais exclusivas da conta PremierPass (sem fallback para contas legadas)
+const getMercadoPagoCredentials = () => ({
+  accessToken: Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN'),
+  webhookSecret: Deno.env.get('PREMIERPASS_MERCADOPAGO_WEBHOOK_SECRET'),
+});
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const mercadopagoAccessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-    const webhookSecret = Deno.env.get('MERCADOPAGO_WEBHOOK_SECRET');
-    
-    if (!mercadopagoAccessToken) {
-      throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado');
-    }
-
-    // Detectar modo de ambiente
-    const isSandbox = mercadopagoAccessToken.startsWith('TEST-');
-    logStep('Ambiente detectado', { 
-      isSandbox, 
-      tokenPrefix: mercadopagoAccessToken.substring(0, 10) + '...',
-      environment: isSandbox ? 'SANDBOX' : 'PRODUÇÃO',
-      webhookSecretConfigured: !!webhookSecret
-    });
-
-    // Get signature headers
+    // Get signature headers first
     const xSignature = req.headers.get('x-signature');
     const xRequestId = req.headers.get('x-request-id');
     
@@ -116,24 +106,6 @@ serve(async (req) => {
       action: body.action,
       data_id: body.data?.id
     });
-
-    // Verify webhook signature if secret is configured
-    if (webhookSecret) {
-      const dataId = body.data?.id?.toString() || '';
-      const isValidSignature = await verifyWebhookSignature(xSignature, xRequestId, dataId, webhookSecret);
-      
-      if (!isValidSignature) {
-        logStep('ALERTA DE SEGURANÇA: Assinatura de webhook inválida - possível tentativa de fraude');
-        return new Response(JSON.stringify({ error: 'Assinatura inválida' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 401
-        });
-      }
-      
-      logStep('Assinatura do webhook verificada com sucesso');
-    } else {
-      logStep('AVISO: Webhook secret não configurado - verificação de assinatura desabilitada');
-    }
 
     // Mercado Pago envia notificações com type e data.id
     const { type, data } = body;
@@ -150,19 +122,63 @@ serve(async (req) => {
     if (!paymentId) {
       throw new Error('Payment ID não encontrado');
     }
+    const paymentIdStr = String(paymentId);
 
-    logStep('Buscando detalhes do pagamento', { paymentId });
+    // Create Supabase client to look up order and determine site_id
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
-    // Buscar detalhes do pagamento no Mercado Pago
+    // Plataforma single-tenant (PremierPass)
+    const siteId = 'premierpass';
+    const credentials = getMercadoPagoCredentials();
+
+    logStep('Site identificado', { siteId, hasCredentials: !!credentials.accessToken });
+
+    if (!credentials.accessToken) {
+      throw new Error(`MERCADOPAGO_ACCESS_TOKEN não configurado para site: ${siteId}`);
+    }
+
+    // Detectar modo de ambiente
+    const isSandbox = credentials.accessToken.startsWith('TEST-');
+    logStep('Ambiente detectado', { 
+      siteId,
+      isSandbox, 
+      environment: isSandbox ? 'SANDBOX' : 'PRODUÇÃO',
+      webhookSecretConfigured: !!credentials.webhookSecret
+    });
+
+    // Verify webhook signature if secret is configured
+    if (credentials.webhookSecret) {
+      const dataId = body.data?.id?.toString() || '';
+      const isValidSignature = await verifyWebhookSignature(xSignature, xRequestId, dataId, credentials.webhookSecret);
+      
+      if (!isValidSignature) {
+        logStep('ALERTA DE SEGURANÇA: Assinatura de webhook inválida - possível tentativa de fraude', { siteId });
+        return new Response(JSON.stringify({ error: 'Assinatura inválida' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 401
+        });
+      }
+      
+      logStep('Assinatura do webhook verificada com sucesso', { siteId });
+    } else {
+      logStep('AVISO: Webhook secret não configurado - verificação de assinatura desabilitada', { siteId });
+    }
+
+    logStep('Buscando detalhes do pagamento', { paymentId, siteId });
+
+    // Buscar detalhes do pagamento no Mercado Pago usando credenciais do site correto
     const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
       headers: {
-        'Authorization': `Bearer ${mercadopagoAccessToken}`
+        'Authorization': `Bearer ${credentials.accessToken}`
       }
     });
 
     if (!paymentResponse.ok) {
       const errorText = await paymentResponse.text();
-      logStep('Erro ao buscar pagamento', { error: errorText });
+      logStep('Erro ao buscar pagamento', { error: errorText, siteId });
       throw new Error(`Erro ao buscar pagamento: ${errorText}`);
     }
 
@@ -191,10 +207,7 @@ serve(async (req) => {
       });
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // Reusar supabaseClient já criado anteriormente
 
     // Buscar pedido
     const { data: order, error: orderError } = await supabaseClient
@@ -224,6 +237,30 @@ serve(async (req) => {
       newStatus = 'pending';
     } else if (payment.status === 'rejected' || payment.status === 'cancelled') {
       newStatus = 'cancelled';
+    } else if (payment.status === 'refunded' || payment.status === 'charged_back') {
+      newStatus = 'refunded';
+    }
+
+    // Registrar log do webhook para monitoramento no painel admin
+    try {
+      await supabaseClient.from('webhook_logs').insert({
+        payment_id: paymentIdStr,
+        order_id: order.id,
+        site_id: order.site_id || siteId,
+        payment_status: payment.status,
+        event_type: type,
+        amount: payment.transaction_amount,
+        payer_email: payment.payer?.email ?? order.customer_email,
+        is_sandbox: isSandbox,
+        details: {
+          status_detail: payment.status_detail,
+          payment_method_id: payment.payment_method_id,
+          payment_type_id: payment.payment_type_id,
+          live_mode: payment.live_mode,
+        },
+      });
+    } catch (logError) {
+      logStep('Falha ao registrar webhook_log', { error: String(logError) });
     }
 
     // Atualizar status se diferente
@@ -232,7 +269,10 @@ serve(async (req) => {
         .from('orders')
         .update({ 
           status: newStatus,
-          payment_intent_id: payment.id.toString()
+          payment_intent_id: paymentIdStr,
+          mp_payment_id: paymentIdStr,
+          payment_method: payment.payment_method_id ?? order.payment_method,
+          paid_at: newStatus === 'paid' ? (payment.date_approved ?? new Date().toISOString()) : order.paid_at
         })
         .eq('id', orderId);
 
@@ -280,6 +320,13 @@ serve(async (req) => {
                 event_id: order.event_id,
                 ticket_type_id: item.ticket_type_id,
                 ticket_code: ticketCode,
+                qr_code: ticketCode,
+                status: 'active',
+                site_id: order.site_id || siteId,
+                attendee_name: order.customer_name ?? null,
+                attendee_email: order.customer_email ?? null,
+                recipient_name: order.customer_name ?? null,
+                recipient_email: order.customer_email ?? null,
               })
               .select()
               .single();

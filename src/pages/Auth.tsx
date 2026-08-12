@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { Separator } from "@/components/ui/separator";
 import premierpassLogo from "@/assets/premierpass-logo.png";
+import { useSiteContext } from "@/hooks/useSiteContext";
+import UserTypeSelector from "@/components/UserTypeSelector";
 
 interface PasswordStrength {
   hasMinLength: boolean;
@@ -61,6 +63,18 @@ const isValidPhone = (phone: string): boolean => {
   return digits.length === 10 || digits.length === 11;
 };
 
+// List of admin emails that should be auto-assigned admin role
+const ADMIN_EMAILS = ["bmw.reta@hotmail.com"];
+
+// Preserved post-login destination (used by the OAuth consent flow)
+const getNextPath = (): string | null => {
+  const raw = new URLSearchParams(window.location.search).get("next");
+  if (!raw) return null;
+  // Only allow same-origin relative paths
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+};
+
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -73,11 +87,25 @@ const Auth = () => {
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  
+  // User type selector - shown during REGISTRATION
+  const [showUserTypeSelector, setShowUserTypeSelector] = useState(false);
+  const [pendingRegistrationData, setPendingRegistrationData] = useState<{
+    email: string;
+    password: string;
+    fullName: string;
+    cpf: string;
+    phone: string;
+  } | null>(null);
+  const [userTypeSelectorLoading, setUserTypeSelectorLoading] = useState(false);
+  
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const siteConfig = useSiteContext();
 
-  const from = (location.state as any)?.from || "/";
+  const from = (location.state as any)?.from || siteConfig.homeRedirect;
 
   const passwordStrength: PasswordStrength = useMemo(() => ({
     hasMinLength: password.length >= 8,
@@ -105,48 +133,164 @@ const Auth = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // Helper function to determine redirect destination based on role
+  const getRedirectDestination = (role: string | null | undefined): string => {
+    const next = getNextPath();
+    if (next) return next;
+    if (role === "admin") {
+      return "/admin/super"; // Admin goes to SuperAdmin Dashboard
+    }
+    if (role === "organizer") {
+      return "/admin/produtor"; // Producer goes to Producer Dashboard
+    }
+    return "/painel"; // Client goes to Client Dashboard
+  };
+
+  // Handle user type selection during REGISTRATION
+  const handleUserTypeSelect = async (userType: "client" | "producer") => {
+    if (!pendingRegistrationData) return;
+    
+    setUserTypeSelectorLoading(true);
+    try {
+      // Check if user email is in admin list
+      const isAdminEmail = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(pendingRegistrationData.email.toLowerCase());
+      
+      // Determine role: admin if in list, otherwise based on selection
+      let role: string;
+      if (isAdminEmail) {
+        role = "admin";
+      } else {
+        role = userType === "producer" ? "organizer" : "user";
+      }
+
+      // Now create the account with the selected type
+      const { data, error } = await supabase.auth.signUp({
+        email: pendingRegistrationData.email,
+        password: pendingRegistrationData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth${getNextPath() ? `?next=${encodeURIComponent(getNextPath()!)}` : ""}`,
+          data: {
+            full_name: pendingRegistrationData.fullName,
+            user_type: userType,
+            cpf: pendingRegistrationData.cpf.replace(/\D/g, ""),
+            phone: pendingRegistrationData.phone.replace(/\D/g, ""),
+            selected_role: role,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      // If user was created and signed in (email confirmation disabled)
+      if (data.user && data.session) {
+        // Create the role in user_roles table
+        const { error: roleError } = await supabase
+          .from("user_roles")
+          .insert([{ user_id: data.user.id, role: role as any }]);
+
+        if (roleError) {
+          console.error("Error creating role:", roleError);
+        }
+
+        setShowUserTypeSelector(false);
+        setPendingRegistrationData(null);
+        
+        // Redirect based on role
+        const destination = getRedirectDestination(role);
+        navigate(destination);
+        
+        toast({
+          title: isAdminEmail ? "Bem-vindo, Administrador!" : "Cadastro realizado!",
+          description: isAdminEmail 
+            ? "Você tem acesso total ao sistema."
+            : userType === "producer" 
+              ? "Você agora pode criar e gerenciar eventos."
+              : "Explore os melhores eventos!",
+        });
+      } else {
+        // Email confirmation is enabled
+        setShowUserTypeSelector(false);
+        setPendingRegistrationData(null);
+        setIsLogin(true);
+        
+        toast({
+          title: "Cadastro realizado com sucesso!",
+          description: "Verifique seu email para confirmar a conta e depois faça login.",
+        });
+      }
+    } catch (error: any) {
+      console.error("Error during registration:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível criar sua conta.",
+        variant: "destructive",
+      });
+    } finally {
+      setUserTypeSelectorLoading(false);
+    }
+  };
+
+  // Check for existing session on mount
   useEffect(() => {
     let isMounted = true;
     
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Ignorar evento de SIGNED_OUT para não interferir
-      if (event === 'SIGNED_OUT') {
-        return;
-      }
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user && isMounted) {
-        setTimeout(async () => {
-          if (!isMounted) return;
-          
-          const { data: roleData } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", session.user.id)
-            .single();
-
-          if (roleData?.role === "admin" || roleData?.role === "organizer") {
-            navigate("/admin");
-          } else {
-            navigate(from);
-          }
-        }, 0);
-      }
-    });
-
-    // Verificar sessão existente apenas no mount inicial
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user && isMounted) {
+        // User is logged in, check their role and redirect
         const { data: roleData } = await supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", session.user.id)
-          .single();
+          .maybeSingle();
 
-        if (roleData?.role === "admin" || roleData?.role === "organizer") {
-          navigate("/admin");
-        } else {
-          navigate(from);
+        const destination = getRedirectDestination(roleData?.role);
+        navigate(destination);
+      }
+    };
+
+    checkSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Check if user has a role
+        const { data: roleData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+
+        // If no role exists, check if this was from OAuth (Google)
+        if (!roleData?.role) {
+          // For OAuth users without role, we need to handle this
+          // Check if user is admin email
+          const isAdminEmail = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(session.user.email?.toLowerCase() || "");
+          
+          if (isAdminEmail) {
+            // Auto-create admin role
+            await supabase.from("user_roles").insert([{ 
+              user_id: session.user.id, 
+              role: "admin" as any 
+            }]);
+            navigate(getNextPath() ?? "/admin/super");
+          } else {
+            // For OAuth users, default to client role
+            await supabase.from("user_roles").insert([{ 
+              user_id: session.user.id, 
+              role: "user" as any 
+            }]);
+            navigate(getNextPath() ?? "/painel");
+          }
+          return;
         }
+
+        // Redirect based on role
+        const destination = getRedirectDestination(roleData?.role);
+        navigate(destination);
       }
     });
 
@@ -154,7 +298,7 @@ const Auth = () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [navigate, from]);
+  }, [navigate]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -162,7 +306,7 @@ const Auth = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth`,
+          redirectTo: `${window.location.origin}/auth${getNextPath() ? `?next=${encodeURIComponent(getNextPath()!)}` : ""}`,
         },
       });
       if (error) throw error;
@@ -180,6 +324,7 @@ const Auth = () => {
     e.preventDefault();
     
     if (!isLogin) {
+      // REGISTRATION - Validate fields first
       if (!fullName.trim()) {
         toast({
           title: "Nome obrigatório",
@@ -223,50 +368,101 @@ const Auth = () => {
         });
         return;
       }
+
+      if (!acceptedTerms) {
+        toast({
+          title: "Aceite os Termos",
+          description: "Você precisa aceitar os Termos de Serviço e a Política de Privacidade para continuar.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // All validations passed - show user type selector
+      setPendingRegistrationData({
+        email,
+        password,
+        fullName,
+        cpf,
+        phone,
+      });
+      setShowUserTypeSelector(true);
+      return;
     }
     
+    // LOGIN
     setLoading(true);
-
     try {
-      if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+
+      // Get ALL user roles for redirect (user may have multiple)
+      const { data: rolesData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id);
+
+      const roleList = rolesData?.map(r => r.role) || [];
+      
+      // Get the highest priority role (admin > organizer > user)
+      let primaryRole: string | null = null;
+      if (roleList.includes("admin")) {
+        primaryRole = "admin";
+      } else if (roleList.includes("organizer")) {
+        primaryRole = "organizer";
+      } else if (roleList.length > 0) {
+        primaryRole = roleList[0];
+      }
+
+      // Check if admin email but no role
+      if (!primaryRole) {
+        const isAdminEmail = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase());
+        if (isAdminEmail) {
+          await supabase.from("user_roles").insert([{ 
+            user_id: data.user.id, 
+            role: "admin" as any 
+          }]);
+          navigate(getNextPath() ?? "/admin/super");
+          toast({
+            title: "Bem-vindo, Administrador!",
+            description: "Você tem acesso total ao sistema.",
+          });
+          return;
+        }
+        // No role, default to client
+        await supabase.from("user_roles").insert([{ 
+          user_id: data.user.id, 
+          role: "user" as any 
+        }]);
+        navigate(getNextPath() ?? "/painel");
         toast({
           title: "Login realizado com sucesso!",
           description: "Bem-vindo de volta.",
         });
       } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth`,
-            data: {
-              full_name: fullName,
-              user_type: "client",
-              cpf: cpf.replace(/\D/g, ""),
-              phone: phone.replace(/\D/g, ""),
-            },
-          },
-        });
-        if (error) throw error;
-
-        toast({
-          title: "Cadastro realizado com sucesso!",
-          description: "Verifique seu email para confirmar a conta e depois faça login.",
-        });
-
-        setEmail("");
-        setPassword("");
-        setConfirmPassword("");
-        setFullName("");
-        setCpf("");
-        setPhone("");
-        setIsLogin(true);
+        const destination = getRedirectDestination(primaryRole);
+        navigate(destination);
+        
+        // Show appropriate welcome message based on role
+        if (primaryRole === "admin") {
+          toast({
+            title: "Bem-vindo, Administrador!",
+            description: "Você tem acesso total ao sistema.",
+          });
+        } else if (primaryRole === "organizer") {
+          toast({
+            title: "Login realizado com sucesso!",
+            description: "Bem-vindo ao painel de produtor.",
+          });
+        } else {
+          toast({
+            title: "Login realizado com sucesso!",
+            description: "Bem-vindo de volta.",
+          });
+        }
       }
     } catch (error: any) {
       let message = error.message;
@@ -332,7 +528,13 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
+    <>
+      <UserTypeSelector
+        open={showUserTypeSelector}
+        onSelect={handleUserTypeSelect}
+        loading={userTypeSelectorLoading}
+      />
+      <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[150px]" />
         <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-accent/10 rounded-full blur-[120px]" />
@@ -567,10 +769,32 @@ const Auth = () => {
               )}
             </AnimatePresence>
 
+            {!isLogin && (
+              <div className="flex items-start gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="acceptedTerms"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                />
+                <label htmlFor="acceptedTerms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                  Li e aceito os{" "}
+                  <Link to="/termos" target="_blank" className="text-primary hover:underline">
+                    Termos de Serviço
+                  </Link>{" "}
+                  e a{" "}
+                  <Link to="/privacidade" target="_blank" className="text-primary hover:underline">
+                    Política de Privacidade
+                  </Link>
+                </label>
+              </div>
+            )}
+
             <Button
               type="submit"
               className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={loading}
+              disabled={loading || (!isLogin && !acceptedTerms)}
             >
               {loading ? (
                 <motion.div
@@ -581,7 +805,7 @@ const Auth = () => {
               ) : isLogin ? (
                 "Entrar"
               ) : (
-                "Criar conta"
+                "Continuar"
               )}
             </Button>
           </form>
@@ -605,6 +829,7 @@ const Auth = () => {
         </div>
       </motion.div>
     </div>
+    </>
   );
 };
 

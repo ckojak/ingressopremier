@@ -29,6 +29,7 @@ import {
   Cell,
 } from "recharts";
 import * as XLSX from "xlsx";
+import { useSiteContext } from "@/hooks/useSiteContext";
 
 type Event = Tables<"events">;
 
@@ -61,6 +62,7 @@ const Reports = () => {
     avgTicketPrice: 0,
   });
   const { toast } = useToast();
+  const { getStatsSiteIds, siteId } = useSiteContext();
 
   const fetchData = async () => {
     setLoading(true);
@@ -68,13 +70,22 @@ const Reports = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch user events
-      const { data: eventsData } = await supabase
+      // Get site_ids for stats (isolated per site)
+      const statsSiteIds = getStatsSiteIds();
+
+      // Fetch user events and filter by site in memory
+      const { data: allEventsData } = await supabase
         .from("events")
         .select("*")
         .eq("organizer_id", user.id);
       
-      setEvents(eventsData || []);
+      // Filter by site_id in memory
+      const eventsData = (allEventsData || []).filter((event: any) => {
+        const eventSiteId = event.site_id || 'premierpass';
+        return statsSiteIds.includes(eventSiteId);
+      });
+      
+      setEvents(eventsData);
 
       // Calculate date range
       const endDate = new Date();
@@ -84,18 +95,27 @@ const Reports = () => {
         ? subDays(endDate, 90)
         : startOfMonth(new Date(new Date().getFullYear(), 0, 1)); // Year
 
-      // Fetch orders
+      // Fetch orders - only for events that belong to the current site
+      const eventIds = eventsData.map((e: any) => e.id);
+      
+      if (eventIds.length === 0) {
+        setSalesData([]);
+        setEventSales([]);
+        setTotals({ revenue: 0, tickets: 0, orders: 0, avgTicketPrice: 0 });
+        setLoading(false);
+        return;
+      }
+
       let ordersQuery = supabase
         .from("orders")
         .select("*, order_items(*, ticket_types(*)), events!inner(*)")
         .eq("status", "paid")
         .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString());
+        .lte("created_at", endDate.toISOString())
+        .in("event_id", eventIds);
 
       if (selectedEvent !== "all") {
         ordersQuery = ordersQuery.eq("event_id", selectedEvent);
-      } else {
-        ordersQuery = ordersQuery.in("event_id", eventsData?.map(e => e.id) || []);
       }
 
       const { data: ordersData } = await ordersQuery;

@@ -13,6 +13,7 @@ import { Tables } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useSiteContext } from "@/hooks/useSiteContext";
 
 type TicketType = Tables<"ticket_types">;
 type Event = Tables<"events">;
@@ -28,6 +29,7 @@ const SERVICE_FEE_PERCENTAGE = 0.08; // 8% taxa de serviço
 
 const Cart = () => {
   const navigate = useNavigate();
+  const { siteId } = useSiteContext();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -304,6 +306,7 @@ const Cart = () => {
       const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
         body: {
           event_id: firstEventId,
+          site_id: siteId, // Send site_id for multi-tenant payment isolation
           items: items.map(item => ({
             ticket_type_id: item.ticketType.id,
             quantity: item.quantity,
@@ -376,6 +379,7 @@ const Cart = () => {
       const { data, error } = await supabase.functions.invoke("create-pix-payment", {
         body: {
           event_id: firstEventId,
+          site_id: siteId, // Send site_id for multi-tenant payment isolation
           items: items.map(item => ({
             ticket_type_id: item.ticketType.id,
             quantity: item.quantity,
@@ -427,7 +431,7 @@ const Cart = () => {
           <Button
             variant="ghost"
             onClick={() => navigate(-1)}
-            className="mb-6 gap-2"
+            className="mb-6 gap-2 hover:bg-primary/10 hover:text-primary transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Continuar comprando
@@ -439,19 +443,22 @@ const Cart = () => {
           >
             <h1 className="text-3xl font-bold text-foreground mb-8">
               Meu <span className="text-gradient">Carrinho</span>
+              <ShoppingCart className="w-8 h-8 text-primary inline-block ml-3" />
             </h1>
 
             {cartItems.length === 0 ? (
-              <Card className="bg-card border-border">
+              <Card className="bg-card/80 backdrop-blur-sm border-border">
                 <CardContent className="py-16 text-center">
-                  <ShoppingCart className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+                  <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                    <ShoppingCart className="w-12 h-12 text-primary/50" />
+                  </div>
                   <h2 className="text-xl font-semibold text-foreground mb-2">
                     Seu carrinho está vazio
                   </h2>
                   <p className="text-muted-foreground mb-6">
                     Explore nossos eventos e adicione ingressos ao seu carrinho
                   </p>
-                  <Button asChild>
+                  <Button asChild className="gradient-primary shadow-lg shadow-primary/20">
                     <Link to="/eventos">Ver eventos</Link>
                   </Button>
                 </CardContent>
@@ -467,7 +474,7 @@ const Cart = () => {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <Card className="bg-card border-border">
+                      <Card className="bg-card/80 backdrop-blur-sm border-border hover:border-primary/30 transition-colors">
                         <CardContent className="p-4">
                           <div className="flex gap-4">
                             {item.event.image_url ? (
@@ -533,7 +540,7 @@ const Cart = () => {
                   ))}
 
                   {/* Coupon Section */}
-                  <Card className="bg-card border-border">
+                  <Card className="bg-card/80 backdrop-blur-sm border-border">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <Tag className="w-5 h-5 text-primary" />
@@ -594,9 +601,12 @@ const Cart = () => {
 
                 {/* Order Summary */}
                 <div>
-                  <Card className="bg-card border-border sticky top-24">
-                    <CardHeader>
-                      <CardTitle className="text-foreground">Resumo do Pedido</CardTitle>
+                  <Card className="bg-card/80 backdrop-blur-sm border-border sticky top-24 shadow-xl shadow-primary/5">
+                    <CardHeader className="border-b border-border/50 bg-gradient-to-r from-primary/10 to-transparent">
+                      <CardTitle className="text-foreground flex items-center gap-2">
+                        <Ticket className="w-5 h-5 text-primary" />
+                        Resumo do Pedido
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
@@ -635,16 +645,16 @@ const Cart = () => {
 
                       <Separator />
 
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-foreground">Total</span>
-                        <span className="text-2xl font-bold text-primary">
+                      <div className="flex justify-between items-center pt-2">
+                        <span className="font-semibold text-foreground text-lg">Total</span>
+                        <span className="text-2xl font-bold text-gradient">
                           R$ {total.toFixed(2)}
                         </span>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="space-y-3 pt-2">
                         <Button
-                          className="w-full gap-2"
+                          className="w-full gap-2 bg-secondary hover:bg-secondary/80 min-h-[48px] text-base"
                           size="lg"
                           onClick={handlePixCheckout}
                           disabled={processing || processingPix}
@@ -655,7 +665,7 @@ const Cart = () => {
                         </Button>
 
                         <Button
-                          className="w-full gap-2"
+                          className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow min-h-[52px] text-base font-semibold"
                           size="lg"
                           onClick={handleCheckout}
                           disabled={processing || processingPix}
@@ -665,9 +675,9 @@ const Cart = () => {
                         </Button>
                       </div>
 
-                      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                        <Lock className="w-3 h-3" />
-                        Pagamento 100% seguro
+                      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
+                        <Lock className="w-3 h-3 text-primary" />
+                        <span>Pagamento 100% seguro</span>
                       </div>
                     </CardContent>
                   </Card>

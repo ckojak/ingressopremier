@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { QrCode, Check, X, Search, Ticket, Calendar, User } from "lucide-react";
+import { QrCode, Check, X, Search, Ticket, Calendar, User, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,11 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import QRCodeScanner from "@/components/QRCodeScanner";
 
 type Event = Tables<"events">;
 type TicketWithDetails = {
@@ -248,7 +250,7 @@ const CheckIn = () => {
             </CardContent>
           </Card>
 
-          {/* Check-in Form */}
+          {/* Check-in Form with Tabs */}
           <Card className="bg-card border-border">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -257,29 +259,52 @@ const CheckIn = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleCheckIn} className="space-y-4">
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      ref={inputRef}
-                      placeholder="Digite ou escaneie o código do ingresso"
-                      value={ticketCode}
-                      onChange={(e) => setTicketCode(e.target.value.toUpperCase())}
-                      className="pl-10 h-12 text-lg uppercase"
-                      autoFocus
-                    />
-                  </div>
-                  <Button 
-                    type="submit" 
-                    size="lg" 
-                    className="h-12 px-8"
-                    disabled={checking || !ticketCode.trim()}
-                  >
-                    {checking ? "Verificando..." : "Validar"}
-                  </Button>
-                </div>
-              </form>
+              <Tabs defaultValue="manual" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  <TabsTrigger value="manual" className="flex items-center gap-2">
+                    <Search className="w-4 h-4" />
+                    Código Manual
+                  </TabsTrigger>
+                  <TabsTrigger value="camera" className="flex items-center gap-2">
+                    <Camera className="w-4 h-4" />
+                    Escanear QR Code
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="manual">
+                  <form onSubmit={handleCheckIn} className="space-y-4">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <Input
+                          ref={inputRef}
+                          placeholder="Digite o código do ingresso"
+                          value={ticketCode}
+                          onChange={(e) => setTicketCode(e.target.value.toUpperCase())}
+                          className="pl-10 h-12 text-lg uppercase"
+                          autoFocus
+                        />
+                      </div>
+                      <Button 
+                        type="submit" 
+                        size="lg" 
+                        className="h-12 px-8"
+                        disabled={checking || !ticketCode.trim()}
+                      >
+                        {checking ? "Verificando..." : "Validar"}
+                      </Button>
+                    </div>
+                  </form>
+                </TabsContent>
+                
+                <TabsContent value="camera">
+                  <QRCodeScanner 
+                    eventId={selectedEvent}
+                    onSuccess={() => fetchRecentCheckIns()}
+                    inline
+                  />
+                </TabsContent>
+              </Tabs>
 
               {/* Result Display */}
               {checkResult && lastCheckedTicket && (

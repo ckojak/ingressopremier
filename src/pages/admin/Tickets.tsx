@@ -37,6 +37,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Tables } from "@/integrations/supabase/types";
 import { z } from "zod";
 import { formatCurrencyInput, parseCurrencyBRL } from "@/lib/currency";
+import { useInvalidateEvents } from "@/hooks/useEvents";
 
 const ticketSchema = z.object({
   event_id: z.string().uuid("Evento inválido"),
@@ -62,6 +63,7 @@ const Tickets = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingTicket, setEditingTicket] = useState<TicketType | null>(null);
   const { toast } = useToast();
+  const { invalidateAll } = useInvalidateEvents();
 
   const [formData, setFormData] = useState({
     event_id: "",
@@ -176,6 +178,7 @@ const Tickets = () => {
       setEditingTicket(null);
       resetForm();
       fetchData();
+      invalidateAll(); // Invalidate cache for public pages
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -197,6 +200,7 @@ const Tickets = () => {
       if (error) throw error;
       toast({ title: "Tipo de ingresso excluído!" });
       fetchData();
+      invalidateAll(); // Invalidate cache for public pages
     } catch (error: any) {
       toast({
         title: "Erro ao excluir",

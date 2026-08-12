@@ -40,6 +40,8 @@ import { z } from "zod";
 import ImageUpload from "@/components/ImageUpload";
 import { useIBGEStates, useIBGECities } from "@/hooks/useIBGE";
 import { EVENT_CATEGORIES } from "@/lib/constants";
+import { useSiteContext, getCurrentSiteConfig } from "@/hooks/useSiteContext";
+import { useInvalidateEvents } from "@/hooks/useEvents";
 
 const eventSchema = z.object({
   title: z.string().min(1, "Título é obrigatório").max(200, "Título deve ter no máximo 200 caracteres"),
@@ -55,13 +57,14 @@ const eventSchema = z.object({
   image_url: z.string().url("URL da imagem inválida").optional().or(z.literal("")),
   website: z.string().url("URL do site inválida").optional().or(z.literal("")),
   contact: z.string().max(200, "Contato deve ter no máximo 200 caracteres").optional().or(z.literal("")),
-  status: z.enum(["draft", "published", "cancelled", "completed"]),
+  status: z.enum(["draft", "pending", "published", "cancelled", "completed"]),
 });
 
 type Event = Tables<"events">;
 
 const statusColors: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
+  pending: "bg-yellow-500/20 text-yellow-400",
   published: "bg-green-500/20 text-green-400",
   cancelled: "bg-destructive/20 text-destructive",
   completed: "bg-blue-500/20 text-blue-400",
@@ -69,19 +72,27 @@ const statusColors: Record<string, string> = {
 
 const statusLabels: Record<string, string> = {
   draft: "Rascunho",
+  pending: "Aguardando Aprovação",
   published: "Publicado",
   cancelled: "Cancelado",
   completed: "Concluído",
 };
 
+// List of admin emails
+const ADMIN_EMAILS = ["bmw.kojak@gmail.com", "bmw.reta@hotmail.com"];
+
 const Events = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
+  const { invalidateAll } = useInvalidateEvents();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -97,7 +108,7 @@ const Events = () => {
     image_url: "",
     website: "",
     contact: "",
-    status: "draft" as "draft" | "published" | "cancelled" | "completed",
+    status: "draft" as "draft" | "pending" | "published" | "cancelled" | "completed",
   });
 
   const { states, loading: statesLoading } = useIBGEStates();
@@ -108,11 +119,31 @@ const Events = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
+      // Check all user roles and get highest priority
+      const { data: rolesData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+      
+      // Get highest priority role (admin > organizer > user)
+      const roles = rolesData?.map(r => r.role) || [];
+      const highestRole = roles.includes("admin") ? "admin" 
+        : roles.includes("organizer") ? "organizer" 
+        : roles[0] || null;
+      
+      setUserRole(highestRole);
+
+      // If admin, fetch all events. If organizer, fetch only their events
+      let query = supabase
         .from("events")
         .select("*")
-        .eq("organizer_id", user.id)
         .order("created_at", { ascending: false });
+      
+      if (highestRole !== "admin") {
+        query = query.eq("organizer_id", user.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setEvents(data || []);
@@ -164,7 +195,7 @@ const Events = () => {
             image_url: validatedData.image_url || null,
             website: validatedData.website || null,
             contact: validatedData.contact || null,
-            status: validatedData.status,
+            status: validatedData.status as any,
           })
           .eq("id", editingEvent.id);
 
@@ -173,7 +204,7 @@ const Events = () => {
       } else {
         const { error } = await supabase
           .from("events")
-          .insert({
+          .insert([{
             title: validatedData.title,
             description: validatedData.description || null,
             short_description: validatedData.short_description || null,
@@ -187,9 +218,9 @@ const Events = () => {
             image_url: validatedData.image_url || null,
             website: validatedData.website || null,
             contact: validatedData.contact || null,
-            status: validatedData.status,
+            status: validatedData.status as any,
             organizer_id: user.id,
-          });
+          }]);
 
         if (error) throw error;
         toast({ title: "Evento criado com sucesso!" });
@@ -199,6 +230,7 @@ const Events = () => {
       setEditingEvent(null);
       resetForm();
       fetchEvents();
+      invalidateAll(); // Invalidate cache for public pages
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -220,6 +252,7 @@ const Events = () => {
       if (error) throw error;
       toast({ title: "Evento excluído com sucesso!" });
       fetchEvents();
+      invalidateAll(); // Invalidate cache for public pages
     } catch (error: any) {
       toast({
         title: "Erro ao excluir",
@@ -232,21 +265,87 @@ const Events = () => {
   };
 
   const handlePublish = async (eventId: string) => {
+    // For admins, publish directly. For organizers, submit for approval.
+    const isAdmin = userRole === "admin";
+    const currentStatus = events.find(e => e.id === eventId)?.status;
+    
+    // If admin and event is pending or draft, publish directly
+    const newStatus = isAdmin ? "published" : "pending";
+    
+    setSubmitting(true);
     try {
       const { error } = await supabase
         .from("events")
-        .update({ status: "published" })
+        .update({ status: newStatus as any })
         .eq("id", eventId);
 
       if (error) throw error;
-      toast({ title: "Evento publicado com sucesso!" });
+      
+      const event = events.find(e => e.id === eventId);
+      
+      if (newStatus === "pending") {
+        // Send notification to admins
+        if (event) {
+          try {
+            await supabase.functions.invoke("send-notification", {
+              body: {
+                type: "event_submitted",
+                data: {
+                  eventId: event.id,
+                  eventTitle: event.title,
+                  adminEmails: ADMIN_EMAILS,
+                },
+              },
+            });
+          } catch (emailError) {
+            console.error("Error sending notification:", emailError);
+          }
+        }
+        
+        toast({ 
+          title: "Evento enviado para aprovação!",
+          description: "Seus dados serão verificados e o evento será publicado em até 2 horas.",
+        });
+      } else {
+        // Event was published - send push notifications to users
+        if (event) {
+          try {
+            const response = await supabase.functions.invoke("send-push-notification", {
+              body: {
+                type: "new_event",
+                eventId: event.id,
+                eventTitle: event.title,
+                eventDate: event.start_date,
+                eventImage: event.image_url,
+              },
+            });
+            
+            // Also trigger a browser notification if user has permission
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('🎉 Novo Evento Publicado!', {
+                body: `${event.title} está disponível! Garanta seu ingresso.`,
+                icon: '/favicon.ico',
+              });
+            }
+          } catch (pushError) {
+            console.error("Error sending push notification:", pushError);
+          }
+        }
+        
+        toast({ title: "Evento publicado com sucesso!" });
+      }
+      
       fetchEvents();
+      invalidateAll(); // Invalidate cache for public pages
     } catch (error: any) {
+      console.error("Error publishing event:", error);
       toast({
         title: "Erro ao publicar",
-        description: error.message,
+        description: error.message || "Tente novamente mais tarde.",
         variant: "destructive",
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -266,7 +365,7 @@ const Events = () => {
       image_url: event.image_url || "",
       website: (event as any).website || "",
       contact: (event as any).contact || "",
-      status: event.status || "draft",
+      status: (event.status === "rejected" ? "draft" : event.status) || "draft",
     });
     setDialogOpen(true);
   };
@@ -290,32 +389,99 @@ const Events = () => {
     });
   };
 
-  const filteredEvents = events.filter((event) =>
-    event.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredEvents = events.filter((event) => {
+    const matchesSearch = event.title.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === "all" || event.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Check if user is organizer (not admin) to show pending notice
+  const isOrganizer = userRole === "organizer";
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Eventos</h1>
-          <p className="text-muted-foreground mt-1">
-            Gerencie seus eventos
-          </p>
+  <div className="space-y-6">
+    {/* Approval Notice for Organizers */}
+    {isOrganizer && (
+      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <div className="bg-yellow-500/20 rounded-full p-2">
+            <Calendar className="w-5 h-5 text-yellow-400" />
+          </div>
+          <div>
+            <h3 className="text-yellow-400 font-semibold">Aviso sobre aprovação de eventos</h3>
+            <p className="text-muted-foreground text-sm mt-1">
+              Os dados do seu evento serão verificados pela nossa equipe e publicados em até <strong className="text-yellow-400">2 horas</strong> após o envio para aprovação.
+            </p>
+          </div>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) {
-            setEditingEvent(null);
-            resetForm();
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              Novo Evento
-            </Button>
-          </DialogTrigger>
+      </div>
+    )}
+    
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h1 className="text-3xl font-bold text-foreground">Eventos</h1>
+        <p className="text-muted-foreground mt-1">
+          Gerencie seus eventos
+        </p>
+      </div>
+      <Dialog open={dialogOpen} onOpenChange={(open) => {
+        setDialogOpen(open);
+        if (!open) {
+          setEditingEvent(null);
+          resetForm();
+        }
+      }}>
+        <DialogTrigger asChild>
+          <Button className="gap-2">
+            <Plus className="w-4 h-4" />
+            Novo Evento
+          </Button>
+        </DialogTrigger>
+        
+    {/* Status Filter + Search */}
+    <div className="flex flex-col sm:flex-row gap-3 items-center">
+      <div className="relative flex-1 sm:flex-none w-full sm:w-64">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar eventos..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+      <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <SelectTrigger className="w-full sm:w-48">
+          <SelectValue placeholder="Filtrar por status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os status</SelectItem>
+          <SelectItem value="draft">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-muted-foreground" />
+              Rascunhos
+            </span>
+          </SelectItem>
+          <SelectItem value="pending">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-yellow-400" />
+              Pendentes
+            </span>
+          </SelectItem>
+          <SelectItem value="published">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-400" />
+              Publicados
+            </span>
+          </SelectItem>
+          <SelectItem value="cancelled">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-destructive" />
+              Cancelados
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
           <DialogContent 
             className="max-w-2xl max-h-[90vh] overflow-y-auto"
             onInteractOutside={(e) => e.preventDefault()}
@@ -560,9 +726,27 @@ const Events = () => {
                           size="sm" 
                           onClick={() => handlePublish(event.id)}
                           className="gap-1"
+                          disabled={submitting}
                         >
                           <Send className="w-4 h-4" />
-                          Publicar
+                          {userRole === "admin" ? "Publicar" : "Enviar para Aprovação"}
+                        </Button>
+                      )}
+                      {(event.status as string) === "pending" && userRole !== "admin" && (
+                        <Badge className="bg-yellow-500/20 text-yellow-400 px-3 py-1">
+                          ⏳ Aguardando aprovação
+                        </Badge>
+                      )}
+                      {(event.status as string) === "pending" && userRole === "admin" && (
+                        <Button 
+                          variant="default" 
+                          size="sm" 
+                          onClick={() => handlePublish(event.id)}
+                          className="gap-1"
+                          disabled={submitting}
+                        >
+                          <Send className="w-4 h-4" />
+                          Aprovar e Publicar
                         </Button>
                       )}
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(event)}>

@@ -8,12 +8,13 @@ const corsHeaders = {
 };
 
 interface NotificationRequest {
-  type: "transfer_accepted" | "transfer_rejected" | "coupon_applied";
+  type: "transfer_accepted" | "transfer_rejected" | "coupon_applied" | "event_submitted" | "event_approved" | "event_rejected";
   data: {
     transferId?: string;
     ticketCode?: string;
     eventTitle?: string;
     eventDate?: string;
+    eventId?: string;
     recipientEmail?: string;
     recipientName?: string;
     senderName?: string;
@@ -22,6 +23,10 @@ interface NotificationRequest {
     discountAmount?: number;
     customerEmail?: string;
     customerName?: string;
+    producerEmail?: string;
+    producerName?: string;
+    adminEmails?: string[];
+    rejectionReason?: string;
   };
 }
 
@@ -195,6 +200,195 @@ const handler = async (req: Request): Promise<Response> => {
                 
                 <p style="color: #a1a1aa; font-size: 14px; line-height: 1.6; margin: 24px 0; text-align: center;">
                   Continue aproveitando os melhores eventos com a PremierPass! 🎉
+                </p>
+                
+                <p style="color: #52525b; font-size: 12px; text-align: center; margin-top: 32px;">
+                  © ${new Date().getFullYear()} PremierPass. Todos os direitos reservados.
+                </p>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+    } else if (type === "event_submitted") {
+      // Send to all admins
+      const adminEmails = data.adminEmails || [];
+      
+      for (const adminEmail of adminEmails) {
+        const submitEmailHtml = `
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #0a0a0a; -webkit-font-smoothing: antialiased;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+              <div style="background: linear-gradient(135deg, #06b6d4, #0891b2); padding: 2px; border-radius: 16px;">
+                <div style="background-color: #18181b; border-radius: 14px; padding: 40px;">
+                  
+                  <!-- Logo -->
+                  <div style="text-align: center; margin-bottom: 32px;">
+                    <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Premier<span style="color: #ec4899;">Pass</span></h1>
+                  </div>
+
+                  <!-- Header -->
+                  <div style="text-align: center; margin-bottom: 32px;">
+                    <div style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(234, 179, 8, 0.1)); border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 20px; line-height: 80px;">
+                      <span style="font-size: 40px;">📋</span>
+                    </div>
+                    <h2 style="color: #eab308; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+                      Novo Evento para Aprovação
+                    </h2>
+                  </div>
+                  
+                  <p style="color: #d4d4d8; font-size: 16px; line-height: 1.7; margin: 0 0 16px 0;">
+                    Um novo evento foi enviado para aprovação:
+                  </p>
+                  
+                  <div style="background-color: #27272a; border-radius: 12px; padding: 24px; margin: 24px 0; border: 1px solid #3f3f46;">
+                    <h3 style="color: #06b6d4; font-size: 18px; margin: 0 0 8px 0; font-weight: 600;">${data.eventTitle}</h3>
+                  </div>
+                  
+                  <p style="color: #a1a1aa; font-size: 14px; line-height: 1.6; margin: 24px 0; text-align: center;">
+                    Acesse o painel administrativo para revisar e aprovar este evento.
+                  </p>
+                  
+                  <p style="color: #52525b; font-size: 12px; text-align: center; margin-top: 32px;">
+                    © ${new Date().getFullYear()} PremierPass. Todos os direitos reservados.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+        
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${RESEND_API_KEY}`,
+          },
+          body: JSON.stringify({
+            from: "PremierPass <onboarding@resend.dev>",
+            to: [adminEmail],
+            subject: "📋 Novo evento aguardando aprovação",
+            html: submitEmailHtml,
+          }),
+        });
+      }
+      
+      return new Response(
+        JSON.stringify({ success: true, message: "Admin notifications sent" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        }
+      );
+    } else if (type === "event_approved") {
+      toEmail = data.producerEmail!;
+      emailSubject = "✅ Seu evento foi aprovado!";
+      emailHtml = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #0a0a0a; -webkit-font-smoothing: antialiased;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <div style="background: linear-gradient(135deg, #06b6d4, #0891b2); padding: 2px; border-radius: 16px;">
+              <div style="background-color: #18181b; border-radius: 14px; padding: 40px;">
+                
+                <!-- Logo -->
+                <div style="text-align: center; margin-bottom: 32px;">
+                  <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Premier<span style="color: #ec4899;">Pass</span></h1>
+                </div>
+
+                <!-- Header -->
+                <div style="text-align: center; margin-bottom: 32px;">
+                  <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1)); border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 20px; line-height: 80px;">
+                    <span style="font-size: 40px;">🎉</span>
+                  </div>
+                  <h2 style="color: #10b981; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+                    Evento Aprovado!
+                  </h2>
+                </div>
+                
+                <p style="color: #d4d4d8; font-size: 16px; line-height: 1.7; margin: 0 0 16px 0;">
+                  Olá <strong style="color: #ffffff;">${data.producerName || 'produtor'}</strong>,
+                </p>
+                
+                <p style="color: #d4d4d8; font-size: 16px; line-height: 1.7; margin: 0 0 24px 0;">
+                  Seu evento foi aprovado e está disponível para venda de ingressos!
+                </p>
+                
+                <div style="background-color: #27272a; border-radius: 12px; padding: 24px; margin: 24px 0; border: 1px solid #3f3f46;">
+                  <h3 style="color: #06b6d4; font-size: 18px; margin: 0 0 8px 0; font-weight: 600;">${data.eventTitle}</h3>
+                </div>
+                
+                <p style="color: #a1a1aa; font-size: 14px; line-height: 1.6; margin: 24px 0; text-align: center;">
+                  Acesse seu painel para configurar os tipos de ingressos e acompanhar as vendas.
+                </p>
+                
+                <p style="color: #52525b; font-size: 12px; text-align: center; margin-top: 32px;">
+                  © ${new Date().getFullYear()} PremierPass. Todos os direitos reservados.
+                </p>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+    } else if (type === "event_rejected") {
+      toEmail = data.producerEmail!;
+      emailSubject = "❌ Seu evento não foi aprovado";
+      emailHtml = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #0a0a0a; -webkit-font-smoothing: antialiased;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <div style="background: linear-gradient(135deg, #06b6d4, #0891b2); padding: 2px; border-radius: 16px;">
+              <div style="background-color: #18181b; border-radius: 14px; padding: 40px;">
+                
+                <!-- Logo -->
+                <div style="text-align: center; margin-bottom: 32px;">
+                  <h1 style="color: #06b6d4; font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -1px;">Premier<span style="color: #ec4899;">Pass</span></h1>
+                </div>
+
+                <!-- Header -->
+                <div style="text-align: center; margin-bottom: 32px;">
+                  <div style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1)); border-radius: 50%; width: 80px; height: 80px; margin: 0 auto 20px; line-height: 80px;">
+                    <span style="font-size: 40px;">😔</span>
+                  </div>
+                  <h2 style="color: #ef4444; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+                    Evento Não Aprovado
+                  </h2>
+                </div>
+                
+                <p style="color: #d4d4d8; font-size: 16px; line-height: 1.7; margin: 0 0 16px 0;">
+                  Olá <strong style="color: #ffffff;">${data.producerName || 'produtor'}</strong>,
+                </p>
+                
+                <p style="color: #d4d4d8; font-size: 16px; line-height: 1.7; margin: 0 0 24px 0;">
+                  Infelizmente seu evento não foi aprovado.
+                </p>
+                
+                <div style="background-color: #27272a; border-radius: 12px; padding: 24px; margin: 24px 0; border: 1px solid #3f3f46;">
+                  <h3 style="color: #06b6d4; font-size: 18px; margin: 0 0 16px 0; font-weight: 600;">${data.eventTitle}</h3>
+                  ${data.rejectionReason ? `
+                  <p style="color: #a1a1aa; font-size: 14px; margin: 0;"><strong>Motivo:</strong> ${data.rejectionReason}</p>
+                  ` : ''}
+                </div>
+                
+                <p style="color: #a1a1aa; font-size: 14px; line-height: 1.6; margin: 24px 0; text-align: center;">
+                  Você pode editar as informações do evento e enviar novamente para aprovação.
                 </p>
                 
                 <p style="color: #52525b; font-size: 12px; text-align: center; margin-top: 32px;">

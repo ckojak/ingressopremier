@@ -8,8 +8,9 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEO 
-        title="PremierPass - Ingressos para os Melhores Eventos"
+        title="Ingressos para os Melhores Eventos"
         description="Compre ingressos para os melhores eventos com segurança e praticidade. PremierPass - Sua porta de entrada para experiências únicas."
+        url="https://premierpass.com.br/"
       />
       <Header />
       <main>

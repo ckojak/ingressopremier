@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useSiteContext } from "@/hooks/useSiteContext";
 
 interface Order {
   id: string;
@@ -52,6 +53,7 @@ const Sales = () => {
     totalOrders: 0,
     paidOrders: 0,
   });
+  const { getStatsSiteIds } = useSiteContext();
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -59,18 +61,27 @@ const Sales = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        // Get site_ids for stats (isolated per site)
+        const statsSiteIds = getStatsSiteIds();
+
         const { data, error } = await supabase
           .from("orders")
-          .select("*, events!inner(title, organizer_id)")
+          .select("*, events!inner(title, organizer_id, site_id)")
           .eq("events.organizer_id", user.id)
           .order("created_at", { ascending: false });
 
         if (error) throw error;
 
-        const formattedOrders = data?.map(order => ({
+        // Filter by site_id in memory (since site_id may not be in generated types)
+        const filteredData = (data || []).filter((order: any) => {
+          const eventSiteId = order.events?.site_id || 'premierpass';
+          return statsSiteIds.includes(eventSiteId);
+        });
+
+        const formattedOrders = filteredData.map((order: any) => ({
           ...order,
           event: { title: order.events?.title || "" }
-        })) || [];
+        }));
 
         setOrders(formattedOrders);
 
