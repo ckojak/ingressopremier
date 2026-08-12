@@ -16,7 +16,7 @@ const Footer = () => {
             <Link to="/" className="flex items-center gap-3 mb-6 group">
               <img 
                 src={premierpassLogo} 
-                alt="PremierPass" 
+                alt="PremierPass Ingressos" 
                 className="w-14 h-14 rounded-xl object-cover transition-all duration-300 group-hover:scale-110 shadow-subtle"
               />
               <div>

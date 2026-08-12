@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -129,6 +130,11 @@ const Events = () => {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
+      <SEO
+        title="Eventos e Shows"
+        description="Descubra todos os eventos, shows, festivais e festas com ingressos à venda no PremierPass. Filtre por data, cidade e categoria e compre online."
+        url="https://premierpass.com.br/eventos"
+      />
       {/* Background decorations */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[150px] pointer-events-none" />
       <div className="absolute bottom-1/3 left-0 w-[400px] h-[400px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />

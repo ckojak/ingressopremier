@@ -1,0 +1,16 @@
+# PremierPass
+
+> Plataforma brasileira de venda de ingressos online para shows, festivais, teatro, esportes e eventos premium, com ingresso digital e pagamento seguro via Pix ou cartão.
+
+## Pages
+
+- [Início](/): Eventos em destaque e busca de ingressos.
+- [Eventos](/eventos): Lista completa de eventos com filtros por data, cidade e categoria.
+- [Sobre](/sobre): Quem somos e como funciona a PremierPass.
+- [Suporte](/suporte): Perguntas frequentes e canais de atendimento.
+- [Meia-entrada](/meia-entrada): Regras da Lei da Meia-Entrada.
+
+## Optional
+
+- [Termos de Serviço](/termos): Condições de uso da plataforma.
+- [Política de Privacidade](/privacidade): Tratamento de dados pessoais.

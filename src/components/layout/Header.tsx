@@ -172,7 +172,7 @@ const Header = () => {
             <div className="relative">
               <img 
                 src={premierpassLogo} 
-                alt="PremierPass" 
+                alt="PremierPass Ingressos" 
                 className="w-12 h-12 md:w-14 md:h-14 rounded-xl object-cover transition-all duration-300 group-hover:scale-110 shadow-subtle"
               />
               <div className="absolute inset-0 rounded-xl bg-primary/20 opacity-0 group-hover:opacity-100 transition-all duration-300 blur-lg" />
