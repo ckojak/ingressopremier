@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { normalizeTicketCode } from "@/lib/ticket-code";
 
 interface QRCodeScannerProps {
   open?: boolean;
@@ -76,8 +77,10 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
     }
   };
 
-  const processQRCode = async (qrCode: string) => {
-    if (status !== "scanning" || !qrCode.trim()) return;
+  const processQRCode = async (rawQrCode: string) => {
+    if (status !== "scanning" || !rawQrCode.trim()) return;
+
+    const qrCode = normalizeTicketCode(rawQrCode);
 
     setStatus("processing");
     

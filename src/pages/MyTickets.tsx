@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { QRCodeSVG } from "qrcode.react";
+import { buildTicketQrValue } from "@/lib/ticket-code";
 
 interface TicketWithDetails {
   id: string;
@@ -495,7 +496,7 @@ const MyTicketsContent = () => {
 
               <div className="flex justify-center p-6 bg-white rounded-xl">
                 <QRCodeSVG
-                  value={`PREMIERPASS-${selectedTicket.ticket_code}`}
+                  value={buildTicketQrValue(selectedTicket.ticket_code)}
                   size={200}
                   level="H"
                   includeMargin
