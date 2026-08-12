@@ -10,12 +10,14 @@ interface SEOProps {
   schema?: object;
 }
 
+const SITE_URL = "https://premierpass.com.br";
+
 const defaultMeta = {
   title: "Premier Pass - Sua Entrada para Experiências Únicas",
   description: "A melhor plataforma para descobrir e comprar ingressos para shows, festivais, teatro, esportes e muito mais. Garanta seu ingresso com segurança!",
   keywords: "ingressos, eventos, shows, festivais, teatro, esportes, stand-up, comprar ingressos, eventos ao vivo, premier pass",
-  image: "/og-image.png",
-  url: "https://premierpass.com.br",
+  image: `${SITE_URL}/og-image.png`,
+  url: SITE_URL,
 };
 
 const SEO = ({
@@ -27,14 +29,17 @@ const SEO = ({
   type = "website",
   schema,
 }: SEOProps) => {
-  const fullTitle = title ? `${title} | Premier Pass` : defaultMeta.title;
+  const fullTitle = title ? `${title} | PremierPass` : defaultMeta.title;
+  const absoluteImage = image.startsWith("http")
+    ? image
+    : `${SITE_URL}${image.startsWith("/") ? "" : "/"}${image}`;
 
   const defaultSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "Premier Pass",
-    url: url,
-    logo: `${url}/logo.png`,
+    url: SITE_URL,
+    logo: `${SITE_URL}/logo.png`,
     sameAs: [
       "https://instagram.com/premierpass",
       "https://facebook.com/premierpass",
@@ -65,7 +70,7 @@ const SEO = ({
       <meta property="og:url" content={url} />
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={description} />
-      <meta property="og:image" content={image} />
+      <meta property="og:image" content={absoluteImage} />
       <meta property="og:locale" content="pt_BR" />
       <meta property="og:site_name" content="Premier Pass" />
 
@@ -74,7 +79,7 @@ const SEO = ({
       <meta property="twitter:url" content={url} />
       <meta property="twitter:title" content={fullTitle} />
       <meta property="twitter:description" content={description} />
-      <meta property="twitter:image" content={image} />
+      <meta property="twitter:image" content={absoluteImage} />
 
       {/* Structured Data */}
       <script type="application/ld+json">
