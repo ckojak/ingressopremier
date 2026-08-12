@@ -108,6 +108,7 @@ const EventDetails = () => {
 
   const handleCardCheckout = async () => {
     if (cart.length === 0) return toast.error("Adicione ingressos");
+    if (!customerName || customerCpf.length < 11) return toast.error("Preencha Nome e CPF corretamente!");
 
     setProcessing(true);
     try {
@@ -118,6 +119,7 @@ const EventDetails = () => {
         body: {
           event_id: id,
           site_id: siteId,
+          customer_cpf: customerCpf.replace(/\D/g, ""),
           items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
         },
       });
@@ -235,7 +237,9 @@ const EventDetails = () => {
                         </button>
                       </div>
                     </div>
-                    {paymentMethod === "pix" && (
+                    {/* Dados do comprador: agora usado tanto por Pix quanto por Cartão, pois o
+                        Mercado Pago usa Nome+CPF pra reduzir recusa por risco no cartão também */}
+                    {(paymentMethod === "pix" || paymentMethod === "card") && (
                     <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-3">
                       <p className="text-xs font-bold text-primary uppercase">Dados do Comprador</p>
                       <Input placeholder="Nome Completo" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
