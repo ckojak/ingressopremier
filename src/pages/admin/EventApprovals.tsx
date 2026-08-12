@@ -252,6 +252,51 @@ const EventApprovals = () => {
     return format(new Date(dateStr), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR });
   };
 
+  const openDocument = async (verification: OrganizerVerificationRow) => {
+    setLoadingDocument(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from("organizer-documents")
+        .createSignedUrl(verification.document_path, 300);
+      if (error) throw error;
+      setDocumentUrl(data?.signedUrl || null);
+      if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error: any) {
+      console.error("Error opening document:", error);
+      toast.error("Não foi possível abrir o documento");
+    } finally {
+      setLoadingDocument(false);
+    }
+  };
+
+  const setVerificationStatus = async (
+    verification: OrganizerVerificationRow,
+    status: "verified" | "rejected"
+  ) => {
+    setProcessing(true);
+    try {
+      const { error } = await supabase
+        .from("organizer_verifications")
+        .update({
+          status,
+          rejection_reason: status === "rejected" ? "Documento não confere com o responsável do evento" : null,
+        })
+        .eq("id", verification.id);
+      if (error) throw error;
+
+      setVerifications(prev => ({
+        ...prev,
+        [verification.user_id]: { ...verification, status },
+      }));
+      toast.success(status === "verified" ? "Documento verificado!" : "Documento recusado.");
+    } catch (error: any) {
+      console.error("Error updating verification:", error);
+      toast.error("Erro ao atualizar verificação");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
