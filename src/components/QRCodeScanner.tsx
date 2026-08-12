@@ -76,8 +76,10 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
     }
   };
 
-  const processQRCode = async (qrCode: string) => {
-    if (status !== "scanning" || !qrCode.trim()) return;
+  const processQRCode = async (rawQrCode: string) => {
+    if (status !== "scanning" || !rawQrCode.trim()) return;
+
+    const qrCode = normalizeTicketCode(rawQrCode);
 
     setStatus("processing");
     
