@@ -19,6 +19,7 @@ import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import QRCodeScanner from "@/components/QRCodeScanner";
+import { normalizeTicketCode } from "@/lib/ticket-code";
 
 type Event = Tables<"events">;
 type TicketWithDetails = {
@@ -143,7 +144,7 @@ const CheckIn = () => {
           ticket_types(name),
           events(title)
         `)
-        .eq("ticket_code", ticketCode.toUpperCase())
+        .eq("ticket_code", normalizeTicketCode(ticketCode))
         .eq("event_id", selectedEvent)
         .single();
 
@@ -280,7 +281,7 @@ const CheckIn = () => {
                           ref={inputRef}
                           placeholder="Digite o código do ingresso"
                           value={ticketCode}
-                          onChange={(e) => setTicketCode(e.target.value.toUpperCase())}
+                          onChange={(e) => setTicketCode(normalizeTicketCode(e.target.value))}
                           className="pl-10 h-12 text-lg uppercase"
                           autoFocus
                         />
