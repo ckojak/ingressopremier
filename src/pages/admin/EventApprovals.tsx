@@ -564,6 +564,81 @@ const EventApprovals = () => {
                     )}
                   </div>
                 </div>
+
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold mb-2 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4" />
+                    Verificação de identidade (KYC)
+                  </h4>
+                  {(() => {
+                    const v = verifications[selectedEvent.organizer_id];
+                    if (!v) {
+                      return (
+                        <p className="text-sm text-destructive">
+                          O produtor ainda não enviou o documento do responsável. O evento não pode ser publicado.
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="space-y-3 text-sm">
+                        <p className="text-muted-foreground">
+                          {v.document_type?.toUpperCase()} {v.document_number ? `• ${v.document_number}` : ""}
+                        </p>
+                        <p>
+                          Status:{" "}
+                          <span
+                            className={
+                              v.status === "verified"
+                                ? "text-green-500"
+                                : v.status === "rejected"
+                                ? "text-destructive"
+                                : "text-yellow-500"
+                            }
+                          >
+                            {v.status === "verified"
+                              ? "Verificado"
+                              : v.status === "rejected"
+                              ? "Recusado"
+                              : "Aguardando verificação"}
+                          </span>
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openDocument(v)}
+                            disabled={loadingDocument}
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            Ver documento
+                          </Button>
+                          {v.status !== "verified" && (
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => setVerificationStatus(v, "verified")}
+                              disabled={processing}
+                            >
+                              <ShieldCheck className="w-4 h-4 mr-1" />
+                              Marcar como verificado
+                            </Button>
+                          )}
+                          {v.status !== "rejected" && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => setVerificationStatus(v, "rejected")}
+                              disabled={processing}
+                            >
+                              <ShieldAlert className="w-4 h-4 mr-1" />
+                              Recusar documento
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
 
               <DialogFooter className="gap-2">
@@ -578,7 +653,7 @@ const EventApprovals = () => {
                 <Button 
                   className="bg-green-600 hover:bg-green-700"
                   onClick={() => handleApprove(selectedEvent.id)}
-                  disabled={processing}
+                  disabled={processing || verifications[selectedEvent.organizer_id]?.status !== "verified"}
                 >
                   <CheckCircle2 className="w-4 h-4 mr-1" />
                   Aprovar e Publicar
