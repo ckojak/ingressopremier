@@ -277,11 +277,7 @@ const ProducerDashboard = () => {
               Os eventos criados passam por aprovação
             </p>
             <p className="text-xs text-muted-foreground mt-1">
- lovable-sync-1786570868
               Seu evento será analisado pela nossa equipe em até 4 horas.
-=======
-              Seus dados serão verificados e o evento será publicado em até 4 horas após a aprovação.
- main
             </p>
           </div>
         </CardContent>
