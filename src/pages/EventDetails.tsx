@@ -321,21 +321,49 @@ const EventDetails = () => {
                   </Alert>
                 )}
                 {ticketTypes.map(ticket => (
-                  <div
-                    key={ticket.id}
-                    className={`p-4 rounded-lg flex justify-between items-center border transition-colors ${
-                      cart[0]?.ticketType.id === ticket.id ? "border-primary bg-primary/10" : "border-transparent bg-secondary/30"
-                    }`}
-                  >
-                    <div>
-                      <h3 className="font-semibold">{ticket.name}</h3>
-                      <p className="text-primary font-bold">R$ {Number(ticket.price).toFixed(2)}</p>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => setCart([{ ticketType: ticket, quantity: 1 }])}>
-                      {cart[0]?.ticketType.id === ticket.id ? "Selecionado" : "Selecionar"}
-                    </Button>
-                  </div>
-                ))}
+                  (() => {
+                    const total = Number(ticket.quantity_available ?? 0);
+                    const sold = Number(ticket.quantity_sold ?? 0);
+                    const remaining = Math.max(total - sold, 0);
+                    const soldOut = remaining <= 0;
+                    const threshold = Math.min(total * 0.15, 20);
+                    const isLow = !soldOut && total > 0 && remaining <= threshold;
+
+                    return (
+                      <div
+                        key={ticket.id}
+                        className={`p-4 rounded-lg flex justify-between items-center gap-3 border transition-colors ${
+                          soldOut
+                            ? "border-transparent bg-muted/40 opacity-70"
+                            : cart[0]?.ticketType.id === ticket.id
+                              ? "border-primary bg-primary/10"
+                              : "border-transparent bg-secondary/30"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <h3 className="font-semibold">{ticket.name}</h3>
+                          <p className="text-primary font-bold">R$ {Number(ticket.price).toFixed(2)}</p>
+                          {soldOut ? (
+                            <Badge variant="secondary" className="mt-2 text-[11px]">Esgotado</Badge>
+                          ) : isLow ? (
+                            <Badge className="mt-2 text-[11px] bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30 gap-1">
+                              <Flame className="w-3 h-3" />
+                              {remaining <= 5 ? "Últimas unidades!" : `Restam ${remaining} ingressos`}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={soldOut}
+                          onClick={() => setCart([{ ticketType: ticket, quantity: 1 }])}
+                        >
+                          {soldOut ? "Esgotado" : cart[0]?.ticketType.id === ticket.id ? "Selecionado" : "Selecionar"}
+                        </Button>
+                      </div>
+                    );
+                  })()
+                )}
 
                 {cart.length > 0 && (
                   <div className="pt-4 space-y-4 border-t border-border">
