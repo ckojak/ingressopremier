@@ -166,26 +166,36 @@ const StaffCheckin = () => {
 
       setLastCheckedTicket(ticketData);
 
-      if (ticket.is_used) {
-        setCheckResult("already_used");
-        toast.error("Este ingresso já foi utilizado!");
+      // Atomic check-in (no race condition)
+      const { data: rpcData, error: rpcError } = await supabase.rpc("checkin_ticket", {
+        p_ticket_id: ticket.id,
+      });
+
+      if (rpcError) throw rpcError;
+
+      const result = rpcData as unknown as {
+        success: boolean;
+        already_used: boolean;
+        attendee_name: string | null;
+        used_at: string | null;
+      };
+
+      if (!result?.success) {
+        if (result?.already_used) {
+          setCheckResult("already_used");
+          setLastCheckedTicket({ ...ticketData, is_used: true, used_at: result.used_at });
+          toast.error("Este ingresso já foi utilizado!");
+        } else {
+          setCheckResult("error");
+          toast.error("Ingresso não encontrado para este evento");
+        }
         return;
       }
 
-      const { error: updateError } = await supabase
-        .from("tickets")
-        .update({ 
-          is_used: true, 
-          used_at: new Date().toISOString() 
-        })
-        .eq("id", ticket.id);
-
-      if (updateError) throw updateError;
-
       setCheckResult("success");
       toast.success("Check-in realizado com sucesso!");
-      
-      setLastCheckedTicket({ ...ticketData, is_used: true, used_at: new Date().toISOString() });
+
+      setLastCheckedTicket({ ...ticketData, is_used: true, used_at: result.used_at ?? new Date().toISOString() });
       fetchRecentCheckIns(event.id);
     } catch (error: any) {
       console.error("Check-in error:", error);

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Instagram, Mail, Shield, Ticket } from "lucide-react";
 import premierpassLogo from "@/assets/premierpass-logo.png";
+import { COMPANY_CNPJ, WHATSAPP_DISPLAY, buildWhatsAppUrl } from "@/lib/constants";
 
 const Footer = () => {
   return (
@@ -112,6 +113,20 @@ const Footer = () => {
         <div className="border-t border-border/30 mt-12 pt-10 space-y-2">
           <p className="text-muted-foreground/70 text-sm md:text-base text-center font-medium">
             © {new Date().getFullYear()} PremierPass. Todos os direitos reservados.
+          </p>
+          <p className="text-muted-foreground/60 text-xs md:text-sm text-center">
+            CNPJ: {COMPANY_CNPJ}
+          </p>
+          <p className="text-muted-foreground/60 text-xs md:text-sm text-center">
+            WhatsApp:{" "}
+            <a
+              href={buildWhatsAppUrl("Olá! Gostaria de mais informações sobre o PremierPass.")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary transition-colors"
+            >
+              {WHATSAPP_DISPLAY}
+            </a>
           </p>
           <p className="text-muted-foreground/40 text-xs text-center">
             feito por KOJAK SOLUÇÕES

@@ -2,6 +2,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
 import { motion } from "framer-motion";
+import { COMPANY_CNPJ, WHATSAPP_DISPLAY } from "@/lib/constants";
 
 const TermsOfService = () => {
   return (
@@ -97,6 +98,9 @@ const TermsOfService = () => {
                   <a href="mailto:legal@premierpass.com.br" className="text-primary hover:underline ml-1">
                     legal@premierpass.com.br
                   </a>
+                </p>
+                <p className="text-muted-foreground leading-relaxed mt-4">
+                  PremierPass — CNPJ {COMPANY_CNPJ}. Atendimento por WhatsApp: {WHATSAPP_DISPLAY}.
                 </p>
               </section>
 

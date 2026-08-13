@@ -41,7 +41,7 @@ import ImageUpload from "@/components/ImageUpload";
 import OrganizerVerificationCard from "@/components/OrganizerVerificationCard";
 import { useOrganizerVerification } from "@/hooks/useOrganizerVerification";
 import { useIBGEStates, useIBGECities } from "@/hooks/useIBGE";
-import { EVENT_CATEGORIES } from "@/lib/constants";
+import { EVENT_CATEGORIES, ADMIN_EMAILS } from "@/lib/constants";
 import { useSiteContext, getCurrentSiteConfig } from "@/hooks/useSiteContext";
 import { useInvalidateEvents } from "@/hooks/useEvents";
 
@@ -81,7 +81,6 @@ const statusLabels: Record<string, string> = {
 };
 
 // List of admin emails
-const ADMIN_EMAILS = ["bmw.kojak@gmail.com", "bmw.reta@hotmail.com"];
 
 const Events = () => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -324,7 +323,11 @@ const Events = () => {
         
         toast({ 
           title: "Evento enviado para aprovação!",
+         lovable-sync-1786570868
           description: "Seu evento será analisado pela nossa equipe em até 4 horas.",
+
+          description: "Seus dados serão verificados e o evento será publicado em até 4 horas.",
+          main
         });
       } else {
         // Event was published - send push notifications to users
@@ -430,8 +433,12 @@ const Events = () => {
           <div>
             <h3 className="text-yellow-400 font-semibold">Aviso sobre aprovação de eventos</h3>
             <p className="text-muted-foreground text-sm mt-1">
+              lovable-sync-1786570868
               Seu evento será analisado pela nossa equipe em até <strong className="text-yellow-400">4 horas</strong> após o envio para aprovação.
               {!isVerified && " A publicação só é liberada após a verificação do documento do responsável."}
+
+              Os dados do seu evento serão verificados pela nossa equipe e publicados em até <strong className="text-yellow-400">4 horas</strong> após o envio para aprovação.
+              main
             </p>
           </div>
         </div>

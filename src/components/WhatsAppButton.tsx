@@ -1,9 +1,9 @@
-import { MessageCircle } from "lucide-react";
+import { buildWhatsAppUrl } from "@/lib/constants";
 
 const WhatsAppButton = () => {
-  const phoneNumber = "5521982031368";
-  const message = encodeURIComponent("Olá! Gostaria de mais informações sobre o PremierPass.");
-  const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+  const whatsappUrl = buildWhatsAppUrl(
+    "Olá! Gostaria de mais informações sobre o PremierPass."
+  );
 
   return (
     <a
