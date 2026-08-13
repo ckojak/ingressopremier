@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import premierpassLogo from "@/assets/premierpass-logo.png";
+import ThemeToggle from "@/components/ThemeToggle";
 import { ADMIN_EMAILS } from "@/lib/constants";
 
 // Admin emails that get automatic admin role
@@ -203,6 +204,7 @@ const Header = () => {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-3">
+            <ThemeToggle />
             <Link to="/carrinho" className="relative">
               <Button variant="ghost" size="icon" className="text-foreground hover:text-primary hover:bg-primary/10 transition-all duration-200 rounded-xl">
                 <ShoppingCart className="w-5 h-5" />
@@ -330,6 +332,7 @@ const Header = () => {
 
           {/* Mobile Menu Button */}
           <div className="flex items-center gap-2 md:hidden">
+            <ThemeToggle />
             <Link to="/carrinho" className="relative">
               <Button variant="ghost" size="icon" className="hover:bg-primary/10 rounded-xl transition-all">
                 <ShoppingCart className="w-5 h-5" />
