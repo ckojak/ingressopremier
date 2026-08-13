@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import premierpassLogo from "@/assets/premierpass-logo.png";
+import { ADMIN_EMAILS } from "@/lib/constants";
 
 // Admin emails that get automatic admin role
-const ADMIN_EMAILS = ["bmw.reta@hotmail.com"];
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);

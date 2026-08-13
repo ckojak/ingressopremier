@@ -64,7 +64,6 @@ const isValidPhone = (phone: string): boolean => {
 };
 
 // List of admin emails that should be auto-assigned admin role
-const ADMIN_EMAILS = ["bmw.reta@hotmail.com"];
 
 // Preserved post-login destination (used by the OAuth consent flow)
 const getNextPath = (): string | null => {
