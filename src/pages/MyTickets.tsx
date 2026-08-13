@@ -573,6 +573,15 @@ const MyTicketsContent = () => {
               <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
                 <p>Apresente este QR Code na entrada do evento para validação.</p>
               </div>
+
+              <Button
+                className="w-full gap-2"
+                disabled={downloadingId === selectedTicket.id}
+                onClick={() => handleDownloadPdf(selectedTicket)}
+              >
+                <Download className="w-4 h-4" />
+                {downloadingId === selectedTicket.id ? "Gerando PDF..." : "Baixar PDF"}
+              </Button>
             </div>
           )}
         </DialogContent>
