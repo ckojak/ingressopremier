@@ -30,18 +30,37 @@ interface TicketData {
 
 type ScanStatus = "scanning" | "success" | "error" | "processing";
 
+// BarcodeDetector é nativo do navegador (Chrome/Edge/Android). Não existe em todo TS lib ainda,
+// então declaramos o tipo mínimo aqui pra não depender de instalar nenhum pacote novo.
+declare global {
+  interface Window {
+    BarcodeDetector?: new (options?: { formats: string[] }) => {
+      detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
+    };
+  }
+}
+
 const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline = false }: QRCodeScannerProps) => {
   const [status, setStatus] = useState<ScanStatus>("scanning");
   const [message, setMessage] = useState("");
   const [ticketInfo, setTicketInfo] = useState<TicketData | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [manualCode, setManualCode] = useState("");
+  const [autoScanSupported, setAutoScanSupported] = useState<boolean>(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<number | null>(null);
+  const detectorRef = useRef<InstanceType<NonNullable<Window["BarcodeDetector"]>> | null>(null);
+  const statusRef = useRef<ScanStatus>("scanning");
+
+  // Mantém uma ref sempre atualizada do status pra usar dentro do loop de leitura
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     const isActive = inline ? true : open;
-    
+
     if (isActive) {
       setStatus("scanning");
       setMessage("");
@@ -51,39 +70,82 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
     } else {
       stopCamera();
     }
-    
+
     return () => stopCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, inline]);
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
       });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
       setHasPermission(true);
+      startAutoScan();
     } catch (err) {
       setHasPermission(false);
     }
   };
 
   const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      window.clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
   };
 
+copilot/fix-edge-functions-redirect-urls
+  const startAutoScan = () => {
+    if (!("BarcodeDetector" in window) || !window.BarcodeDetector) {
+      setAutoScanSupported(false);
+      return;
+    }
+    setAutoScanSupported(true);
+
+    try {
+      detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
+    } catch {
+      setAutoScanSupported(false);
+      return;
+    }
+
+    if (scanIntervalRef.current) window.clearInterval(scanIntervalRef.current);
+
+    scanIntervalRef.current = window.setInterval(async () => {
+      if (statusRef.current !== "scanning") return;
+      if (!videoRef.current || videoRef.current.readyState < 2) return;
+      if (!detectorRef.current) return;
+
+      try {
+        const results = await detectorRef.current.detect(videoRef.current);
+        if (results.length > 0 && results[0].rawValue) {
+          processQRCode(results[0].rawValue);
+        }
+      } catch {
+        // frame não pôde ser lido, tenta de novo no próximo intervalo
+      }
+    }, 350);
+  };
+
+  const processQRCode = async (rawQrCode: string) => {
+    if (statusRef.current !== "scanning" || !rawQrCode.trim()) return;
+
   const processQRCode = async (rawQrCode: string) => {
     if (status !== "scanning" || !rawQrCode.trim()) return;
+lovable-sync-1786570868
 
     const qrCode = normalizeTicketCode(rawQrCode);
 
     setStatus("processing");
-    
+
     try {
       // Look up ticket by QR code or ticket_code
       const { data: ticketData, error: ticketError } = await supabase
@@ -112,7 +174,7 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
         .select("name")
         .eq("id", ticketData.ticket_type_id)
         .single();
-        
+
       const { data: eventData } = await supabase
         .from("events")
         .select("title")
@@ -155,10 +217,9 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
       setTicketInfo(result);
       setStatus("success");
       setMessage("Check-in realizado com sucesso!");
-      
+
       onSuccess?.(result);
       toast.success("Check-in realizado!");
-      
     } catch (err) {
       console.error("Scan error:", err);
       setStatus("error");
@@ -232,7 +293,9 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
               </div>
             </div>
             <p className="text-center text-sm text-muted-foreground">
-              Posicione o QR Code na câmera ou digite o código manualmente
+              {autoScanSupported
+                ? "Aponte a câmera para o QR Code — a leitura é automática"
+                : "Seu navegador não lê QR automaticamente aqui — digite o código manualmente abaixo"}
             </p>
             <form onSubmit={handleManualSubmit} className="flex gap-2">
               <input

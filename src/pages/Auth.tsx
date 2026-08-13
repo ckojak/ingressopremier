@@ -87,6 +87,7 @@ const Auth = () => {
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   
   // User type selector - shown during REGISTRATION
   const [showUserTypeSelector, setShowUserTypeSelector] = useState(false);
@@ -363,6 +364,15 @@ const Auth = () => {
         toast({
           title: "Senhas não conferem",
           description: "A confirmação de senha deve ser igual à senha.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!acceptedTerms) {
+        toast({
+          title: "Aceite os Termos",
+          description: "Você precisa aceitar os Termos de Serviço e a Política de Privacidade para continuar.",
           variant: "destructive",
         });
         return;
@@ -759,10 +769,32 @@ const Auth = () => {
               )}
             </AnimatePresence>
 
+            {!isLogin && (
+              <div className="flex items-start gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="acceptedTerms"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                />
+                <label htmlFor="acceptedTerms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                  Li e aceito os{" "}
+                  <Link to="/termos" target="_blank" className="text-primary hover:underline">
+                    Termos de Serviço
+                  </Link>{" "}
+                  e a{" "}
+                  <Link to="/privacidade" target="_blank" className="text-primary hover:underline">
+                    Política de Privacidade
+                  </Link>
+                </label>
+              </div>
+            )}
+
             <Button
               type="submit"
               className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={loading}
+              disabled={loading || (!isLogin && !acceptedTerms)}
             >
               {loading ? (
                 <motion.div
