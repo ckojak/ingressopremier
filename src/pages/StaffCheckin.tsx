@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { normalizeTicketCode } from "@/lib/ticket-code";
 
 type TicketWithDetails = {
   id: string;
@@ -147,7 +148,7 @@ const StaffCheckin = () => {
           used_at,
           ticket_types(name)
         `)
-        .eq("ticket_code", ticketCode.toUpperCase())
+        .eq("ticket_code", normalizeTicketCode(ticketCode))
         .eq("event_id", event.id)
         .single();
 
@@ -304,7 +305,7 @@ const StaffCheckin = () => {
                     ref={inputRef}
                     placeholder="Digite ou escaneie o código"
                     value={ticketCode}
-                    onChange={(e) => setTicketCode(e.target.value.toUpperCase())}
+                    onChange={(e) => setTicketCode(normalizeTicketCode(e.target.value))}
                     className="pl-10 h-14 text-lg uppercase"
                     autoFocus
                   />

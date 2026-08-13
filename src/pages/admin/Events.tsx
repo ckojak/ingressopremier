@@ -38,6 +38,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { z } from "zod";
 import ImageUpload from "@/components/ImageUpload";
+import OrganizerVerificationCard from "@/components/OrganizerVerificationCard";
+import { useOrganizerVerification } from "@/hooks/useOrganizerVerification";
 import { useIBGEStates, useIBGECities } from "@/hooks/useIBGE";
 import { EVENT_CATEGORIES, ADMIN_EMAILS } from "@/lib/constants";
 import { useSiteContext, getCurrentSiteConfig } from "@/hooks/useSiteContext";
@@ -92,6 +94,7 @@ const Events = () => {
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
   const { invalidateAll } = useInvalidateEvents();
+  const { verification, hasSubmitted, isVerified } = useOrganizerVerification();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -222,7 +225,13 @@ const Events = () => {
           }]);
 
         if (error) throw error;
-        toast({ title: "Evento criado com sucesso!" });
+        toast({
+          title: "Evento criado com sucesso!",
+          description:
+            userRole === "admin"
+              ? undefined
+              : "Ao enviar para aprovação, seu evento será analisado pela nossa equipe em até 4 horas.",
+        });
       }
 
       setDialogOpen(false);
@@ -270,7 +279,18 @@ const Events = () => {
     
     // If admin and event is pending or draft, publish directly
     const newStatus = isAdmin ? "published" : "pending";
-    
+
+    // Producers must submit their identity document (KYC) before requesting approval
+    if (!isAdmin && !hasSubmitted) {
+      toast({
+        title: "Verificação de identidade necessária",
+        description:
+          "Envie a foto do documento (CPF ou CNPJ) do responsável pelo evento antes de enviar para aprovação.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { error } = await supabase
@@ -303,7 +323,11 @@ const Events = () => {
         
         toast({ 
           title: "Evento enviado para aprovação!",
+         lovable-sync-1786570868
+          description: "Seu evento será analisado pela nossa equipe em até 4 horas.",
+
           description: "Seus dados serão verificados e o evento será publicado em até 4 horas.",
+          main
         });
       } else {
         // Event was published - send push notifications to users
@@ -409,12 +433,19 @@ const Events = () => {
           <div>
             <h3 className="text-yellow-400 font-semibold">Aviso sobre aprovação de eventos</h3>
             <p className="text-muted-foreground text-sm mt-1">
+              lovable-sync-1786570868
+              Seu evento será analisado pela nossa equipe em até <strong className="text-yellow-400">4 horas</strong> após o envio para aprovação.
+              {!isVerified && " A publicação só é liberada após a verificação do documento do responsável."}
+
               Os dados do seu evento serão verificados pela nossa equipe e publicados em até <strong className="text-yellow-400">4 horas</strong> após o envio para aprovação.
+              main
             </p>
           </div>
         </div>
       </div>
     )}
+
+    {isOrganizer && <OrganizerVerificationCard />}
     
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>

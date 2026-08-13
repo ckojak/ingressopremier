@@ -13,4 +13,8 @@ export const normalizeTicketCode = (raw: string) => {
   return value.startsWith(TICKET_QR_PREFIX)
     ? value.slice(TICKET_QR_PREFIX.length)
     : value;
+ lovable-sync-1786570868
 };
+
+};
+ main

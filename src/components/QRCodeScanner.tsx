@@ -102,6 +102,7 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
     }
   };
 
+copilot/fix-edge-functions-redirect-urls
   const startAutoScan = () => {
     if (!("BarcodeDetector" in window) || !window.BarcodeDetector) {
       setAutoScanSupported(false);
@@ -136,6 +137,10 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
 
   const processQRCode = async (rawQrCode: string) => {
     if (statusRef.current !== "scanning" || !rawQrCode.trim()) return;
+
+  const processQRCode = async (rawQrCode: string) => {
+    if (status !== "scanning" || !rawQrCode.trim()) return;
+lovable-sync-1786570868
 
     const qrCode = normalizeTicketCode(rawQrCode);
 

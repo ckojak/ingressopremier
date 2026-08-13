@@ -11,7 +11,11 @@ import {
   User,
   Mail,
   Phone,
-  AlertTriangle
+  AlertTriangle,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldQuestion,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +67,16 @@ interface PendingEvent {
   };
 }
 
+interface OrganizerVerificationRow {
+  id: string;
+  user_id: string;
+  document_type: string;
+  document_number: string | null;
+  document_path: string;
+  status: string;
+  rejection_reason: string | null;
+}
+
 const EventApprovals = () => {
   const [events, setEvents] = useState<PendingEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +86,9 @@ const EventApprovals = () => {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [verifications, setVerifications] = useState<Record<string, OrganizerVerificationRow>>({});
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  const [loadingDocument, setLoadingDocument] = useState(false);
 
   const fetchPendingEvents = async () => {
     try {
@@ -100,6 +117,22 @@ const EventApprovals = () => {
       );
       
       setEvents(eventsWithOrganizers as PendingEvent[]);
+
+      const organizerIds = Array.from(new Set(pendingEvents.map((e: any) => e.organizer_id)));
+      if (organizerIds.length > 0) {
+        const { data: verificationRows } = await supabase
+          .from("organizer_verifications")
+          .select("*")
+          .in("user_id", organizerIds);
+
+        const map: Record<string, OrganizerVerificationRow> = {};
+        (verificationRows || []).forEach((row: any) => {
+          map[row.user_id] = row as OrganizerVerificationRow;
+        });
+        setVerifications(map);
+      } else {
+        setVerifications({});
+      }
     } catch (error) {
       console.error("Error fetching pending events:", error);
       toast.error("Erro ao carregar solicitações");
@@ -115,7 +148,19 @@ const EventApprovals = () => {
   const handleApprove = async (eventId: string) => {
     const eventToApprove = events.find(e => e.id === eventId);
     if (!eventToApprove) return;
-    
+
+    const verification = verifications[eventToApprove.organizer_id];
+    if (verification?.status !== "verified") {
+      toast.error(
+        verification
+          ? "Verifique o documento do produtor antes de publicar o evento."
+          : "O produtor ainda não enviou o documento de identificação."
+      );
+      setSelectedEvent(eventToApprove);
+      setViewDialogOpen(true);
+      return;
+    }
+
     setProcessing(true);
     try {
       const { error } = await supabase
@@ -205,6 +250,51 @@ const EventApprovals = () => {
   const formatEventDate = (dateStr: string | null) => {
     if (!dateStr) return "Data não definida";
     return format(new Date(dateStr), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR });
+  };
+
+  const openDocument = async (verification: OrganizerVerificationRow) => {
+    setLoadingDocument(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from("organizer-documents")
+        .createSignedUrl(verification.document_path, 300);
+      if (error) throw error;
+      setDocumentUrl(data?.signedUrl || null);
+      if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error: any) {
+      console.error("Error opening document:", error);
+      toast.error("Não foi possível abrir o documento");
+    } finally {
+      setLoadingDocument(false);
+    }
+  };
+
+  const setVerificationStatus = async (
+    verification: OrganizerVerificationRow,
+    status: "verified" | "rejected"
+  ) => {
+    setProcessing(true);
+    try {
+      const { error } = await supabase
+        .from("organizer_verifications")
+        .update({
+          status,
+          rejection_reason: status === "rejected" ? "Documento não confere com o responsável do evento" : null,
+        })
+        .eq("id", verification.id);
+      if (error) throw error;
+
+      setVerifications(prev => ({
+        ...prev,
+        [verification.user_id]: { ...verification, status },
+      }));
+      toast.success(status === "verified" ? "Documento verificado!" : "Documento recusado.");
+    } catch (error: any) {
+      console.error("Error updating verification:", error);
+      toast.error("Erro ao atualizar verificação");
+    } finally {
+      setProcessing(false);
+    }
   };
 
   return (
@@ -306,6 +396,42 @@ const EventApprovals = () => {
                         </p>
                       </div>
 
+                      <div className="mb-3">
+                        {(() => {
+                          const v = verifications[event.organizer_id];
+                          if (!v) {
+                            return (
+                              <Badge variant="outline" className="bg-destructive/15 text-destructive border-destructive/30">
+                                <ShieldAlert className="w-3 h-3 mr-1" />
+                                Documento não enviado
+                              </Badge>
+                            );
+                          }
+                          if (v.status === "verified") {
+                            return (
+                              <Badge variant="outline" className="bg-green-500/15 text-green-500 border-green-500/30">
+                                <ShieldCheck className="w-3 h-3 mr-1" />
+                                Identidade verificada
+                              </Badge>
+                            );
+                          }
+                          if (v.status === "rejected") {
+                            return (
+                              <Badge variant="outline" className="bg-destructive/15 text-destructive border-destructive/30">
+                                <ShieldAlert className="w-3 h-3 mr-1" />
+                                Documento recusado
+                              </Badge>
+                            );
+                          }
+                          return (
+                            <Badge variant="outline" className="bg-yellow-500/15 text-yellow-500 border-yellow-500/30">
+                              <ShieldQuestion className="w-3 h-3 mr-1" />
+                              Documento aguardando verificação
+                            </Badge>
+                          );
+                        })()}
+                      </div>
+
                       <div className="flex flex-wrap gap-2">
                         <Button 
                           size="sm" 
@@ -322,7 +448,7 @@ const EventApprovals = () => {
                           size="sm" 
                           className="bg-green-600 hover:bg-green-700"
                           onClick={() => handleApprove(event.id)}
-                          disabled={processing}
+                          disabled={processing || verifications[event.organizer_id]?.status !== "verified"}
                         >
                           <CheckCircle2 className="w-4 h-4 mr-1" />
                           Aprovar
@@ -438,6 +564,81 @@ const EventApprovals = () => {
                     )}
                   </div>
                 </div>
+
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold mb-2 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4" />
+                    Verificação de identidade (KYC)
+                  </h4>
+                  {(() => {
+                    const v = verifications[selectedEvent.organizer_id];
+                    if (!v) {
+                      return (
+                        <p className="text-sm text-destructive">
+                          O produtor ainda não enviou o documento do responsável. O evento não pode ser publicado.
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="space-y-3 text-sm">
+                        <p className="text-muted-foreground">
+                          {v.document_type?.toUpperCase()} {v.document_number ? `• ${v.document_number}` : ""}
+                        </p>
+                        <p>
+                          Status:{" "}
+                          <span
+                            className={
+                              v.status === "verified"
+                                ? "text-green-500"
+                                : v.status === "rejected"
+                                ? "text-destructive"
+                                : "text-yellow-500"
+                            }
+                          >
+                            {v.status === "verified"
+                              ? "Verificado"
+                              : v.status === "rejected"
+                              ? "Recusado"
+                              : "Aguardando verificação"}
+                          </span>
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openDocument(v)}
+                            disabled={loadingDocument}
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            Ver documento
+                          </Button>
+                          {v.status !== "verified" && (
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => setVerificationStatus(v, "verified")}
+                              disabled={processing}
+                            >
+                              <ShieldCheck className="w-4 h-4 mr-1" />
+                              Marcar como verificado
+                            </Button>
+                          )}
+                          {v.status !== "rejected" && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => setVerificationStatus(v, "rejected")}
+                              disabled={processing}
+                            >
+                              <ShieldAlert className="w-4 h-4 mr-1" />
+                              Recusar documento
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
 
               <DialogFooter className="gap-2">
@@ -452,7 +653,7 @@ const EventApprovals = () => {
                 <Button 
                   className="bg-green-600 hover:bg-green-700"
                   onClick={() => handleApprove(selectedEvent.id)}
-                  disabled={processing}
+                  disabled={processing || verifications[selectedEvent.organizer_id]?.status !== "verified"}
                 >
                   <CheckCircle2 className="w-4 h-4 mr-1" />
                   Aprovar e Publicar
