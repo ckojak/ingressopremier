@@ -1,4 +1,3 @@
-lovable-sync-1786647086
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import { buildTicketQrValue } from "@/lib/ticket-code";
@@ -97,4 +96,3 @@ export const generateTicketPDF = (ticketData: {
   // Dispara a impressão nativa otimizada para salvar como PDF no telemóvel/desktop
   window.print();
 };
-main
