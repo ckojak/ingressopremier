@@ -3,6 +3,7 @@ import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
 import { motion } from "framer-motion";
 import { Ticket, Users, Shield, Zap, Heart, Globe } from "lucide-react";
+import { COMPANY_CNPJ, WHATSAPP_DISPLAY } from "@/lib/constants";
 
 const values = [
   {
@@ -132,6 +133,19 @@ const About = () => {
                 </motion.div>
               ))}
             </div>
+          </motion.div>
+
+          {/* Dados da empresa */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="gradient-card rounded-2xl p-6 md:p-8 mt-16 text-center"
+          >
+            <h2 className="text-xl font-semibold text-foreground mb-2">Dados da empresa</h2>
+            <p className="text-muted-foreground">PremierPass</p>
+            <p className="text-muted-foreground">CNPJ: {COMPANY_CNPJ}</p>
+            <p className="text-muted-foreground">WhatsApp: {WHATSAPP_DISPLAY}</p>
           </motion.div>
         </div>
       </main>

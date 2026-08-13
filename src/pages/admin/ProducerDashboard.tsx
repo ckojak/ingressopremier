@@ -224,7 +224,7 @@ const ProducerDashboard = () => {
               Os eventos criados passam por aprovação
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Seus dados serão verificados e o evento será publicado em até 2 horas após a aprovação.
+              Seus dados serão verificados e o evento será publicado em até 4 horas após a aprovação.
             </p>
           </div>
         </CardContent>

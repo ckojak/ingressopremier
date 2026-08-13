@@ -39,7 +39,7 @@ import { ptBR } from "date-fns/locale";
 import { z } from "zod";
 import ImageUpload from "@/components/ImageUpload";
 import { useIBGEStates, useIBGECities } from "@/hooks/useIBGE";
-import { EVENT_CATEGORIES } from "@/lib/constants";
+import { EVENT_CATEGORIES, ADMIN_EMAILS } from "@/lib/constants";
 import { useSiteContext, getCurrentSiteConfig } from "@/hooks/useSiteContext";
 import { useInvalidateEvents } from "@/hooks/useEvents";
 
@@ -79,7 +79,6 @@ const statusLabels: Record<string, string> = {
 };
 
 // List of admin emails
-const ADMIN_EMAILS = ["bmw.kojak@gmail.com", "bmw.reta@hotmail.com"];
 
 const Events = () => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -304,7 +303,7 @@ const Events = () => {
         
         toast({ 
           title: "Evento enviado para aprovação!",
-          description: "Seus dados serão verificados e o evento será publicado em até 2 horas.",
+          description: "Seus dados serão verificados e o evento será publicado em até 4 horas.",
         });
       } else {
         // Event was published - send push notifications to users
@@ -410,7 +409,7 @@ const Events = () => {
           <div>
             <h3 className="text-yellow-400 font-semibold">Aviso sobre aprovação de eventos</h3>
             <p className="text-muted-foreground text-sm mt-1">
-              Os dados do seu evento serão verificados pela nossa equipe e publicados em até <strong className="text-yellow-400">2 horas</strong> após o envio para aprovação.
+              Os dados do seu evento serão verificados pela nossa equipe e publicados em até <strong className="text-yellow-400">4 horas</strong> após o envio para aprovação.
             </p>
           </div>
         </div>
