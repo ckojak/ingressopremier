@@ -28,7 +28,6 @@ import { ptBR } from "date-fns/locale";
 import { QRCodeSVG } from "qrcode.react";
 lovable-sync-1786570868
 import { buildTicketQrValue } from "@/lib/ticket-code";
-=======
 import { toast } from "sonner";
 import { downloadTicketPdf } from "@/lib/ticket-pdf";
  main
