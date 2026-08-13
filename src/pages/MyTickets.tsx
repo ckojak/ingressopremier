@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+lovable-sync-1786647086
+import { Ticket, Calendar, MapPin, QrCode, Download } from "lucide-react";
+
 import { Ticket, Calendar, MapPin, QrCode, Download, Send, XCircle } from "lucide-react";
+main
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -64,8 +68,11 @@ const MyTicketsContent = () => {
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<TicketWithDetails | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+ lovable-sync-1786647086
+
   const [transferTicket, setTransferTicket] = useState<TicketWithDetails | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+ main
 
   const handleDownloadPdf = async (ticket: TicketWithDetails) => {
     setDownloadingId(ticket.id);
@@ -92,6 +99,7 @@ const MyTicketsContent = () => {
       setDownloadingId(null);
     }
   };
+ lovable-sync-1786647086
 
   // Cancela uma transferência que EU (dono original) enviei e ainda está pendente
   const handleCancelTransfer = async (ticket: TicketWithDetails) => {
@@ -134,6 +142,7 @@ const MyTicketsContent = () => {
       setCancelingId(null);
     }
   };
+main
 
   const fetchTickets = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -467,6 +476,7 @@ const MyTicketsContent = () => {
                 <Download className="w-4 h-4" />
                 {downloadingId === ticket.id ? "Gerando..." : "Baixar PDF"}
               </Button>
+              lovable-sync-1786647086
 
               {!ticket.is_used &&
                 !ticket.is_complimentary === false && // sempre permitido também para cortesia
@@ -503,6 +513,8 @@ const MyTicketsContent = () => {
                   {cancelingId === ticket.id ? "Cancelando..." : "Cancelar transferência"}
                 </Button>
               )}
+              
+              main
             </div>
           </CardContent>
         </div>
