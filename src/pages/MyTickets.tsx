@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Ticket, Calendar, MapPin, QrCode } from "lucide-react";
+import { Ticket, Calendar, MapPin, QrCode, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { QRCodeSVG } from "qrcode.react";
+import { toast } from "sonner";
+import { downloadTicketPdf } from "@/lib/ticket-pdf";
 
 interface TicketWithDetails {
   id: string;
@@ -59,7 +61,33 @@ const MyTicketsContent = () => {
   const [tickets, setTickets] = useState<TicketWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<TicketWithDetails | null>(null);
-  
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownloadPdf = async (ticket: TicketWithDetails) => {
+    setDownloadingId(ticket.id);
+    try {
+      const location = ticket.event
+        ? [ticket.event.venue_name, ticket.event.city, ticket.event.state].filter(Boolean).join(", ") ||
+          "Local a confirmar"
+        : "Local a confirmar";
+
+      await downloadTicketPdf({
+        eventTitle: ticket.event?.title || "Ingresso PremierPass",
+        dateTime: ticket.event
+          ? format(new Date(ticket.event.start_date), "EEEE, dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })
+          : "Data a confirmar",
+        location,
+        holderName: ticket.attendee_name || "-",
+        ticketTypeName: ticket.ticket_type?.name || "Ingresso",
+        ticketCode: ticket.ticket_code,
+      });
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      toast.error("Não foi possível gerar o PDF do ingresso.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const fetchTickets = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -382,6 +410,19 @@ const MyTicketsContent = () => {
               <Button variant="outline" size="sm" className="gap-1" disabled={ticket.transfer_status === "pending"}>
                 <QrCode className="w-4 h-4" />
                 Ver QR Code
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="gap-1"
+                disabled={downloadingId === ticket.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadPdf(ticket);
+                }}
+              >
+                <Download className="w-4 h-4" />
+                {downloadingId === ticket.id ? "Gerando..." : "Baixar PDF"}
               </Button>
             </div>
           </CardContent>
