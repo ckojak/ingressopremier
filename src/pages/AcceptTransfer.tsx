@@ -148,6 +148,7 @@ const AcceptTransfer = () => {
         .update({
           user_id: session.user.id,
           attendee_email: session.user.email,
+          transfer_status: "none",
         })
         .eq("id", transfer.ticket.id);
 
