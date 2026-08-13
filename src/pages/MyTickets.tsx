@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+lovable-sync-1786647086
 import { Ticket, Calendar, MapPin, QrCode, Download } from "lucide-react";
+
+import { Ticket, Calendar, MapPin, QrCode, Download, Send, XCircle } from "lucide-react";
+main
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +20,8 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
 import TicketCardSkeleton from "@/components/skeletons/TicketCardSkeleton";
+import TicketTransfer from "@/components/TicketTransfer";
+import PendingTransfers from "@/components/PendingTransfers";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -62,6 +68,11 @@ const MyTicketsContent = () => {
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<TicketWithDetails | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+ lovable-sync-1786647086
+
+  const [transferTicket, setTransferTicket] = useState<TicketWithDetails | null>(null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+ main
 
   const handleDownloadPdf = async (ticket: TicketWithDetails) => {
     setDownloadingId(ticket.id);
@@ -88,6 +99,50 @@ const MyTicketsContent = () => {
       setDownloadingId(null);
     }
   };
+ lovable-sync-1786647086
+
+  // Cancela uma transferência que EU (dono original) enviei e ainda está pendente
+  const handleCancelTransfer = async (ticket: TicketWithDetails) => {
+    setCancelingId(ticket.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      const { data: pendingTransfer, error: findError } = await supabase
+        .from("ticket_transfers")
+        .select("id")
+        .eq("ticket_id", ticket.id)
+        .eq("from_user_id", user.id)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (findError) throw findError;
+      if (!pendingTransfer) {
+        toast.error("Nenhuma transferência pendente encontrada para este ingresso.");
+        return;
+      }
+
+      const { error: cancelError } = await supabase
+        .from("ticket_transfers")
+        .update({ status: "cancelled", completed_at: new Date().toISOString() })
+        .eq("id", pendingTransfer.id);
+      if (cancelError) throw cancelError;
+
+      const { error: ticketError } = await supabase
+        .from("tickets")
+        .update({ transfer_status: "none" })
+        .eq("id", ticket.id);
+      if (ticketError) throw ticketError;
+
+      toast.success("Transferência cancelada. O ingresso voltou para você.");
+      fetchTickets();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao cancelar transferência");
+    } finally {
+      setCancelingId(null);
+    }
+  };
+main
 
   const fetchTickets = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -248,7 +303,6 @@ const MyTicketsContent = () => {
         let event: TicketWithDetails["event"] = directEvent || eventFromId || null;
 
         if (!isComplimentary) {
-          // Paid ticket - get status from order_items (nested or direct)
           const nestedOrderItem = ticket.order_items as
             | { ticket_type_id: string | null; orders: { status: string } | null }
             | null;
@@ -259,7 +313,6 @@ const MyTicketsContent = () => {
           const resolvedOrderItem = nestedOrderItem || directOrderItem || null;
           orderStatus = resolvedOrderItem?.orders?.status || "paid";
 
-          // If no direct event/ticket_type, try to get from order_items -> ticket_types
           const ttId = resolvedOrderItem?.ticket_type_id || null;
           if (ttId && ticketTypesWithEvents[ttId]) {
             const ttInfo = ticketTypesWithEvents[ttId];
@@ -346,7 +399,6 @@ const MyTicketsContent = () => {
                     Transferência Pendente
                   </Badge>
                 )}
-                {/* Status Badge */}
                 {ticket.is_used ? (
                   <Badge variant="secondary" className="text-xs">
                     Utilizado
@@ -406,7 +458,7 @@ const MyTicketsContent = () => {
                 </div>
               )}
             </div>
-            <div className="mt-3 flex items-center gap-2">
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
               <Button variant="outline" size="sm" className="gap-1" disabled={ticket.transfer_status === "pending"}>
                 <QrCode className="w-4 h-4" />
                 Ver QR Code
@@ -424,6 +476,45 @@ const MyTicketsContent = () => {
                 <Download className="w-4 h-4" />
                 {downloadingId === ticket.id ? "Gerando..." : "Baixar PDF"}
               </Button>
+              lovable-sync-1786647086
+
+              {!ticket.is_used &&
+                !ticket.is_complimentary === false && // sempre permitido também para cortesia
+                ticket.transfer_status !== "pending" &&
+                ticket.order_status !== "pending" &&
+                ticket.order_status !== "failed" &&
+                ticket.order_status !== "cancelled" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTransferTicket(ticket);
+                    }}
+                  >
+                    <Send className="w-4 h-4" />
+                    Transferir
+                  </Button>
+                )}
+
+              {ticket.transfer_status === "pending" && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="gap-1"
+                  disabled={cancelingId === ticket.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCancelTransfer(ticket);
+                  }}
+                >
+                  <XCircle className="w-4 h-4" />
+                  {cancelingId === ticket.id ? "Cancelando..." : "Cancelar transferência"}
+                </Button>
+              )}
+              
+              main
             </div>
           </CardContent>
         </div>
@@ -449,6 +540,7 @@ const MyTicketsContent = () => {
             </p>
           </motion.div>
 
+          <PendingTransfers onTransferHandled={fetchTickets} />
 
           {loading ? (
             <div className="space-y-4">
@@ -587,6 +679,21 @@ const MyTicketsContent = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Modal de transferência */}
+      {transferTicket && (
+        <TicketTransfer
+          ticketId={transferTicket.id}
+          ticketCode={transferTicket.ticket_code}
+          eventTitle={transferTicket.event?.title || "Ingresso PremierPass"}
+          eventDate={transferTicket.event?.start_date}
+          open={!!transferTicket}
+          onOpenChange={(open) => !open && setTransferTicket(null)}
+          onSuccess={() => {
+            setTransferTicket(null);
+            fetchTickets();
+          }}
+        />
+      )}
     </div>
   );
 };

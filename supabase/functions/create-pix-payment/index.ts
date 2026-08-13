@@ -43,6 +43,27 @@ serve(async (req) => {
     customer_phone = customer_phone || profile?.phone || null;
     customer_cpf = (customer_cpf || '').replace(/\D/g, '') || null;
     if (!customer_name) throw new Error('Nome do comprador obrigatório');
+// Limite de 4 ingressos por CPF por evento (soma pedidos pagos + pendentes)
+    if (customer_cpf && customer_cpf.length >= 11) {
+      const { data: existingOrders } = await supabase
+        .from('orders')
+        .select('id, order_items(quantity)')
+        .eq('event_id', event_id)
+        .eq('customer_cpf', customer_cpf)
+        .in('status', ['paid', 'pending']);
+
+      const alreadyBought = (existingOrders || []).reduce(
+        (sum: number, o: any) =>
+          sum + (o.order_items || []).reduce((s: number, oi: any) => s + oi.quantity, 0),
+        0
+      );
+      const newQty = items.reduce((s: number, i: any) => s + Math.max(1, Math.floor(Number(i.quantity) || 0)), 0);
+      if (alreadyBought + newQty > 4) {
+        throw new Error(
+          `Limite de 4 ingressos por CPF atingido para este evento (você já tem ${alreadyBought}).`
+        );
+      }
+    }
 
     const ticketTypeIds = items.map((i: any) => i.ticket_type_id);
     const [{ data: event }, { data: ticketTypes, error: ttErr }] = await Promise.all([
