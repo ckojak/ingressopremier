@@ -323,11 +323,7 @@ const Events = () => {
         
         toast({ 
           title: "Evento enviado para aprovação!",
-         lovable-sync-1786570868
-          description: "Seu evento será analisado pela nossa equipe em até 4 horas.",
-
           description: "Seus dados serão verificados e o evento será publicado em até 4 horas.",
-          main
         });
       } else {
         // Event was published - send push notifications to users
@@ -433,12 +429,8 @@ const Events = () => {
           <div>
             <h3 className="text-yellow-400 font-semibold">Aviso sobre aprovação de eventos</h3>
             <p className="text-muted-foreground text-sm mt-1">
-              lovable-sync-1786570868
-              Seu evento será analisado pela nossa equipe em até <strong className="text-yellow-400">4 horas</strong> após o envio para aprovação.
-              {!isVerified && " A publicação só é liberada após a verificação do documento do responsável."}
-
               Os dados do seu evento serão verificados pela nossa equipe e publicados em até <strong className="text-yellow-400">4 horas</strong> após o envio para aprovação.
-              main
+              {!isVerified && " A publicação só é liberada após a verificação do documento do responsável."}
             </p>
           </div>
         </div>
