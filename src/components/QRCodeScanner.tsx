@@ -176,29 +176,40 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
         .eq("id", ticketData.event_id)
         .single();
 
-      // Check if already used
-      if (ticketData.is_used) {
+      // Atomic check-in (no race condition)
+      const { data: rpcData, error: rpcError } = await supabase.rpc("checkin_ticket", {
+        p_ticket_id: ticketData.id,
+      });
+
+      const checkin = rpcData as unknown as {
+        success: boolean;
+        already_used: boolean;
+        attendee_name: string | null;
+        used_at: string | null;
+      } | null;
+
+      if (rpcError || !checkin) {
         setStatus("error");
-        setMessage("Este ingresso já foi utilizado.");
-        setTicketInfo({
-          id: ticketData.id,
-          attendeeName: ticketData.attendee_name || "N/A",
-          ticketType: typeData?.name || "N/A",
-          eventName: eventData?.title || "N/A",
-          usedAt: ticketData.used_at,
-        });
+        setMessage("Erro ao validar ingresso. Tente novamente.");
         return;
       }
 
-      // Mark ticket as used
-      const { error: updateError } = await supabase
-        .from("tickets")
-        .update({ is_used: true, used_at: new Date().toISOString() })
-        .eq("id", ticketData.id);
-
-      if (updateError) {
+      if (!checkin.success) {
         setStatus("error");
-        setMessage("Erro ao validar ingresso. Tente novamente.");
+        setMessage(
+          checkin.already_used
+            ? "Este ingresso já foi utilizado."
+            : "Ingresso não encontrado. Código inválido."
+        );
+        if (checkin.already_used) {
+          setTicketInfo({
+            id: ticketData.id,
+            attendeeName: ticketData.attendee_name || "N/A",
+            ticketType: typeData?.name || "N/A",
+            eventName: eventData?.title || "N/A",
+            usedAt: checkin.used_at,
+          });
+        }
         return;
       }
 
