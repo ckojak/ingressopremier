@@ -15,7 +15,8 @@ interface CheckoutItem {
 interface CheckoutRequest {
   event_id: string;
   items: CheckoutItem[];
-  site_id?: string; // Site identifier for multi-tenant payment isolation
+  site_id?: string;
+  customer_cpf?: string; // NOVO
 }
 
 interface TicketType {
