@@ -39,7 +39,7 @@ import { ptBR } from "date-fns/locale";
 import { z } from "zod";
 import ImageUpload from "@/components/ImageUpload";
 import { useIBGEStates, useIBGECities } from "@/hooks/useIBGE";
-import { EVENT_CATEGORIES } from "@/lib/constants";
+import { EVENT_CATEGORIES, ADMIN_EMAILS } from "@/lib/constants";
 import { useSiteContext, getCurrentSiteConfig } from "@/hooks/useSiteContext";
 import { useInvalidateEvents } from "@/hooks/useEvents";
 
