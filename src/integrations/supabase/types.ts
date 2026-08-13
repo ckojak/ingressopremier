@@ -674,6 +674,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      checkin_ticket: { Args: { p_ticket_id: string }; Returns: Json }
       generate_ticket_code: { Args: never; Returns: string }
       has_role: {
         Args: {
