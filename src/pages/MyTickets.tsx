@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Ticket, Calendar, MapPin, QrCode } from "lucide-react";
+import { Ticket, Calendar, MapPin, QrCode, Download, Send, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,10 +16,14 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
 import TicketCardSkeleton from "@/components/skeletons/TicketCardSkeleton";
+import TicketTransfer from "@/components/TicketTransfer";
+import PendingTransfers from "@/components/PendingTransfers";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { QRCodeSVG } from "qrcode.react";
+import { toast } from "sonner";
+import { downloadTicketPdf } from "@/lib/ticket-pdf";
 
 interface TicketWithDetails {
   id: string;
@@ -59,7 +63,77 @@ const MyTicketsContent = () => {
   const [tickets, setTickets] = useState<TicketWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState<TicketWithDetails | null>(null);
-  
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [transferTicket, setTransferTicket] = useState<TicketWithDetails | null>(null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+
+  const handleDownloadPdf = async (ticket: TicketWithDetails) => {
+    setDownloadingId(ticket.id);
+    try {
+      const location = ticket.event
+        ? [ticket.event.venue_name, ticket.event.city, ticket.event.state].filter(Boolean).join(", ") ||
+          "Local a confirmar"
+        : "Local a confirmar";
+
+      await downloadTicketPdf({
+        eventTitle: ticket.event?.title || "Ingresso PremierPass",
+        dateTime: ticket.event
+          ? format(new Date(ticket.event.start_date), "EEEE, dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })
+          : "Data a confirmar",
+        location,
+        holderName: ticket.attendee_name || "-",
+        ticketTypeName: ticket.ticket_type?.name || "Ingresso",
+        ticketCode: ticket.ticket_code,
+      });
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      toast.error("Não foi possível gerar o PDF do ingresso.");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  // Cancela uma transferência que EU (dono original) enviei e ainda está pendente
+  const handleCancelTransfer = async (ticket: TicketWithDetails) => {
+    setCancelingId(ticket.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      const { data: pendingTransfer, error: findError } = await supabase
+        .from("ticket_transfers")
+        .select("id")
+        .eq("ticket_id", ticket.id)
+        .eq("from_user_id", user.id)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (findError) throw findError;
+      if (!pendingTransfer) {
+        toast.error("Nenhuma transferência pendente encontrada para este ingresso.");
+        return;
+      }
+
+      const { error: cancelError } = await supabase
+        .from("ticket_transfers")
+        .update({ status: "cancelled", completed_at: new Date().toISOString() })
+        .eq("id", pendingTransfer.id);
+      if (cancelError) throw cancelError;
+
+      const { error: ticketError } = await supabase
+        .from("tickets")
+        .update({ transfer_status: "none" })
+        .eq("id", ticket.id);
+      if (ticketError) throw ticketError;
+
+      toast.success("Transferência cancelada. O ingresso voltou para você.");
+      fetchTickets();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao cancelar transferência");
+    } finally {
+      setCancelingId(null);
+    }
+  };
 
   const fetchTickets = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -220,7 +294,6 @@ const MyTicketsContent = () => {
         let event: TicketWithDetails["event"] = directEvent || eventFromId || null;
 
         if (!isComplimentary) {
-          // Paid ticket - get status from order_items (nested or direct)
           const nestedOrderItem = ticket.order_items as
             | { ticket_type_id: string | null; orders: { status: string } | null }
             | null;
@@ -231,7 +304,6 @@ const MyTicketsContent = () => {
           const resolvedOrderItem = nestedOrderItem || directOrderItem || null;
           orderStatus = resolvedOrderItem?.orders?.status || "paid";
 
-          // If no direct event/ticket_type, try to get from order_items -> ticket_types
           const ttId = resolvedOrderItem?.ticket_type_id || null;
           if (ttId && ticketTypesWithEvents[ttId]) {
             const ttInfo = ticketTypesWithEvents[ttId];
@@ -318,7 +390,6 @@ const MyTicketsContent = () => {
                     Transferência Pendente
                   </Badge>
                 )}
-                {/* Status Badge */}
                 {ticket.is_used ? (
                   <Badge variant="secondary" className="text-xs">
                     Utilizado
@@ -378,11 +449,60 @@ const MyTicketsContent = () => {
                 </div>
               )}
             </div>
-            <div className="mt-3 flex items-center gap-2">
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
               <Button variant="outline" size="sm" className="gap-1" disabled={ticket.transfer_status === "pending"}>
                 <QrCode className="w-4 h-4" />
                 Ver QR Code
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="gap-1"
+                disabled={downloadingId === ticket.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadPdf(ticket);
+                }}
+              >
+                <Download className="w-4 h-4" />
+                {downloadingId === ticket.id ? "Gerando..." : "Baixar PDF"}
+              </Button>
+
+              {!ticket.is_used &&
+                !ticket.is_complimentary === false && // sempre permitido também para cortesia
+                ticket.transfer_status !== "pending" &&
+                ticket.order_status !== "pending" &&
+                ticket.order_status !== "failed" &&
+                ticket.order_status !== "cancelled" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTransferTicket(ticket);
+                    }}
+                  >
+                    <Send className="w-4 h-4" />
+                    Transferir
+                  </Button>
+                )}
+
+              {ticket.transfer_status === "pending" && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="gap-1"
+                  disabled={cancelingId === ticket.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCancelTransfer(ticket);
+                  }}
+                >
+                  <XCircle className="w-4 h-4" />
+                  {cancelingId === ticket.id ? "Cancelando..." : "Cancelar transferência"}
+                </Button>
+              )}
             </div>
           </CardContent>
         </div>
@@ -408,6 +528,7 @@ const MyTicketsContent = () => {
             </p>
           </motion.div>
 
+          <PendingTransfers onTransferHandled={fetchTickets} />
 
           {loading ? (
             <div className="space-y-4">
@@ -532,11 +653,35 @@ const MyTicketsContent = () => {
               <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
                 <p>Apresente este QR Code na entrada do evento para validação.</p>
               </div>
+
+              <Button
+                className="w-full gap-2"
+                disabled={downloadingId === selectedTicket.id}
+                onClick={() => handleDownloadPdf(selectedTicket)}
+              >
+                <Download className="w-4 h-4" />
+                {downloadingId === selectedTicket.id ? "Gerando PDF..." : "Baixar PDF"}
+              </Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
+      {/* Modal de transferência */}
+      {transferTicket && (
+        <TicketTransfer
+          ticketId={transferTicket.id}
+          ticketCode={transferTicket.ticket_code}
+          eventTitle={transferTicket.event?.title || "Ingresso PremierPass"}
+          eventDate={transferTicket.event?.start_date}
+          open={!!transferTicket}
+          onOpenChange={(open) => !open && setTransferTicket(null)}
+          onSuccess={() => {
+            setTransferTicket(null);
+            fetchTickets();
+          }}
+        />
+      )}
     </div>
   );
 };
