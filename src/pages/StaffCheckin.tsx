@@ -127,8 +127,8 @@ const StaffCheckin = () => {
 
   const handleCheckIn = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    
-    if (!ticketCode.trim() || !event) {
+
+    if (!ticketCode.trim() || !event || !accessCode) {
       toast.error("Digite o código do ingresso");
       return;
     }
@@ -137,20 +137,17 @@ const StaffCheckin = () => {
     setCheckResult(null);
 
     try {
-      const { data: ticket, error: findError } = await supabase
-        .from("tickets")
-        .select(`
-          id,
-          ticket_code,
-          attendee_name,
-          attendee_email,
-          is_used,
-          used_at,
-          ticket_types(name)
-        `)
-        .eq("ticket_code", normalizeTicketCode(ticketCode))
-        .eq("event_id", event.id)
-        .single();
+      // Busca o ingresso já validando o access_code no banco
+      // (garante que o staff só encontra ingressos do próprio evento)
+      const { data: ticketRows, error: findError } = await supabase.rpc(
+        "find_ticket_for_checkin",
+        {
+          p_ticket_code: normalizeTicketCode(ticketCode),
+          p_access_code: accessCode,
+        }
+      );
+
+      const ticket = ticketRows?.[0];
 
       if (findError || !ticket) {
         setCheckResult("error");
@@ -160,15 +157,21 @@ const StaffCheckin = () => {
       }
 
       const ticketData: TicketWithDetails = {
-        ...ticket,
-        ticket_type: ticket.ticket_types as { name: string } | null,
+        id: ticket.id,
+        ticket_code: ticket.ticket_code,
+        attendee_name: ticket.attendee_name,
+        attendee_email: ticket.attendee_email,
+        is_used: ticket.is_used,
+        used_at: ticket.used_at,
+        ticket_type: ticket.ticket_type_name ? { name: ticket.ticket_type_name } : null,
       };
 
       setLastCheckedTicket(ticketData);
 
-      // Atomic check-in (no race condition)
+      // Atomic check-in (no race condition), agora validado por access_code
       const { data: rpcData, error: rpcError } = await supabase.rpc("checkin_ticket", {
         p_ticket_id: ticket.id,
+        p_access_code: accessCode,
       });
 
       if (rpcError) throw rpcError;
