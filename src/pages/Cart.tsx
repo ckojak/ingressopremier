@@ -85,17 +85,15 @@ const Cart = () => {
 
       setCartItems(loadedItems);
       
-      // Load saved coupon if exists
+      // Load saved coupon if exists (via RPC — busca exata por ID, sem listar a tabela)
       if (parsed.couponId) {
-        const { data: coupon } = await supabase
-          .from("coupons")
-          .select("*")
-          .eq("id", parsed.couponId)
-          .eq("is_active", true)
-          .single();
-        
+        const { data: couponRows } = await supabase.rpc("get_coupon_by_id", {
+          p_id: parsed.couponId,
+        });
+
+        const coupon = couponRows?.[0];
         if (coupon) {
-          setAppliedCoupon(coupon);
+          setAppliedCoupon(coupon as Coupon);
         }
       }
     } catch (error) {
@@ -167,12 +165,12 @@ const Cart = () => {
     setCouponError("");
 
     try {
-      const { data: coupon, error } = await supabase
-        .from("coupons")
-        .select("*")
-        .eq("code", couponCode.trim().toUpperCase())
-        .eq("is_active", true)
-        .single();
+      // Busca exata por código via RPC — não lista mais cupons de outros eventos
+      const { data: couponRows, error } = await supabase.rpc("get_coupon_by_code", {
+        p_code: couponCode.trim().toUpperCase(),
+      });
+
+      const coupon = couponRows?.[0] as Coupon | undefined;
 
       if (error || !coupon) {
         setCouponError("Cupom inválido ou expirado");
