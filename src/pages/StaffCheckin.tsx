@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { QrCode, Check, X, Search, Ticket, Calendar, User, LogOut, Mail, Loader2 } from "lucide-react";
+import { QrCode, Check, X, Search, Ticket, Calendar, User, LogOut, Mail, Loader2, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -49,6 +50,16 @@ type InviteInfo = {
 // "checkin" -> pronto pra escanear
 type Step = "loading" | "invite_error" | "email_mismatch" | "confirm_accept" | "checkin";
 
+// BarcodeDetector é nativo do navegador (Chrome/Edge/Android). Declaramos o tipo mínimo
+// aqui pra não precisar instalar nenhum pacote novo.
+declare global {
+  interface Window {
+    BarcodeDetector?: new (options?: { formats: string[] }) => {
+      detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>>;
+    };
+  }
+}
+
 const StaffCheckin = () => {
   const { accessCode } = useParams<{ accessCode: string }>();
   const navigate = useNavigate();
@@ -65,7 +76,14 @@ const StaffCheckin = () => {
   const [lastCheckedTicket, setLastCheckedTicket] = useState<TicketWithDetails | null>(null);
   const [checkResult, setCheckResult] = useState<"success" | "error" | "already_used" | null>(null);
   const [recentCheckIns, setRecentCheckIns] = useState<TicketWithDetails[]>([]);
+  const [autoScanSupported, setAutoScanSupported] = useState(true);
+  const [cameraPermission, setCameraPermission] = useState<boolean | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<number | null>(null);
+  const detectorRef = useRef<InstanceType<NonNullable<Window["BarcodeDetector"]>> | null>(null);
+  const checkingRef = useRef(false);
 
   const loadInvite = useCallback(async () => {
     if (!accessCode) {
@@ -117,6 +135,15 @@ const StaffCheckin = () => {
   useEffect(() => {
     loadInvite();
   }, [loadInvite]);
+
+  // Liga/desliga a câmera junto com a tela de check-in
+  useEffect(() => {
+    if (step === "checkin") {
+      startCamera();
+    }
+    return () => stopCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const enterCheckinMode = (inviteData: InviteInfo) => {
     setEvent({
@@ -179,14 +206,74 @@ const StaffCheckin = () => {
     }
   };
 
-  const handleCheckIn = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // --- Câmera (leitura automática de QR Code) ---
 
-    if (!ticketCode.trim() || !event || !accessCode) {
-      toast.error("Digite o código do ingresso");
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setCameraPermission(true);
+      startAutoScan();
+    } catch (err) {
+      setCameraPermission(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      window.clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const startAutoScan = () => {
+    if (!("BarcodeDetector" in window) || !window.BarcodeDetector) {
+      setAutoScanSupported(false);
+      return;
+    }
+    setAutoScanSupported(true);
+
+    try {
+      detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
+    } catch {
+      setAutoScanSupported(false);
       return;
     }
 
+    if (scanIntervalRef.current) window.clearInterval(scanIntervalRef.current);
+
+    scanIntervalRef.current = window.setInterval(async () => {
+      if (checkingRef.current) return;
+      if (!videoRef.current || videoRef.current.readyState < 2) return;
+      if (!detectorRef.current) return;
+
+      try {
+        const results = await detectorRef.current.detect(videoRef.current);
+        if (results.length > 0 && results[0].rawValue) {
+          runCheckIn(results[0].rawValue);
+        }
+      } catch {
+        // frame não pôde ser lido, tenta de novo no próximo intervalo
+      }
+    }, 350);
+  };
+
+  // --- Check-in (usado tanto pelo texto manual quanto pela câmera) ---
+
+  const runCheckIn = async (rawCode: string) => {
+    const code = normalizeTicketCode(rawCode);
+    if (!code || checkingRef.current || !event || !accessCode) return;
+
+    checkingRef.current = true;
     setChecking(true);
     setCheckResult(null);
 
@@ -196,7 +283,7 @@ const StaffCheckin = () => {
       const { data: ticketRows, error: findError } = await supabase.rpc(
         "find_ticket_for_checkin",
         {
-          p_ticket_code: normalizeTicketCode(ticketCode),
+          p_ticket_code: code,
           p_access_code: accessCode,
         }
       );
@@ -251,7 +338,7 @@ const StaffCheckin = () => {
       setCheckResult("success");
       toast.success("Check-in realizado com sucesso!");
 
-      setLastCheckedTicket({ ...ticketData, is_used: true, used_at: result.used_at ?? new Date().toISOString() });
+      setLastCheckedTicket({ ....ticketData, is_used: true, used_at: result.used_at ?? new Date().toISOString() });
       fetchRecentCheckIns(event.id);
     } catch (error: any) {
       console.error("Check-in error:", error);
@@ -261,7 +348,20 @@ const StaffCheckin = () => {
       setChecking(false);
       setTicketCode("");
       inputRef.current?.focus();
+      // Pequena pausa antes de aceitar o próximo QR, pra não ler o mesmo código 2x seguidas
+      window.setTimeout(() => {
+        checkingRef.current = false;
+      }, 1200);
     }
+  };
+
+  const handleCheckIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!ticketCode.trim()) {
+      toast.error("Digite o código do ingresso");
+      return;
+    }
+    runCheckIn(ticketCode);
   };
 
   const handleLogout = async () => {
@@ -355,7 +455,7 @@ const StaffCheckin = () => {
               </div>
               <div>
                 <span className="text-lg font-bold text-foreground">
-                  Event<span className="text-gradient">ix</span>
+                  Premier<span className="text-gradient">Pass</span>
                 </span>
                 <p className="text-xs text-muted-foreground">Check-in</p>
               </div>
@@ -388,7 +488,7 @@ const StaffCheckin = () => {
               <div>
                 <h1 className="text-xl font-bold text-foreground">{event.title}</h1>
                 <p className="text-muted-foreground">
-                  {format(new Date(event.start_date), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+                  {format(new Date(event.start_date), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })
                 </p>
                 {event.venue_name && (
                   <p className="text-sm text-muted-foreground">{event.venue_name}</p>
@@ -407,29 +507,74 @@ const StaffCheckin = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleCheckIn} className="space-y-4">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    ref={inputRef}
-                    placeholder="Digite ou escaneie o código"
-                    value={ticketCode}
-                    onChange={(e) => setTicketCode(normalizeTicketCode(e.target.value))}
-                    className="pl-10 h-14 text-lg uppercase"
-                    autoFocus
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  size="lg" 
-                  className="h-14 px-8"
-                  disabled={checking || !ticketCode.trim()}
-                >
-                  {checking ? "Verificando..." : "Validar"}
-                </Button>
-              </div>
-            </form>
+            <Tabs defaultValue="camera" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="camera" className="flex items-center gap-2">
+                  <Camera className="w-4 h-4" />
+                  Escanear QR Code
+                </TabsTrigger>
+                <TabsTrigger value="manual" className="flex items-center gap-2">
+                  <Search className="w-4 h-4" />
+                  Código Manual
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="camera">
+                {cameraPermission === false ? (
+                  <div className="aspect-video rounded-lg bg-secondary flex flex-col items-center justify-center p-6 text-center">
+                    <X className="w-10 h-10 text-destructive mb-3" />
+                    <p className="text-foreground font-medium mb-1">Câmera não disponível</p>
+                    <p className="text-sm text-muted-foreground">Use a aba "Código Manual" ao lado.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="relative aspect-video rounded-lg overflow-hidden bg-black">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 pointer-events-none">
+                        <div className="absolute inset-8 border-2 border-primary rounded-xl opacity-50" />
+                      </div>
+                    </div>
+                    <p className="text-center text-sm text-muted-foreground">
+                      {autoScanSupported
+                        ? "Aponte a câmera para o QR Code — a leitura é automática"
+                        : "Seu navegador não lê QR automaticamente aqui — use a aba \"Código Manual\""}
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="manual">
+                <form onSubmit={handleCheckIn} className="space-y-4">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <Input
+                        ref={inputRef}
+                        placeholder="Digite ou escaneie o código"
+                        value={ticketCode}
+                        onChange={(e) => setTicketCode(normalizeTicketCode(e.target.value))}
+                        className="pl-10 h-14 text-lg uppercase"
+                        autoFocus
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      size="lg" 
+                      className="h-14 px-8"
+                      disabled={checking || !ticketCode.trim()}
+                    >
+                      {checking ? "Verificando..." : "Validar"}
+                    </Button>
+                  </div>
+                </form>
+              </TabsContent>
+            </Tabs>
 
             {/* Result Display */}
             {checkResult && lastCheckedTicket && (
