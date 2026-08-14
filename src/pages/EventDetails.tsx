@@ -370,6 +370,30 @@ const EventDetails = () => {
                 {event.description || event.short_description || "Sem descrição disponível."}
               </p>
             </div>
+
+            {/* Sobre o produtor */}
+            {organizer && (
+              <Card className="bg-card/80 backdrop-blur-sm border-border">
+                <CardContent className="p-4 md:p-5 flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <Building2 className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-foreground">Sobre o produtor</h2>
+                    <p className="text-sm text-muted-foreground">{organizer.name}</p>
+                    {organizer.document && (
+                      <p className="text-xs text-muted-foreground mt-0.5">Documento: {organizer.document}</p>
+                    )}
+                    {organizer.verified && (
+                      <Badge className="mt-2 text-[11px] gap-1 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                        <ShieldCheck className="w-3 h-3" />
+                        Produtor verificado
+                      </Badge>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Coluna lateral: compra de ingressos */}
@@ -459,12 +483,86 @@ const EventDetails = () => {
                     <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-3">
                       <p className="text-xs font-bold text-primary uppercase">Dados do Comprador</p>
                       <Input placeholder="Nome Completo" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-                      <Input placeholder="CPF (apenas números)" value={customerCpf} maxLength={11} onChange={(e) => setCustomerCpf(e.target.value.replace(/\D/g, ""))} />
+                      <div className="space-y-1">
+                        <Input
+                          placeholder="CPF"
+                          inputMode="numeric"
+                          value={formatCpf(customerCpf)}
+                          maxLength={14}
+                          aria-invalid={!!cpfValidationError}
+                          className={cpfValidationError ? "border-destructive focus-visible:ring-destructive" : ""}
+                          onChange={(e) => setCustomerCpf(onlyDigits(e.target.value).slice(0, 11))}
+                          onBlur={() => setCpfTouched(true)}
+                        />
+                        {cpfValidationError && (
+                          <p className="text-xs text-destructive">{cpfValidationError}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Endereço de cobrança */}
+                    <div className="bg-secondary/30 p-4 rounded-xl border border-border space-y-3">
+                      <p className="text-xs font-bold text-primary uppercase">Endereço de Cobrança</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input placeholder="CEP" inputMode="numeric" value={address.zip} onChange={(e) => setAddress({ ...address, zip: e.target.value })} />
+                        <Input placeholder="Número" value={address.number} onChange={(e) => setAddress({ ...address, number: e.target.value })} />
+                      </div>
+                      <Input placeholder="Rua / Logradouro" value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} />
+                      <Input placeholder="Complemento (opcional)" value={address.complement} onChange={(e) => setAddress({ ...address, complement: e.target.value })} />
+                      <Input placeholder="Bairro" value={address.district} onChange={(e) => setAddress({ ...address, district: e.target.value })} />
+                      <div className="grid grid-cols-3 gap-2">
+                        <Input className="col-span-2" placeholder="Cidade" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
+                        <Input placeholder="UF" maxLength={2} value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value.toUpperCase() })} />
+                      </div>
+                    </div>
+
+                    {/* Compra Protegida */}
+                    <label className="flex items-start gap-3 p-4 rounded-xl border border-border bg-secondary/20 cursor-pointer">
+                      <Checkbox
+                        checked={purchaseProtection}
+                        onCheckedChange={(v) => setPurchaseProtection(v === true)}
+                        className="mt-0.5"
+                      />
+                      <span className="text-sm">
+                        <span className="font-semibold block">Compra Protegida — R$ 3,00</span>
+                        <span className="text-xs text-muted-foreground">
+                          Cobertura opcional de reembolso em caso de imprevistos comprovados.
+                        </span>
+                      </span>
+                    </label>
+
+                    {/* Resumo com taxas detalhadas */}
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Subtotal dos ingressos</span>
+                        <span>R$ {subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Taxa de conveniência</span>
+                        <span>R$ {convenienceFee.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Taxa de processamento</span>
+                        <span>R$ {processingFee.toFixed(2)}</span>
+                      </div>
+                      {protectionFee > 0 && (
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Compra Protegida</span>
+                          <span>R$ {protectionFee.toFixed(2)}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total</span>
                       <span>R$ {totalAmount.toFixed(2)}</span>
                     </div>
+
+                    {/* Selos de segurança */}
+                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><Lock className="w-3.5 h-3.5 text-primary" /> Pagamento seguro</span>
+                      <span className="flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5 text-primary" /> Dados criptografados</span>
+                    </div>
+
                     {paymentMethod === "pix" ? (
                       <Button className="w-full bg-secondary min-h-[48px]" onClick={handlePixCheckout} disabled={processingPix}>
                         {processingPix ? "Gerando..." : "Pagar com PIX"}
@@ -474,6 +572,28 @@ const EventDetails = () => {
                         {processing ? "Redirecionando..." : "Pagar com Cartão"}
                       </Button>
                     )}
+
+                    {paymentMethod === "pix" && (
+                      <p className="text-xs text-muted-foreground">
+                        O QR Code do PIX expira em <strong>2 minutos</strong>. A confirmação costuma ser imediata,
+                        mas em casos raros pode levar até 2 horas.
+                      </p>
+                    )}
+
+                    {/* Política de cancelamento */}
+                    <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-3 space-y-1">
+                      <p className="font-semibold text-foreground flex items-center gap-1">
+                        <Info className="w-3.5 h-3.5" /> Política de cancelamento
+                      </p>
+                      <p>
+                        Cancelamento com reembolso integral em até 7 dias após a compra, desde que solicitado com no
+                        mínimo 48 horas de antecedência do início do evento.
+                      </p>
+                      <p>
+                        Fora desse prazo, você ainda pode <strong>transferir o ingresso</strong> para outra pessoa pelo
+                        painel "Meus Ingressos", sem custo adicional.
+                      </p>
+                    </div>
                   </div>
                 )}
               </CardContent>
