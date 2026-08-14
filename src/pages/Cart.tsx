@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useSiteContext } from "@/hooks/useSiteContext";
+import CardCheckoutBrick from "@/components/checkout/CardCheckoutBrick";
 
 type TicketType = Tables<"ticket_types">;
 type Event = Tables<"events">;
@@ -32,9 +33,9 @@ const Cart = () => {
   const { siteId } = useSiteContext();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
   const [processingPix, setProcessingPix] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [showCardForm, setShowCardForm] = useState(false);
   
   // Coupon state
   const [couponCode, setCouponCode] = useState("");
@@ -271,79 +272,18 @@ const Cart = () => {
   const serviceFee = subtotalAfterDiscount * SERVICE_FEE_PERCENTAGE;
   const total = subtotalAfterDiscount + serviceFee;
 
-  const handleCheckout = async () => {
-    if (cartItems.length === 0) {
-      toast.error("Seu carrinho está vazio");
-      return;
-    }
+  // Agrupa os itens do carrinho pelo primeiro evento (mesmo padrão já usado
+  // no PIX e no checkout por redirecionamento) — reaproveitado pelo cartão.
+  const getFirstEventGroup = () => {
+    const eventGroups = cartItems.reduce((acc, item) => {
+      const eventId = item.event.id;
+      if (!acc[eventId]) acc[eventId] = [];
+      acc[eventId].push(item);
+      return acc;
+    }, {} as Record<string, CartItem[]>);
 
-    // Require login for checkout
-    if (!user) {
-      toast.info("Faça login para finalizar a compra");
-      navigate("/auth");
-      return;
-    }
-
-    setProcessing(true);
-
-    try {
-      // Group items by event
-      const eventGroups = cartItems.reduce((acc, item) => {
-        const eventId = item.event.id;
-        if (!acc[eventId]) {
-          acc[eventId] = [];
-        }
-        acc[eventId].push(item);
-        return acc;
-      }, {} as Record<string, CartItem[]>);
-
-      // For simplicity, process first event group
-      const firstEventId = Object.keys(eventGroups)[0];
-      const items = eventGroups[firstEventId];
-
-      const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
-        body: {
-          event_id: firstEventId,
-          site_id: siteId, // Send site_id for multi-tenant payment isolation
-          items: items.map(item => ({
-            ticket_type_id: item.ticketType.id,
-            quantity: item.quantity,
-            unit_price: Number(item.ticketType.price),
-          })),
-        },
-      });
-
-      if (error) throw error;
-
-      // Send notification email if coupon was applied
-      if (appliedCoupon && user) {
-        try {
-          await supabase.functions.invoke("send-notification", {
-            body: {
-              type: "coupon_applied",
-              data: {
-                couponCode: appliedCoupon.code,
-                discountAmount: discount,
-                customerEmail: user.email,
-                customerName: user.user_metadata?.full_name || user.email,
-              },
-            },
-          });
-        } catch (notifError) {
-          console.error("Error sending coupon notification:", notifError);
-        }
-      }
-
-      if (data?.checkout_url) {
-        localStorage.removeItem("cart");
-        window.location.href = data.checkout_url;
-      }
-    } catch (error: any) {
-      console.error("Checkout error:", error);
-      toast.error(error.message || "Erro ao processar pagamento");
-    } finally {
-      setProcessing(false);
-    }
+    const firstEventId = Object.keys(eventGroups)[0];
+    return { eventId: firstEventId, items: eventGroups[firstEventId] || [] };
   };
 
   const handlePixCheckout = async () => {
@@ -361,18 +301,7 @@ const Cart = () => {
     setProcessingPix(true);
 
     try {
-      // Group items by event
-      const eventGroups = cartItems.reduce((acc, item) => {
-        const eventId = item.event.id;
-        if (!acc[eventId]) {
-          acc[eventId] = [];
-        }
-        acc[eventId].push(item);
-        return acc;
-      }, {} as Record<string, CartItem[]>);
-
-      const firstEventId = Object.keys(eventGroups)[0];
-      const items = eventGroups[firstEventId];
+      const { eventId: firstEventId, items } = getFirstEventGroup();
 
       const { data, error } = await supabase.functions.invoke("create-pix-payment", {
         body: {
@@ -403,6 +332,24 @@ const Cart = () => {
     } finally {
       setProcessingPix(false);
     }
+  };
+
+  const handleShowCardForm = () => {
+    if (cartItems.length === 0) {
+      toast.error("Seu carrinho está vazio");
+      return;
+    }
+    if (!user) {
+      toast.info("Faça login para finalizar a compra");
+      navigate("/auth");
+      return;
+    }
+    setShowCardForm(true);
+  };
+
+  const handleCardSuccess = (orderId: string) => {
+    localStorage.removeItem("cart");
+    navigate(`/checkout/status?order_id=${orderId}&status=success`);
   };
 
   if (loading) {
@@ -595,6 +542,35 @@ const Cart = () => {
                       )}
                     </CardContent>
                   </Card>
+
+                  {/* Formulário de cartão transparente (aparece ao clicar em "Pagar com Cartão") */}
+                  {showCardForm && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowCardForm(false)}
+                        className="mb-2 gap-2 text-muted-foreground"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        Escolher outra forma de pagamento
+                      </Button>
+                      <CardCheckoutBrick
+                        eventId={getFirstEventGroup().eventId}
+                        siteId={siteId}
+                        amount={total}
+                        items={getFirstEventGroup().items.map(item => ({
+                          ticket_type_id: item.ticketType.id,
+                          quantity: item.quantity,
+                        }))}
+                        payerEmail={user?.email || ""}
+                        onSuccess={handleCardSuccess}
+                      />
+                    </motion.div>
+                  )}
                 </div>
 
                 {/* Order Summary */}
@@ -650,28 +626,30 @@ const Cart = () => {
                         </span>
                       </div>
 
-                      <div className="space-y-3 pt-2">
-                        <Button
-                          className="w-full gap-2 bg-secondary hover:bg-secondary/80 min-h-[48px] text-base"
-                          size="lg"
-                          onClick={handlePixCheckout}
-                          disabled={processing || processingPix}
-                          variant="secondary"
-                        >
-                          <QrCode className="w-5 h-5" />
-                          {processingPix ? "Gerando PIX..." : "Pagar com PIX"}
-                        </Button>
+                      {!showCardForm && (
+                        <div className="space-y-3 pt-2">
+                          <Button
+                            className="w-full gap-2 bg-secondary hover:bg-secondary/80 min-h-[48px] text-base"
+                            size="lg"
+                            onClick={handlePixCheckout}
+                            disabled={processingPix}
+                            variant="secondary"
+                          >
+                            <QrCode className="w-5 h-5" />
+                            {processingPix ? "Gerando PIX..." : "Pagar com PIX"}
+                          </Button>
 
-                        <Button
-                          className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow min-h-[52px] text-base font-semibold"
-                          size="lg"
-                          onClick={handleCheckout}
-                          disabled={processing || processingPix}
-                        >
-                          <CreditCard className="w-5 h-5" />
-                          {processing ? "Processando..." : "Pagar com Cartão"}
-                        </Button>
-                      </div>
+                          <Button
+                            className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow min-h-[52px] text-base font-semibold"
+                            size="lg"
+                            onClick={handleShowCardForm}
+                            disabled={processingPix}
+                          >
+                            <CreditCard className="w-5 h-5" />
+                            Pagar com Cartão
+                          </Button>
+                        </div>
+                      )}
 
                       <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground pt-2">
                         <Lock className="w-3 h-3 text-primary" />
