@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useSiteContext } from "@/hooks/useSiteContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cpfError, formatCpf, onlyDigits } from "@/lib/cpf";
+import CardCheckoutBrick from "@/components/checkout/CardCheckoutBrick";
 
 type Event = Tables<"events">;
 type TicketType = Tables<"ticket_types">;
@@ -84,6 +85,10 @@ const EventDetails = () => {
   const [address, setAddress] = useState({
     zip: "", street: "", number: "", complement: "", district: "", city: "", state: "",
   });
+
+  // Formulário de cartão transparente (Payment Brick embutido — sem redirect pro Mercado Pago)
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
     const fetchEventDetails = async () => {
@@ -193,6 +198,10 @@ const EventDetails = () => {
     }
   };
 
+  // Antes: chamava create-mercadopago-checkout e redirecionava (window.location.href)
+  // pro checkout hospedado do Mercado Pago. Agora só valida os dados e abre o
+  // formulário de cartão embutido na própria página (CardCheckoutBrick),
+  // igual ao que o Carrinho (Cart.tsx) já faz — sem sair do site.
   const handleCardCheckout = async () => {
     if (!validateCustomerData()) return;
 
@@ -201,26 +210,15 @@ const EventDetails = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return navigate("/auth");
 
-      const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
-        body: {
-          event_id: id,
-          site_id: siteId,
-          customer_cpf: onlyDigits(customerCpf),
-          purchase_protection: purchaseProtection,
-          billing_address: address,
-          items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
-        },
-      });
-
-      if (error) throw new Error(error.message);
-      if (data?.error) throw new Error(data.error);
-      if (!data?.checkout_url) throw new Error("Não foi possível iniciar o pagamento com cartão");
-
-      window.location.href = data.checkout_url;
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao processar pagamento");
+      setUserEmail(session.user?.email || "");
+      setShowCardForm(true);
+    } finally {
       setProcessing(false);
     }
+  };
+
+  const handleCardSuccess = (orderId: string) => {
+    navigate(`/checkout/status?order_id=${orderId}&status=success`);
   };
 
   if (loading) return <EventDetailsSkeleton />;
@@ -455,6 +453,28 @@ const EventDetails = () => {
 
                 {cart.length > 0 && (
                   <div className="pt-4 space-y-4 border-t border-border">
+                    {showCardForm ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowCardForm(false)}
+                          className="gap-2 text-muted-foreground"
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                          Escolher outra forma de pagamento
+                        </Button>
+                        <CardCheckoutBrick
+                          eventId={id as string}
+                          siteId={siteId}
+                          amount={totalAmount}
+                          items={cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity }))}
+                          payerEmail={userEmail}
+                          onSuccess={handleCardSuccess}
+                        />
+                      </>
+                    ) : (
+                      <>
                     <div className="space-y-2">
                       <p className="text-xs font-bold text-primary uppercase">Forma de Pagamento</p>
                       <div className="grid grid-cols-2 gap-3">
@@ -569,7 +589,7 @@ const EventDetails = () => {
                       </Button>
                     ) : (
                       <Button className="w-full min-h-[48px]" onClick={handleCardCheckout} disabled={processing}>
-                        {processing ? "Redirecionando..." : "Pagar com Cartão"}
+                        {processing ? "Carregando..." : "Pagar com Cartão"}
                       </Button>
                     )}
 
@@ -594,6 +614,8 @@ const EventDetails = () => {
                         painel "Meus Ingressos", sem custo adicional.
                       </p>
                     </div>
+                      </>
+                    )}
                   </div>
                 )}
               </CardContent>
