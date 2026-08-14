@@ -39,8 +39,17 @@ const ImageUpload = ({
     setUploading(true);
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Você precisa estar logado para enviar imagens");
+        setUploading(false);
+        return;
+      }
+
       const fileExt = file.name.split(".").pop();
-      const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      // A pasta com o user.id é obrigatória: a política de segurança do
+      // storage só permite editar/apagar arquivos dentro da própria pasta.
+      const fileName = `${folder}/${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from(bucket)
