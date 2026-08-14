@@ -9,7 +9,8 @@ import {
   MapPin,
   ArrowRight,
   QrCode,
-  Settings
+  Settings,
+  Rocket
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import { ptBR } from "date-fns/locale";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { toast } from "sonner";
 
 interface TicketData {
   id: string;
@@ -42,6 +44,8 @@ const ClientDashboard = () => {
   const [pastTicketsCount, setPastTicketsCount] = useState(0);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOrganizer, setIsOrganizer] = useState(false);
+  const [becomingProducer, setBecomingProducer] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -68,6 +72,13 @@ const ClientDashboard = () => {
           email: user.email || "",
           avatar_url: profileData?.avatar_url || null,
         });
+
+        // Verifica se já tem o cargo de produtor (pra não mostrar o card à toa)
+        const { data: rolesData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id);
+        setIsOrganizer((rolesData || []).some((r) => r.role === "organizer" || r.role === "admin"));
 
         // Fetch tickets - use any to avoid deep type instantiation issue with Supabase types
         const ticketsResult = await (supabase as any)
@@ -135,6 +146,35 @@ const ClientDashboard = () => {
     fetchData();
   }, [navigate]);
 
+  // Promove a conta atual pra produtor, sem precisar criar uma conta nova.
+  const handleBecomeProducer = async () => {
+    setBecomingProducer(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("user_roles")
+        .insert([{ user_id: user.id, role: "organizer" as any }]);
+
+      // Se já existir (corrida/duplo clique), não é erro de verdade
+      if (error && error.code !== "23505") {
+        throw error;
+      }
+
+      toast.success("Agora você também é produtor!");
+      navigate("/admin/produtor/bem-vindo");
+    } catch (error: any) {
+      toast.error(error.message || "Não foi possível ativar o modo produtor.");
+    } finally {
+      setBecomingProducer(false);
+    }
+  };
+
   const quickActions = [
     { icon: Calendar, label: "Ver Eventos", path: "/eventos", color: "text-primary", bgColor: "bg-primary/10" },
     { icon: Ticket, label: "Meus Ingressos", path: "/meus-ingressos", color: "text-accent", bgColor: "bg-accent/10" },
@@ -180,6 +220,32 @@ const ClientDashboard = () => {
             </motion.div>
           ))}
         </div>
+
+        {/* Torne-se um produtor: qualquer cliente pode virar produtor na própria conta,
+            sem precisar criar uma conta nova (e sem burlar nada, o CPF já é o mesmo). */}
+        {!loading && !isOrganizer && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+            <Card className="bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10 border-primary/20">
+              <CardContent className="p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
+                    <Rocket className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Quer organizar um evento?</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Ative o modo produtor na sua conta atual e comece a vender ingressos.
+                    </p>
+                  </div>
+                </div>
+                <Button onClick={handleBecomeProducer} disabled={becomingProducer} className="gap-2 gradient-primary whitespace-nowrap">
+                  {becomingProducer ? "Ativando..." : "Tornar-me produtor"}
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         <Card className="mb-8">
           <CardHeader className="flex flex-row items-center justify-between">
@@ -251,6 +317,9 @@ const ClientDashboard = () => {
               <Link to="/perfil" className="block"><div className="flex items-center justify-between p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"><span className="text-foreground">Editar Perfil</span><ArrowRight className="w-4 h-4 text-muted-foreground" /></div></Link>
               <Link to="/meus-ingressos" className="block"><div className="flex items-center justify-between p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"><span className="text-foreground">Histórico de Ingressos</span><ArrowRight className="w-4 h-4 text-muted-foreground" /></div></Link>
               <Link to="/suporte" className="block"><div className="flex items-center justify-between p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"><span className="text-foreground">Suporte</span><ArrowRight className="w-4 h-4 text-muted-foreground" /></div></Link>
+              {isOrganizer && (
+                <Link to="/admin/produtor" className="block"><div className="flex items-center justify-between p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"><span className="text-foreground">Painel de Produtor</span><ArrowRight className="w-4 h-4 text-muted-foreground" /></div></Link>
+              )}
             </CardContent>
           </Card>
         </div>
