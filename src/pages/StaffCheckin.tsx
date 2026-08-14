@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { QrCode, Check, X, Search, Ticket, Calendar, User, LogOut } from "lucide-react";
+import { QrCode, Check, X, Search, Ticket, Calendar, User, LogOut, Mail, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,68 +31,122 @@ type EventDetails = {
   venue_name: string | null;
 };
 
+type InviteInfo = {
+  invite_email: string;
+  invite_name: string | null;
+  is_active: boolean;
+  accepted: boolean;
+  event_id: string;
+  event_title: string;
+  event_start_date: string;
+  event_venue_name: string | null;
+};
+
+// "loading" -> verificando sessão / convite
+// "invite_error" -> código inválido, inexistente ou inativo
+// "email_mismatch" -> logado, mas com e-mail diferente do convite
+// "confirm_accept" -> logado com o e-mail certo, ainda não aceitou
+// "checkin" -> pronto pra escanear
+type Step = "loading" | "invite_error" | "email_mismatch" | "confirm_accept" | "checkin";
+
 const StaffCheckin = () => {
   const { accessCode } = useParams<{ accessCode: string }>();
   const navigate = useNavigate();
+
+  const [step, setStep] = useState<Step>("loading");
+  const [invite, setInvite] = useState<InviteInfo | null>(null);
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState(false);
+
   const [event, setEvent] = useState<EventDetails | null>(null);
   const [staffName, setStaffName] = useState<string>("");
   const [ticketCode, setTicketCode] = useState("");
-  const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
-  const [authorized, setAuthorized] = useState(false);
   const [lastCheckedTicket, setLastCheckedTicket] = useState<TicketWithDetails | null>(null);
   const [checkResult, setCheckResult] = useState<"success" | "error" | "already_used" | null>(null);
   const [recentCheckIns, setRecentCheckIns] = useState<TicketWithDetails[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    verifyAccess();
-  }, [accessCode]);
-
-  const verifyAccess = async () => {
+  const loadInvite = useCallback(async () => {
     if (!accessCode) {
       navigate("/");
       return;
     }
 
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      // Precisa logar (ou criar conta) com o e-mail que recebeu o convite,
+      // e depois voltar exatamente pra esta página.
+      navigate(`/auth?next=${encodeURIComponent(`/staff-checkin/${accessCode}`)}`);
+      return;
+    }
+
+    setSessionEmail(session.user.email ?? null);
+
+    const { data, error } = await supabase.rpc("get_checkin_invite", {
+      p_access_code: accessCode,
+    });
+
+    const inviteData = data?.[0] as InviteInfo | undefined;
+
+    if (error || !inviteData || !inviteData.is_active) {
+      setStep("invite_error");
+      return;
+    }
+
+    setInvite(inviteData);
+
+    const emailMatches =
+      inviteData.invite_email.toLowerCase() === (session.user.email ?? "").toLowerCase();
+
+    if (!emailMatches) {
+      setStep("email_mismatch");
+      return;
+    }
+
+    if (!inviteData.accepted) {
+      setStep("confirm_accept");
+      return;
+    }
+
+    // Já aceito antes com esta mesma conta: entra direto na tela de check-in.
+    enterCheckinMode(inviteData);
+  }, [accessCode, navigate]);
+
+  useEffect(() => {
+    loadInvite();
+  }, [loadInvite]);
+
+  const enterCheckinMode = (inviteData: InviteInfo) => {
+    setEvent({
+      id: inviteData.event_id,
+      title: inviteData.event_title,
+      start_date: inviteData.event_start_date,
+      venue_name: inviteData.event_venue_name,
+    });
+    setStaffName(inviteData.invite_name || inviteData.invite_email);
+    setStep("checkin");
+    fetchRecentCheckIns(inviteData.event_id);
+  };
+
+  const handleAcceptInvite = async () => {
+    if (!accessCode || !invite) return;
+    setAccepting(true);
     try {
-      const { data: staffData, error } = await supabase
-        .from("checkin_staff")
-        .select(`
-          id,
-          name,
-          email,
-          event_id,
-          is_active,
-          events (id, title, start_date, venue_name)
-        `)
-        .eq("access_code", accessCode)
-        .eq("is_active", true)
-        .single();
+      const { error } = await supabase.rpc("accept_checkin_invite", {
+        p_access_code: accessCode,
+      });
 
-      if (error || !staffData) {
-        toast.error("Código de acesso inválido ou expirado");
-        navigate("/");
-        return;
-      }
+      if (error) throw error;
 
-      // Update last access
-      await supabase
-        .from("checkin_staff")
-        .update({ last_access_at: new Date().toISOString() })
-        .eq("id", staffData.id);
-
-      const eventData = staffData.events as EventDetails;
-      setEvent(eventData);
-      setStaffName(staffData.name || staffData.email);
-      setAuthorized(true);
-      fetchRecentCheckIns(eventData.id);
-    } catch (error) {
-      console.error("Error verifying access:", error);
-      toast.error("Erro ao verificar acesso");
-      navigate("/");
+      toast.success("Convite aceito! Você já faz parte da equipe de check-in.");
+      enterCheckinMode({ ...invite, accepted: true });
+    } catch (error: any) {
+      console.error("Error accepting invite:", error);
+      toast.error("Não foi possível aceitar o convite. Tente novamente.");
     } finally {
-      setLoading(false);
+      setAccepting(false);
     }
   };
 
@@ -137,8 +191,8 @@ const StaffCheckin = () => {
     setCheckResult(null);
 
     try {
-      // Busca o ingresso já validando o access_code no banco
-      // (garante que o staff só encontra ingressos do próprio evento)
+      // Busca o ingresso já validando, no banco, que esta conta logada
+      // aceitou o convite de staff daquele evento específico.
       const { data: ticketRows, error: findError } = await supabase.rpc(
         "find_ticket_for_checkin",
         {
@@ -168,7 +222,6 @@ const StaffCheckin = () => {
 
       setLastCheckedTicket(ticketData);
 
-      // Atomic check-in (no race condition), agora validado por access_code
       const { data: rpcData, error: rpcError } = await supabase.rpc("checkin_ticket", {
         p_ticket_id: ticket.id,
         p_access_code: accessCode,
@@ -211,7 +264,12 @@ const StaffCheckin = () => {
     }
   };
 
-  if (loading) {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+  };
+
+  if (step === "loading") {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-muted-foreground">Verificando acesso...</div>
@@ -219,7 +277,7 @@ const StaffCheckin = () => {
     );
   }
 
-  if (!authorized || !event) {
+  if (step === "invite_error") {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md w-full mx-4">
@@ -234,6 +292,55 @@ const StaffCheckin = () => {
         </Card>
       </div>
     );
+  }
+
+  if (step === "email_mismatch" && invite) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md w-full mx-4">
+          <CardContent className="py-12 text-center">
+            <Mail className="w-16 h-16 mx-auto text-destructive mb-4" />
+            <h2 className="text-xl font-semibold mb-2">E-mail diferente</h2>
+            <p className="text-muted-foreground mb-2">
+              Este convite foi enviado para <strong>{invite.invite_email}</strong>.
+            </p>
+            <p className="text-muted-foreground mb-6">
+              Você está logado como <strong>{sessionEmail}</strong>. Saia e entre com a conta correta pra aceitar o convite.
+            </p>
+            <Button onClick={handleLogout} className="w-full">
+              Sair e entrar com outra conta
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (step === "confirm_accept" && invite) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md w-full mx-4">
+          <CardContent className="py-12 text-center">
+            <div className="w-16 h-16 mx-auto rounded-full bg-primary/20 flex items-center justify-center mb-4">
+              <Ticket className="w-8 h-8 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">Convite de check-in</h2>
+            <p className="text-muted-foreground mb-1">
+              Você foi convidado para fazer parte da equipe de check-in de:
+            </p>
+            <p className="text-lg font-medium text-foreground mb-6">{invite.event_title}</p>
+            <Button onClick={handleAcceptInvite} disabled={accepting} className="w-full">
+              {accepting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+              Aceitar e continuar
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (step !== "checkin" || !event) {
+    return null;
   }
 
   return (
@@ -261,7 +368,7 @@ const StaffCheckin = () => {
               <Button 
                 variant="ghost" 
                 size="icon"
-                onClick={() => navigate("/")}
+                onClick={handleLogout}
               >
                 <LogOut className="w-5 h-5" />
               </Button>
