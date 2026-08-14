@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, Flame, CreditCard } from "lucide-react";
+import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, Flame, CreditCard, ShieldCheck, Lock, Building2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
@@ -20,6 +21,7 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useSiteContext } from "@/hooks/useSiteContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cpfError, formatCpf, onlyDigits } from "@/lib/cpf";
 
 type Event = Tables<"events">;
 type TicketType = Tables<"ticket_types">;
@@ -76,6 +78,12 @@ const EventDetails = () => {
   // DADOS DO COMPRADOR NA TELA
   const [customerName, setCustomerName] = useState("");
   const [customerCpf, setCustomerCpf] = useState("");
+  const [cpfTouched, setCpfTouched] = useState(false);
+  const [purchaseProtection, setPurchaseProtection] = useState(false);
+  const [organizer, setOrganizer] = useState<{ name: string; document: string | null; verified: boolean } | null>(null);
+  const [address, setAddress] = useState({
+    zip: "", street: "", number: "", complement: "", district: "", city: "", state: "",
+  });
 
   useEffect(() => {
     const fetchEventDetails = async () => {
@@ -94,13 +102,66 @@ const EventDetails = () => {
     fetchEventDetails();
   }, [id]);
 
+  // Sobre o produtor (perfil + verificação KYC)
+  useEffect(() => {
+    const fetchOrganizer = async () => {
+      const organizerId = (event as any)?.organizer_id;
+      if (!organizerId) return;
+      const [{ data: profile }, { data: verification }] = await Promise.all([
+        supabase.from("profiles").select("full_name").eq("id", organizerId).maybeSingle(),
+        supabase
+          .from("organizer_verifications")
+          .select("document_number, status")
+          .eq("user_id", organizerId)
+          .eq("status", "approved")
+          .maybeSingle(),
+      ]);
+      if (profile?.full_name || verification) {
+        setOrganizer({
+          name: profile?.full_name || "Produtor PremierPass",
+          document: verification?.document_number ?? null,
+          verified: !!verification,
+        });
+      }
+    };
+    fetchOrganizer();
+  }, [event]);
+
   const subtotal = cart.reduce((sum, item) => sum + Number(item.ticketType.price) * item.quantity, 0);
-  const serviceFee = subtotal * 0.08;
-  const totalAmount = subtotal + serviceFee;
+  const serviceFee = Math.round(subtotal * 0.08 * 100) / 100;
+  // Detalhamento visual das taxas (soma exatamente os mesmos 8% já cobrados)
+  const convenienceFee = Math.round(subtotal * 0.055 * 100) / 100;
+  const processingFee = Math.round((serviceFee - convenienceFee) * 100) / 100;
+  const protectionFee = purchaseProtection ? 3 : 0;
+  const totalAmount = Math.round((subtotal + serviceFee + protectionFee) * 100) / 100;
+
+  const cpfValidationError = cpfTouched ? cpfError(customerCpf) : null;
+
+  const validateCustomerData = () => {
+    if (cart.length === 0) {
+      toast.error("Adicione ingressos");
+      return false;
+    }
+    if (!customerName.trim()) {
+      toast.error("Informe o nome completo");
+      return false;
+    }
+    setCpfTouched(true);
+    const err = cpfError(customerCpf);
+    if (err) {
+      toast.error(err);
+      return false;
+    }
+    const missing = !address.zip || !address.street || !address.number || !address.district || !address.city || !address.state;
+    if (missing) {
+      toast.error("Preencha o endereço de cobrança completo");
+      return false;
+    }
+    return true;
+  };
 
   const handlePixCheckout = async () => {
-    if (cart.length === 0) return toast.error("Adicione ingressos");
-    if (!customerName || customerCpf.length < 11) return toast.error("Preencha Nome e CPF corretamente!");
+    if (!validateCustomerData()) return;
 
     setProcessingPix(true);
     try {
@@ -112,7 +173,9 @@ const EventDetails = () => {
           event_id: id,
           site_id: siteId,
           customer_name: customerName,
-          customer_cpf: customerCpf.replace(/\D/g, ""),
+          customer_cpf: onlyDigits(customerCpf),
+          purchase_protection: purchaseProtection,
+          billing_address: address,
           items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
         },
       });
@@ -131,8 +194,7 @@ const EventDetails = () => {
   };
 
   const handleCardCheckout = async () => {
-    if (cart.length === 0) return toast.error("Adicione ingressos");
-    if (!customerName || customerCpf.length < 11) return toast.error("Preencha Nome e CPF corretamente!");
+    if (!validateCustomerData()) return;
 
     setProcessing(true);
     try {
@@ -143,7 +205,9 @@ const EventDetails = () => {
         body: {
           event_id: id,
           site_id: siteId,
-          customer_cpf: customerCpf.replace(/\D/g, ""),
+          customer_cpf: onlyDigits(customerCpf),
+          purchase_protection: purchaseProtection,
+          billing_address: address,
           items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
         },
       });
