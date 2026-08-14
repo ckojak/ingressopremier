@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const SERVICE_FEE = 0.08;
+const PROTECTION_FEE = 3;
 const log = (step: string, details?: unknown) =>
   console.log(`[CREATE-PIX] ${step}${details ? `: ${JSON.stringify(details)}` : ''}`);
 
@@ -26,7 +27,7 @@ serve(async (req) => {
     if (userErr || !user) throw new Error('Não autenticado');
 
     const body = await req.json();
-    const { event_id, items, site_id } = body;
+    const { event_id, items, site_id, purchase_protection } = body;
     let { customer_name, customer_cpf, customer_phone } = body;
 
     const mpAccessToken =
@@ -94,7 +95,8 @@ serve(async (req) => {
     }
 
     const serviceFee = Math.round(subtotal * SERVICE_FEE * 100) / 100;
-    const totalAmount = Math.round((subtotal + serviceFee) * 100) / 100;
+    const protectionFee = purchase_protection === true ? PROTECTION_FEE : 0;
+    const totalAmount = Math.round((subtotal + serviceFee + protectionFee) * 100) / 100;
     if (totalAmount <= 0) throw new Error('Valor inválido para pagamento PIX');
 
     const effectiveSiteId = site_id || event.site_id || 'premierpass';
@@ -139,7 +141,7 @@ serve(async (req) => {
       external_reference: order.id,
       notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago-webhook`,
       statement_descriptor: 'PREMIERPASS',
-      date_of_expiration: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      date_of_expiration: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
     };
 
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
@@ -181,6 +183,7 @@ serve(async (req) => {
       expiration_date: mpResult.date_of_expiration,
       total_amount: totalAmount,
       service_fee: serviceFee,
+      protection_fee: protectionFee,
       is_sandbox: isSandbox,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
