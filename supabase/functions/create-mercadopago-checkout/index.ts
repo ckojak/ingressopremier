@@ -72,7 +72,7 @@ serve(async (req) => {
 
     logStep('Usuário autenticado', { id: user.id, email: user.email });
 
-    const { event_id, items, site_id }: CheckoutRequest = await req.json();
+    const { event_id, items, site_id, purchase_protection }: CheckoutRequest & { purchase_protection?: boolean } = await req.json();
     logStep('Request recebido', { event_id, items, site_id });
 
     if (!event_id || !items || items.length === 0) {
@@ -172,7 +172,8 @@ serve(async (req) => {
 
     // Taxa de serviço: 8% (igual ao exibido no frontend e no PIX)
     const serviceFee = Math.round(subtotal * 0.08 * 100) / 100;
-    const totalAmount = Math.round((subtotal + serviceFee) * 100) / 100;
+    const protectionFee = purchase_protection === true ? 3 : 0;
+    const totalAmount = Math.round((subtotal + serviceFee + protectionFee) * 100) / 100;
     if (totalAmount <= 0) throw new Error('Valor inválido para pagamento');
 
     mpItems.push({
@@ -184,7 +185,18 @@ serve(async (req) => {
       unit_price: serviceFee
     });
 
-    logStep('Totais calculados', { subtotal, serviceFee, totalAmount });
+    if (protectionFee > 0) {
+      mpItems.push({
+        id: 'purchase-protection',
+        title: 'Compra Protegida',
+        description: 'Proteção opcional de reembolso',
+        quantity: 1,
+        currency_id: 'BRL',
+        unit_price: protectionFee
+      });
+    }
+
+    logStep('Totais calculados', { subtotal, serviceFee, protectionFee, totalAmount });
 
     // Buscar perfil do usuário (dados do comprador)
     const { data: profile } = await supabaseAdmin
@@ -268,8 +280,8 @@ serve(async (req) => {
         installments: 12,
         default_installments: 1
       },
-      // Configuração específica para PIX - validade de 30 minutos
-      date_of_expiration: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+      // Validade da preferência: 2 minutos
+      date_of_expiration: new Date(Date.now() + 2 * 60 * 1000).toISOString()
     };
 
     logStep('Criando preferência no Mercado Pago', { 
