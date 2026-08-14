@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
-import { ADMIN_EMAILS } from "@/lib/constants";
 import { Separator } from "@/components/ui/separator";
 import premierpassLogo from "@/assets/premierpass-logo.png";
 import { useSiteContext } from "@/hooks/useSiteContext";
@@ -65,6 +64,7 @@ const isValidPhone = (phone: string): boolean => {
 };
 
 // List of admin emails that should be auto-assigned admin role
+const ADMIN_EMAILS = ["bmw.reta@hotmail.com"];
 
 // Preserved post-login destination (used by the OAuth consent flow)
 const getNextPath = (): string | null => {
@@ -338,6 +338,19 @@ const Auth = () => {
         toast({
           title: "CPF inválido",
           description: "Por favor, insira um CPF válido.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Impede criar uma segunda conta com o mesmo CPF de outra já existente
+      const { data: cpfAvailable, error: cpfCheckError } = await supabase.rpc("is_cpf_available", {
+        p_cpf: cpf,
+      });
+      if (!cpfCheckError && cpfAvailable === false) {
+        toast({
+          title: "CPF já cadastrado",
+          description: "Já existe uma conta com este CPF. Faça login em vez de criar uma nova conta.",
           variant: "destructive",
         });
         return;
