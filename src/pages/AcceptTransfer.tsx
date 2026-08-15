@@ -55,8 +55,6 @@ const AcceptTransfer = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          // Auth.tsx lê o parâmetro "next" (não "redirect") pra saber pra
-          // onde voltar depois do login.
           navigate(`/auth?next=${encodeURIComponent(`/aceitar-transferencia?code=${transferCode}`)}`);
           return;
         }
@@ -93,7 +91,6 @@ const AcceptTransfer = () => {
           return;
         }
 
-        // Get sender email
         const { data: senderProfile } = await supabase
           .from("profiles")
           .select("email")
@@ -132,31 +129,14 @@ const AcceptTransfer = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Usuário não autenticado");
 
-      // Update transfer status
-      const { error: updateTransferError } = await supabase
-        .from("ticket_transfers")
-        .update({
-          status: "accepted",
-          to_user_id: session.user.id,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", transfer.id);
+      // Aceita através de uma função segura: ela confere no servidor que quem está
+      // chamando é de fato o destinatário do convite antes de mudar qualquer coisa.
+      const { error: acceptError } = await supabase.rpc("accept_ticket_transfer", {
+        p_transfer_id: transfer.id,
+      });
 
-      if (updateTransferError) throw updateTransferError;
+      if (acceptError) throw acceptError;
 
-      // Transfer ticket ownership
-      const { error: updateTicketError } = await supabase
-        .from("tickets")
-        .update({
-          user_id: session.user.id,
-          attendee_email: session.user.email,
-          transfer_status: "none",
-        })
-        .eq("id", transfer.ticket.id);
-
-      if (updateTicketError) throw updateTicketError;
-
-      // Send notification email
       try {
         await supabase.functions.invoke("send-notification", {
           body: {
@@ -198,10 +178,9 @@ const AcceptTransfer = () => {
     setProcessing(true);
 
     try {
-      const { error } = await supabase
-        .from("ticket_transfers")
-        .update({ status: "rejected" })
-        .eq("id", transfer.id);
+      const { error } = await supabase.rpc("reject_ticket_transfer", {
+        p_transfer_id: transfer.id,
+      });
 
       if (error) throw error;
 
