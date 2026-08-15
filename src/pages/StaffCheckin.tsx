@@ -43,15 +43,8 @@ type InviteInfo = {
   event_venue_name: string | null;
 };
 
-// "loading" -> verificando sessão / convite
-// "invite_error" -> código inválido, inexistente ou inativo
-// "email_mismatch" -> logado, mas com e-mail diferente do convite
-// "confirm_accept" -> logado com o e-mail certo, ainda não aceitou
-// "checkin" -> pronto pra escanear
 type Step = "loading" | "invite_error" | "email_mismatch" | "confirm_accept" | "checkin";
 
-// BarcodeDetector é nativo do navegador (Chrome/Edge/Android). Declaramos o tipo mínimo
-// aqui pra não precisar instalar nenhum pacote novo.
 declare global {
   interface Window {
     BarcodeDetector?: new (options?: { formats: string[] }) => {
@@ -94,8 +87,6 @@ const StaffCheckin = () => {
     const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
-      // Precisa logar (ou criar conta) com o e-mail que recebeu o convite,
-      // e depois voltar exatamente pra esta página.
       navigate(`/auth?next=${encodeURIComponent(`/staff-checkin/${accessCode}`)}`);
       return;
     }
@@ -128,7 +119,6 @@ const StaffCheckin = () => {
       return;
     }
 
-    // Já aceito antes com esta mesma conta: entra direto na tela de check-in.
     enterCheckinMode(inviteData);
   }, [accessCode, navigate]);
 
@@ -136,7 +126,6 @@ const StaffCheckin = () => {
     loadInvite();
   }, [loadInvite]);
 
-  // Liga/desliga a câmera junto com a tela de check-in
   useEffect(() => {
     if (step === "checkin") {
       startCamera();
@@ -206,8 +195,6 @@ const StaffCheckin = () => {
     }
   };
 
-  // --- Câmera (leitura automática de QR Code) ---
-
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -267,8 +254,6 @@ const StaffCheckin = () => {
     }, 350);
   };
 
-  // --- Check-in (usado tanto pelo texto manual quanto pela câmera) ---
-
   const runCheckIn = async (rawCode: string) => {
     const code = normalizeTicketCode(rawCode);
     if (!code || checkingRef.current || !event || !accessCode) return;
@@ -278,8 +263,6 @@ const StaffCheckin = () => {
     setCheckResult(null);
 
     try {
-      // Busca o ingresso já validando, no banco, que esta conta logada
-      // aceitou o convite de staff daquele evento específico.
       const { data: ticketRows, error: findError } = await supabase.rpc(
         "find_ticket_for_checkin",
         {
@@ -338,7 +321,7 @@ const StaffCheckin = () => {
       setCheckResult("success");
       toast.success("Check-in realizado com sucesso!");
 
-      setLastCheckedTicket({ ....ticketData, is_used: true, used_at: result.used_at ?? new Date().toISOString() });
+      setLastCheckedTicket({ ...ticketData, is_used: true, used_at: result.used_at ?? new Date().toISOString() });
       fetchRecentCheckIns(event.id);
     } catch (error: any) {
       console.error("Check-in error:", error);
@@ -348,7 +331,6 @@ const StaffCheckin = () => {
       setChecking(false);
       setTicketCode("");
       inputRef.current?.focus();
-      // Pequena pausa antes de aceitar o próximo QR, pra não ler o mesmo código 2x seguidas
       window.setTimeout(() => {
         checkingRef.current = false;
       }, 1200);
@@ -445,7 +427,6 @@ const StaffCheckin = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -478,7 +459,6 @@ const StaffCheckin = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-6">
-        {/* Event Info */}
         <Card className="bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
           <CardContent className="py-6">
             <div className="flex items-start gap-4">
@@ -488,7 +468,7 @@ const StaffCheckin = () => {
               <div>
                 <h1 className="text-xl font-bold text-foreground">{event.title}</h1>
                 <p className="text-muted-foreground">
-                  {format(new Date(event.start_date), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })
+                  {format(new Date(event.start_date), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
                 </p>
                 {event.venue_name && (
                   <p className="text-sm text-muted-foreground">{event.venue_name}</p>
@@ -498,7 +478,6 @@ const StaffCheckin = () => {
           </CardContent>
         </Card>
 
-        {/* Check-in Form */}
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -576,7 +555,6 @@ const StaffCheckin = () => {
               </TabsContent>
             </Tabs>
 
-            {/* Result Display */}
             {checkResult && lastCheckedTicket && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -648,7 +626,6 @@ const StaffCheckin = () => {
           </CardContent>
         </Card>
 
-        {/* Recent Check-ins */}
         {recentCheckIns.length > 0 && (
           <Card className="bg-card border-border">
             <CardHeader>
