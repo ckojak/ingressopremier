@@ -595,7 +595,7 @@ const EventDetails = () => {
 
                     {paymentMethod === "pix" && (
                       <p className="text-xs text-muted-foreground">
-                        O QR Code do PIX expira em <strong>2 minutos</strong>. A confirmação costuma ser imediata,
+                        O QR Code do PIX expira em <strong>5 minutos</strong>. A confirmação costuma ser imediata,
                         mas em casos raros pode levar até 2 horas.
                       </p>
                     )}
