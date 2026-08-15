@@ -55,7 +55,9 @@ const AcceptTransfer = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          navigate(`/auth?redirect=/aceitar-transferencia?code=${transferCode}`);
+          // Auth.tsx lê o parâmetro "next" (não "redirect") pra saber pra
+          // onde voltar depois do login.
+          navigate(`/auth?next=${encodeURIComponent(`/aceitar-transferencia?code=${transferCode}`)}`);
           return;
         }
 
