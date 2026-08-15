@@ -116,17 +116,12 @@ const MyTicketsContent = () => {
         return;
       }
 
-      const { error: cancelError } = await supabase
-        .from("ticket_transfers")
-        .update({ status: "cancelled", completed_at: new Date().toISOString() })
-        .eq("id", pendingTransfer.id);
+      // Cancela através de uma função segura: ela confere no servidor que quem
+      // está chamando foi de fato quem enviou a transferência antes de mudar algo.
+      const { error: cancelError } = await supabase.rpc("cancel_ticket_transfer", {
+        p_transfer_id: pendingTransfer.id,
+      });
       if (cancelError) throw cancelError;
-
-      const { error: ticketError } = await supabase
-        .from("tickets")
-        .update({ transfer_status: "none" })
-        .eq("id", ticket.id);
-      if (ticketError) throw ticketError;
 
       toast.success("Transferência cancelada. O ingresso voltou para você.");
       fetchTickets();
