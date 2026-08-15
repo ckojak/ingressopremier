@@ -32,9 +32,10 @@ declare global {
 interface CardCheckoutBrickProps {
   eventId: string;
   siteId: string;
-  amount: number; // valor total (com taxa de serviço já incluída) só para exibição no Brick
+  amount: number; // valor total (com taxa de serviço e proteção já incluídas) só para exibição no Brick
   items: { ticket_type_id: string; quantity: number }[];
   payerEmail: string;
+  purchaseProtection?: boolean;
   onSuccess: (orderId: string) => void;
   onError?: (message: string) => void;
 }
@@ -47,6 +48,7 @@ const CardCheckoutBrick = ({
   amount,
   items,
   payerEmail,
+  purchaseProtection,
   onSuccess,
   onError,
 }: CardCheckoutBrickProps) => {
@@ -118,6 +120,7 @@ const CardCheckoutBrick = ({
                     payment_method_id: formData.payment_method_id,
                     issuer_id: formData.issuer_id,
                     installments: formData.installments,
+                    purchase_protection: purchaseProtection === true,
                     payer: {
                       email: formData.payer.email || payerEmail,
                       identification: formData.payer.identification,
