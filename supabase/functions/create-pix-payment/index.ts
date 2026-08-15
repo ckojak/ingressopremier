@@ -141,7 +141,7 @@ serve(async (req) => {
       external_reference: order.id,
       notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago-webhook`,
       statement_descriptor: 'PREMIERPASS',
-      date_of_expiration: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+      date_of_expiration: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     };
 
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
