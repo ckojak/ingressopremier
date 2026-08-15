@@ -38,18 +38,9 @@ const TicketTransfer = ({
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const generateTransferCode = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
-    for (let i = 0; i < 10; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  };
-
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email) {
       toast({
         title: "Erro",
@@ -57,22 +48,6 @@ const TicketTransfer = ({
         variant: "destructive",
       });
       return;
-    }
-
-    // Check if event is within 2 hours
-    if (eventDate) {
-      const eventTime = new Date(eventDate).getTime();
-      const now = Date.now();
-      const twoHoursInMs = 2 * 60 * 60 * 1000;
-      
-      if (eventTime - now < twoHoursInMs) {
-        toast({
-          title: "Transferência não permitida",
-          description: "Não é possível transferir ingressos com menos de 2 horas para o evento.",
-          variant: "destructive",
-        });
-        return;
-      }
     }
 
     setLoading(true);
@@ -89,49 +64,29 @@ const TicketTransfer = ({
 
       const senderName = profile?.full_name || profile?.email || "Um usuário";
 
-      // Check if user already has a pending transfer for this ticket
-      const { data: existingTransfer } = await supabase
-        .from("ticket_transfers")
-        .select("id")
-        .eq("ticket_id", ticketId)
-        .eq("status", "pending")
-        .maybeSingle();
-
-      if (existingTransfer) {
-        throw new Error("Já existe uma transferência pendente para este ingresso");
-      }
-
-      // Create transfer request
-      const transferCode = generateTransferCode();
-      const { data: transferData, error } = await supabase
-        .from("ticket_transfers")
-        .insert({
-          ticket_id: ticketId,
-          from_user_id: user.id,
-          to_user_email: email.toLowerCase(),
-          transfer_code: transferCode,
-          status: "pending",
-        })
-        .select()
-        .single();
+      // Cria a transferência através de uma função segura no banco, que já valida
+      // do lado do servidor: dono do ingresso, ingresso não usado, sem transferência
+      // pendente duplicada, e o prazo mínimo de 2h antes do evento.
+      const { data: transferRpcData, error } = await supabase.rpc("initiate_ticket_transfer", {
+        p_ticket_id: ticketId,
+        p_to_email: email.toLowerCase(),
+      });
 
       if (error) throw error;
 
-      // Update ticket transfer_status to pending
-      await supabase
-        .from("tickets")
-        .update({ transfer_status: "pending" })
-        .eq("id", ticketId);
+      const transferRow = transferRpcData?.[0];
+      const transferId = transferRow?.transfer_id;
+      const transferCode = transferRow?.transfer_code;
 
       // Format event date
-      const formattedDate = eventDate 
+      const formattedDate = eventDate
         ? format(new Date(eventDate), "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR })
         : "Data não informada";
 
       // Send transfer email
       const { error: emailError } = await supabase.functions.invoke("send-transfer-email", {
         body: {
-          transferId: transferData.id,
+          transferId,
           recipientEmail: email.toLowerCase(),
           transferCode,
           eventTitle,
@@ -188,7 +143,7 @@ const TicketTransfer = ({
             <p className="font-semibold text-foreground">{eventTitle}</p>
             <p className="text-xs text-muted-foreground mt-1">Código: {ticketCode}</p>
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="email">E-mail do Destinatário *</Label>
             <Input
@@ -207,6 +162,7 @@ const TicketTransfer = ({
               <li>O destinatário receberá um e-mail com o link para aceitar</li>
               <li>Você pode cancelar a transferência enquanto não for aceita</li>
               <li>Após aceita, o ingresso será vinculado à conta do destinatário</li>
+              <li>Não é possível transferir com menos de 2 horas para o evento</li>
             </ul>
           </div>
 
