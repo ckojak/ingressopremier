@@ -15,7 +15,9 @@ import { toast } from "sonner";
 //    transforma isso num token de uso único direto no navegador da pessoa.
 // 3. Só esse token (não o cartão) é enviado pra Edge Function
 //    "create-mercadopago-card-payment", que cobra o cartão usando a
-//    credencial secreta do Mercado Pago no servidor.
+//    credencial secreta do Mercado Pago no servidor. O valor cobrado é
+//    SEMPRE recalculado no servidor (preço, cupom e taxa de proteção) —
+//    o "amount" abaixo é só para exibição/parcelamento no formulário.
 //
 // PRÉ-REQUISITO ainda pendente: precisa da CHAVE PÚBLICA do Mercado Pago
 // (Public Key — começa com APP_USR- ou TEST-, é diferente do Access Token,
@@ -32,10 +34,11 @@ declare global {
 interface CardCheckoutBrickProps {
   eventId: string;
   siteId: string;
-  amount: number; // valor total (com taxas já incluídas) só para exibição no Brick
+  amount: number; // valor total (com taxa de serviço e proteção já incluídas) só para exibição no Brick
   items: { ticket_type_id: string; quantity: number }[];
   payerEmail: string;
-  purchaseProtection?: boolean; // "Compra Protegida" (R$3) — mesmo padrão do PIX
+  purchaseProtection?: boolean;
+  couponCode?: string;
   onSuccess: (orderId: string) => void;
   onError?: (message: string) => void;
 }
@@ -48,7 +51,8 @@ const CardCheckoutBrick = ({
   amount,
   items,
   payerEmail,
-  purchaseProtection = false,
+  purchaseProtection,
+  couponCode,
   onSuccess,
   onError,
 }: CardCheckoutBrickProps) => {
@@ -116,11 +120,12 @@ const CardCheckoutBrick = ({
                     event_id: eventId,
                     site_id: siteId,
                     items,
-                    purchase_protection: purchaseProtection,
                     token: formData.token,
                     payment_method_id: formData.payment_method_id,
                     issuer_id: formData.issuer_id,
                     installments: formData.installments,
+                    purchase_protection: purchaseProtection === true,
+                    coupon_code: couponCode || undefined,
                     payer: {
                       email: formData.payer.email || payerEmail,
                       identification: formData.payer.identification,
