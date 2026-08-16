@@ -60,6 +60,8 @@ const eventSchema = z.object({
   website: z.string().url("URL do site inválida").optional().or(z.literal("")),
   contact: z.string().max(200, "Contato deve ter no máximo 200 caracteres").optional().or(z.literal("")),
   status: z.enum(["draft", "pending", "published", "cancelled", "completed"]),
+  meta_pixel_id: z.string().max(50, "ID do Pixel inválido").optional().or(z.literal("")),
+  ga4_measurement_id: z.string().max(50, "ID do GA4 inválido").optional().or(z.literal("")),
 });
 
 type Event = Tables<"events">;
@@ -79,8 +81,6 @@ const statusLabels: Record<string, string> = {
   cancelled: "Cancelado",
   completed: "Concluído",
 };
-
-// List of admin emails
 
 const Events = () => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -111,6 +111,8 @@ const Events = () => {
     website: "",
     contact: "",
     status: "draft" as "draft" | "pending" | "published" | "cancelled" | "completed",
+    meta_pixel_id: "",
+    ga4_measurement_id: "",
   });
 
   const { states, loading: statesLoading } = useIBGEStates();
@@ -121,13 +123,11 @@ const Events = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Check all user roles and get highest priority
       const { data: rolesData } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id);
       
-      // Get highest priority role (admin > organizer > user)
       const roles = rolesData?.map(r => r.role) || [];
       const highestRole = roles.includes("admin") ? "admin" 
         : roles.includes("organizer") ? "organizer" 
@@ -135,7 +135,6 @@ const Events = () => {
       
       setUserRole(highestRole);
 
-      // If admin, fetch all events. If organizer, fetch only their events
       let query = supabase
         .from("events")
         .select("*")
@@ -198,6 +197,8 @@ const Events = () => {
             website: validatedData.website || null,
             contact: validatedData.contact || null,
             status: validatedData.status as any,
+            meta_pixel_id: validatedData.meta_pixel_id || null,
+            ga4_measurement_id: validatedData.ga4_measurement_id || null,
           })
           .eq("id", editingEvent.id);
 
@@ -222,6 +223,8 @@ const Events = () => {
             contact: validatedData.contact || null,
             status: validatedData.status as any,
             organizer_id: user.id,
+            meta_pixel_id: validatedData.meta_pixel_id || null,
+            ga4_measurement_id: validatedData.ga4_measurement_id || null,
           }]);
 
         if (error) throw error;
@@ -238,7 +241,7 @@ const Events = () => {
       setEditingEvent(null);
       resetForm();
       fetchEvents();
-      invalidateAll(); // Invalidate cache for public pages
+      invalidateAll();
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -260,7 +263,7 @@ const Events = () => {
       if (error) throw error;
       toast({ title: "Evento excluído com sucesso!" });
       fetchEvents();
-      invalidateAll(); // Invalidate cache for public pages
+      invalidateAll();
     } catch (error: any) {
       toast({
         title: "Erro ao excluir",
@@ -273,14 +276,11 @@ const Events = () => {
   };
 
   const handlePublish = async (eventId: string) => {
-    // For admins, publish directly. For organizers, submit for approval.
     const isAdmin = userRole === "admin";
     const currentStatus = events.find(e => e.id === eventId)?.status;
     
-    // If admin and event is pending or draft, publish directly
     const newStatus = isAdmin ? "published" : "pending";
 
-    // Producers must submit their identity document (KYC) before requesting approval
     if (!isAdmin && !hasSubmitted) {
       toast({
         title: "Verificação de identidade necessária",
@@ -303,7 +303,6 @@ const Events = () => {
       const event = events.find(e => e.id === eventId);
       
       if (newStatus === "pending") {
-        // Send notification to admins
         if (event) {
           try {
             await supabase.functions.invoke("send-notification", {
@@ -326,7 +325,6 @@ const Events = () => {
           description: "Seus dados serão verificados e o evento será publicado em até 4 horas.",
         });
       } else {
-        // Event was published - send push notifications to users
         if (event) {
           try {
             const response = await supabase.functions.invoke("send-push-notification", {
@@ -339,7 +337,6 @@ const Events = () => {
               },
             });
             
-            // Also trigger a browser notification if user has permission
             if ('Notification' in window && Notification.permission === 'granted') {
               new Notification('🎉 Novo Evento Publicado!', {
                 body: `${event.title} está disponível! Garanta seu ingresso.`,
@@ -355,7 +352,7 @@ const Events = () => {
       }
       
       fetchEvents();
-      invalidateAll(); // Invalidate cache for public pages
+      invalidateAll();
     } catch (error: any) {
       console.error("Error publishing event:", error);
       toast({
@@ -385,6 +382,8 @@ const Events = () => {
       website: (event as any).website || "",
       contact: (event as any).contact || "",
       status: (event.status === "rejected" ? "draft" : event.status) || "draft",
+      meta_pixel_id: (event as any).meta_pixel_id || "",
+      ga4_measurement_id: (event as any).ga4_measurement_id || "",
     });
     setDialogOpen(true);
   };
@@ -405,6 +404,8 @@ const Events = () => {
       website: "",
       contact: "",
       status: "draft",
+      meta_pixel_id: "",
+      ga4_measurement_id: "",
     });
   };
 
@@ -414,12 +415,10 @@ const Events = () => {
     return matchesSearch && matchesStatus;
   });
 
-  // Check if user is organizer (not admin) to show pending notice
   const isOrganizer = userRole === "organizer";
 
   return (
   <div className="space-y-6">
-    {/* Approval Notice for Organizers */}
     {isOrganizer && (
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
         <div className="flex items-start gap-3">
@@ -460,7 +459,6 @@ const Events = () => {
           </Button>
         </DialogTrigger>
         
-    {/* Status Filter + Search */}
     <div className="flex flex-col sm:flex-row gap-3 items-center">
       <div className="relative flex-1 sm:flex-none w-full sm:w-64">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -666,6 +664,33 @@ const Events = () => {
                     onChange={(url) => setFormData({ ...formData, image_url: url })}
                   />
                 </div>
+
+                {/* Rastreamento de anúncios (opcional) — cada produtor usa o próprio Pixel/Analytics */}
+                <div className="space-y-2 md:col-span-2 pt-2 border-t border-border">
+                  <Label className="text-sm font-semibold">Rastreamento de Anúncios (opcional)</Label>
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    Cole aqui o ID do seu Pixel do Meta e/ou do Google Analytics pra acompanhar,
+                    dentro da SUA conta, se os anúncios que você faz pra este evento estão convertendo em venda.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="meta_pixel_id">ID do Pixel do Meta</Label>
+                  <Input
+                    id="meta_pixel_id"
+                    placeholder="Ex: 1234567890123456"
+                    value={formData.meta_pixel_id}
+                    onChange={(e) => setFormData({ ...formData, meta_pixel_id: e.target.value.trim() })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ga4_measurement_id">ID de Medição do Google Analytics</Label>
+                  <Input
+                    id="ga4_measurement_id"
+                    placeholder="Ex: G-XXXXXXXXXX"
+                    value={formData.ga4_measurement_id}
+                    onChange={(e) => setFormData({ ...formData, ga4_measurement_id: e.target.value.trim() })}
+                  />
+                </div>
               </div>
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
@@ -680,7 +705,6 @@ const Events = () => {
         </Dialog>
       </div>
 
-      {/* Search */}
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
@@ -691,7 +715,6 @@ const Events = () => {
         />
       </div>
 
-      {/* Events List */}
       {loading ? (
         <div className="text-center py-12 text-muted-foreground">Carregando...</div>
       ) : filteredEvents.length === 0 ? (
@@ -791,7 +814,6 @@ const Events = () => {
         </div>
       )}
 
-      {/* Delete Confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
