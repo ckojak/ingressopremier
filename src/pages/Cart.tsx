@@ -122,7 +122,6 @@ const Cart = () => {
         return item;
       }).filter(Boolean) as CartItem[];
 
-      // Update localStorage
       const cartData = {
         items: updated.map(item => ({
           ticketTypeId: item.ticketType.id,
@@ -166,7 +165,6 @@ const Cart = () => {
     setCouponError("");
 
     try {
-      // Busca exata por código via RPC — não lista mais cupons de outros eventos
       const { data: couponRows, error } = await supabase.rpc("get_coupon_by_code", {
         p_code: couponCode.trim().toUpperCase(),
       });
@@ -179,7 +177,6 @@ const Cart = () => {
         return;
       }
 
-      // Check validity dates
       const now = new Date();
       if (coupon.valid_from && new Date(coupon.valid_from) > now) {
         setCouponError("Este cupom ainda não está ativo");
@@ -192,21 +189,18 @@ const Cart = () => {
         return;
       }
 
-      // Check usage limit
       if (coupon.max_uses && (coupon.used_count || 0) >= coupon.max_uses) {
         setCouponError("Este cupom atingiu o limite de uso");
         setCouponLoading(false);
         return;
       }
 
-      // Check minimum purchase amount
       if (coupon.min_purchase_amount && subtotal < Number(coupon.min_purchase_amount)) {
         setCouponError(`Compra mínima de R$ ${Number(coupon.min_purchase_amount).toFixed(2)}`);
         setCouponLoading(false);
         return;
       }
 
-      // Check if coupon is for specific event
       if (coupon.event_id) {
         const eventIds = cartItems.map(item => item.event.id);
         if (!eventIds.includes(coupon.event_id)) {
@@ -220,7 +214,6 @@ const Cart = () => {
       setCouponCode("");
       toast.success("Cupom aplicado com sucesso!");
 
-      // Save coupon to cart
       const savedCart = localStorage.getItem("cart");
       if (savedCart) {
         const parsed = JSON.parse(savedCart);
@@ -242,7 +235,6 @@ const Cart = () => {
     setCouponError("");
     toast.success("Cupom removido");
 
-    // Remove coupon from cart
     const savedCart = localStorage.getItem("cart");
     if (savedCart) {
       const parsed = JSON.parse(savedCart);
@@ -256,7 +248,6 @@ const Cart = () => {
     0
   );
 
-  // Calculate discount
   const calculateDiscount = () => {
     if (!appliedCoupon) return 0;
     
@@ -272,8 +263,6 @@ const Cart = () => {
   const serviceFee = subtotalAfterDiscount * SERVICE_FEE_PERCENTAGE;
   const total = subtotalAfterDiscount + serviceFee;
 
-  // Agrupa os itens do carrinho pelo primeiro evento (mesmo padrão já usado
-  // no PIX e no checkout por redirecionamento) — reaproveitado pelo cartão.
   const getFirstEventGroup = () => {
     const eventGroups = cartItems.reduce((acc, item) => {
       const eventId = item.event.id;
@@ -306,7 +295,8 @@ const Cart = () => {
       const { data, error } = await supabase.functions.invoke("create-pix-payment", {
         body: {
           event_id: firstEventId,
-          site_id: siteId, // Send site_id for multi-tenant payment isolation
+          site_id: siteId,
+          coupon_code: appliedCoupon?.code, // o servidor revalida e aplica o desconto de verdade
           items: items.map(item => ({
             ticket_type_id: item.ticketType.id,
             quantity: item.quantity,
@@ -410,7 +400,6 @@ const Cart = () => {
               </Card>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Cart Items */}
                 <div className="lg:col-span-2 space-y-4">
                   {cartItems.map((item, index) => (
                     <motion.div
@@ -484,7 +473,6 @@ const Cart = () => {
                     </motion.div>
                   ))}
 
-                  {/* Coupon Section */}
                   <Card className="bg-card/80 backdrop-blur-sm border-border">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-3">
@@ -543,7 +531,6 @@ const Cart = () => {
                     </CardContent>
                   </Card>
 
-                  {/* Formulário de cartão transparente (aparece ao clicar em "Pagar com Cartão") */}
                   {showCardForm && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
@@ -567,13 +554,13 @@ const Cart = () => {
                           quantity: item.quantity,
                         }))}
                         payerEmail={user?.email || ""}
+                        couponCode={appliedCoupon?.code}
                         onSuccess={handleCardSuccess}
                       />
                     </motion.div>
                   )}
                 </div>
 
-                {/* Order Summary */}
                 <div>
                   <Card className="bg-card/80 backdrop-blur-sm border-border sticky top-24 shadow-xl shadow-primary/5">
                     <CardHeader className="border-b border-border/50 bg-gradient-to-r from-primary/10 to-transparent">
