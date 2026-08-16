@@ -465,13 +465,14 @@ const EventDetails = () => {
                           Escolher outra forma de pagamento
                         </Button>
                         <CardCheckoutBrick
-                          eventId={id as string}
-                          siteId={siteId}
-                          amount={totalAmount}
-                          items={cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity }))}
-                          payerEmail={userEmail}
-                          onSuccess={handleCardSuccess}
-                        />
+  eventId={id as string}
+  siteId={siteId}
+  amount={totalAmount}
+  items={cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity }))}
+  payerEmail={userEmail}
+  purchaseProtection={purchaseProtection}
+  onSuccess={handleCardSuccess}
+/>
                       </>
                     ) : (
                       <>
