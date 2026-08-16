@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
@@ -80,7 +79,7 @@ const EventDetails = () => {
   const [customerName, setCustomerName] = useState("");
   const [customerCpf, setCustomerCpf] = useState("");
   const [cpfTouched, setCpfTouched] = useState(false);
-  const [purchaseProtection, setPurchaseProtection] = useState(false);
+  const [purchaseProtection, setPurchaseProtection] = useState(true);
   const [organizer, setOrganizer] = useState<{ name: string; document: string | null; verified: boolean } | null>(null);
   const [address, setAddress] = useState({
     zip: "", street: "", number: "", complement: "", district: "", city: "", state: "",
@@ -519,19 +518,52 @@ const EventDetails = () => {
                       </div>
                     </div>
 
-                    <label className="flex items-start gap-3 p-4 rounded-xl border border-border bg-secondary/20 cursor-pointer">
-                      <Checkbox
-                        checked={purchaseProtection}
-                        onCheckedChange={(v) => setPurchaseProtection(v === true)}
-                        className="mt-0.5"
-                      />
-                      <span className="text-sm">
-                        <span className="font-semibold block">Compra Protegida — R$ 3,00</span>
-                        <span className="text-xs text-muted-foreground">
-                          Cobertura opcional de reembolso em caso de imprevistos comprovados.
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold text-primary uppercase">Proteção da compra</p>
+                      <label
+                        className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                          purchaseProtection ? "border-primary bg-primary/10" : "border-border bg-secondary/20"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="purchaseProtection"
+                          checked={purchaseProtection}
+                          onChange={() => setPurchaseProtection(true)}
+                          className="mt-1 accent-primary"
+                        />
+                        <span className="text-sm">
+                          <span className="font-semibold flex items-center gap-2">
+                            Compra Protegida — R$ 3,00
+                            <Badge className="text-[10px] bg-primary/20 text-primary border-primary/30">Recomendado</Badge>
+                          </span>
+                          <span className="text-xs text-muted-foreground block mt-0.5">
+                            Quero meu dinheiro de volta em caso de imprevistos comprovados (doença, viagem cancelada
+                            e outros motivos previstos nos Termos).
+                          </span>
                         </span>
-                      </span>
-                    </label>
+                      </label>
+                      <label
+                        className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-colors ${
+                          !purchaseProtection ? "border-primary bg-primary/10" : "border-border bg-secondary/20"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="purchaseProtection"
+                          checked={!purchaseProtection}
+                          onChange={() => setPurchaseProtection(false)}
+                          className="mt-1 accent-primary"
+                        />
+                        <span className="text-sm">
+                          <span className="font-semibold block">Seguir sem proteção adicional</span>
+                          <span className="text-xs text-muted-foreground block mt-0.5">
+                            Tenho ciência de que, sem a Compra Protegida, não terei direito a reembolso em caso de
+                            imprevistos — apenas nas hipóteses já previstas nos Termos de Serviço.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
 
                     <div className="space-y-1.5 text-sm">
                       <div className="flex justify-between text-muted-foreground">
