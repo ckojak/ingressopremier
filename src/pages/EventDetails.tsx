@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useSiteContext } from "@/hooks/useSiteContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cpfError, formatCpf, onlyDigits } from "@/lib/cpf";
+import { Link } from "react-router-dom";
 import CardCheckoutBrick from "@/components/checkout/CardCheckoutBrick";
 
 type Event = Tables<"events">;
@@ -76,7 +77,6 @@ const EventDetails = () => {
   const [processingPix, setProcessingPix] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix");
 
-  // DADOS DO COMPRADOR NA TELA
   const [customerName, setCustomerName] = useState("");
   const [customerCpf, setCustomerCpf] = useState("");
   const [cpfTouched, setCpfTouched] = useState(false);
@@ -86,7 +86,6 @@ const EventDetails = () => {
     zip: "", street: "", number: "", complement: "", district: "", city: "", state: "",
   });
 
-  // Formulário de cartão transparente (Payment Brick embutido — sem redirect pro Mercado Pago)
   const [showCardForm, setShowCardForm] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
@@ -107,7 +106,6 @@ const EventDetails = () => {
     fetchEventDetails();
   }, [id]);
 
-  // Sobre o produtor (perfil + verificação KYC)
   useEffect(() => {
     const fetchOrganizer = async () => {
       const organizerId = (event as any)?.organizer_id;
@@ -134,7 +132,6 @@ const EventDetails = () => {
 
   const subtotal = cart.reduce((sum, item) => sum + Number(item.ticketType.price) * item.quantity, 0);
   const serviceFee = Math.round(subtotal * 0.08 * 100) / 100;
-  // Detalhamento visual das taxas (soma exatamente os mesmos 8% já cobrados)
   const convenienceFee = Math.round(subtotal * 0.055 * 100) / 100;
   const processingFee = Math.round((serviceFee - convenienceFee) * 100) / 100;
   const protectionFee = purchaseProtection ? 3 : 0;
@@ -198,10 +195,6 @@ const EventDetails = () => {
     }
   };
 
-  // Antes: chamava create-mercadopago-checkout e redirecionava (window.location.href)
-  // pro checkout hospedado do Mercado Pago. Agora só valida os dados e abre o
-  // formulário de cartão embutido na própria página (CardCheckoutBrick),
-  // igual ao que o Carrinho (Cart.tsx) já faz — sem sair do site.
   const handleCardCheckout = async () => {
     if (!validateCustomerData()) return;
 
@@ -285,7 +278,6 @@ const EventDetails = () => {
       />
       <Header />
 
-      {/* Hero com imagem de capa */}
       <div className="relative w-full h-[45vh] min-h-[280px] max-h-[480px] mt-16 md:mt-20 overflow-hidden bg-secondary">
         {heroImage ? (
           <img
@@ -328,9 +320,7 @@ const EventDetails = () => {
 
       <main className="pb-16 container mx-auto px-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-6 md:mt-8">
-          {/* Coluna principal: infos + descrição */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Data, hora e local */}
             <Card className="bg-card/80 backdrop-blur-sm border-border">
               <CardContent className="p-4 md:p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex items-start gap-3">
@@ -361,7 +351,6 @@ const EventDetails = () => {
               </CardContent>
             </Card>
 
-            {/* Descrição */}
             <div>
               <h2 className="text-lg font-bold text-foreground mb-3">Sobre o evento</h2>
               <p className="text-muted-foreground whitespace-pre-line leading-relaxed">
@@ -369,7 +358,6 @@ const EventDetails = () => {
               </p>
             </div>
 
-            {/* Sobre o produtor */}
             {organizer && (
               <Card className="bg-card/80 backdrop-blur-sm border-border">
                 <CardContent className="p-4 md:p-5 flex items-start gap-3">
@@ -394,7 +382,6 @@ const EventDetails = () => {
             )}
           </div>
 
-          {/* Coluna lateral: compra de ingressos */}
           <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
             <Card className="bg-card/80 backdrop-blur-sm border-border">
               <CardHeader><CardTitle className="flex items-center gap-2"><Ticket className="w-5 h-5 text-primary" /> Ingressos</CardTitle></CardHeader>
@@ -406,50 +393,48 @@ const EventDetails = () => {
                     <AlertDescription>Não há lotes ativos para este evento no momento.</AlertDescription>
                   </Alert>
                 )}
-                {ticketTypes.map(ticket => (
-                  (() => {
-                    const total = Number(ticket.quantity_available ?? 0);
-                    const sold = Number(ticket.quantity_sold ?? 0);
-                    const remaining = Math.max(total - sold, 0);
-                    const soldOut = remaining <= 0;
-                    const threshold = Math.min(total * 0.15, 20);
-                    const isLow = !soldOut && total > 0 && remaining <= threshold;
+                {ticketTypes.map(ticket => {
+                  const total = Number(ticket.quantity_available ?? 0);
+                  const sold = Number(ticket.quantity_sold ?? 0);
+                  const remaining = Math.max(total - sold, 0);
+                  const soldOut = remaining <= 0;
+                  const threshold = Math.min(total * 0.15, 20);
+                  const isLow = !soldOut && total > 0 && remaining <= threshold;
 
-                    return (
-                      <div
-                        key={ticket.id}
-                        className={`p-4 rounded-lg flex justify-between items-center gap-3 border transition-colors ${
-                          soldOut
-                            ? "border-transparent bg-muted/40 opacity-70"
-                            : cart[0]?.ticketType.id === ticket.id
-                              ? "border-primary bg-primary/10"
-                              : "border-transparent bg-secondary/30"
-                        }`}
-                      >
-                        <div className="min-w-0">
-                          <h3 className="font-semibold">{ticket.name}</h3>
-                          <p className="text-primary font-bold">R$ {Number(ticket.price).toFixed(2)}</p>
-                          {soldOut ? (
-                            <Badge variant="secondary" className="mt-2 text-[11px]">Esgotado</Badge>
-                          ) : isLow ? (
-                            <Badge className="mt-2 text-[11px] bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30 gap-1">
-                              <Flame className="w-3 h-3" />
-                              {remaining <= 5 ? "Últimas unidades!" : `Restam ${remaining} ingressos`}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={soldOut}
-                          onClick={() => setCart([{ ticketType: ticket, quantity: 1 }])}
-                        >
-                          {soldOut ? "Esgotado" : cart[0]?.ticketType.id === ticket.id ? "Selecionado" : "Selecionar"}
-                        </Button>
+                  return (
+                    <div
+                      key={ticket.id}
+                      className={`p-4 rounded-lg flex justify-between items-center gap-3 border transition-colors ${
+                        soldOut
+                          ? "border-transparent bg-muted/40 opacity-70"
+                          : cart[0]?.ticketType.id === ticket.id
+                            ? "border-primary bg-primary/10"
+                            : "border-transparent bg-secondary/30"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <h3 className="font-semibold">{ticket.name}</h3>
+                        <p className="text-primary font-bold">R$ {Number(ticket.price).toFixed(2)}</p>
+                        {soldOut ? (
+                          <Badge variant="secondary" className="mt-2 text-[11px]">Esgotado</Badge>
+                        ) : isLow ? (
+                          <Badge className="mt-2 text-[11px] bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30 gap-1">
+                            <Flame className="w-3 h-3" />
+                            {remaining <= 5 ? "Últimas unidades!" : `Restam ${remaining} ingressos`}
+                          </Badge>
+                        ) : null}
                       </div>
-                    );
-                  })()
-                ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={soldOut}
+                        onClick={() => setCart([{ ticketType: ticket, quantity: 1 }])}
+                      >
+                        {soldOut ? "Esgotado" : cart[0]?.ticketType.id === ticket.id ? "Selecionado" : "Selecionar"}
+                      </Button>
+                    </div>
+                  );
+                })}
 
                 {cart.length > 0 && (
                   <div className="pt-4 space-y-4 border-t border-border">
@@ -465,14 +450,14 @@ const EventDetails = () => {
                           Escolher outra forma de pagamento
                         </Button>
                         <CardCheckoutBrick
-  eventId={id as string}
-  siteId={siteId}
-  amount={totalAmount}
-  items={cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity }))}
-  payerEmail={userEmail}
-  purchaseProtection={purchaseProtection}
-  onSuccess={handleCardSuccess}
-/>
+                          eventId={id as string}
+                          siteId={siteId}
+                          amount={totalAmount}
+                          items={cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity }))}
+                          payerEmail={userEmail}
+                          purchaseProtection={purchaseProtection}
+                          onSuccess={handleCardSuccess}
+                        />
                       </>
                     ) : (
                       <>
@@ -499,8 +484,6 @@ const EventDetails = () => {
                         </button>
                       </div>
                     </div>
-                    {/* Dados do comprador: usado tanto por Pix quanto por Cartão, pois o
-                        Mercado Pago usa Nome+CPF pra reduzir recusa por risco no cartão também */}
                     <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-3">
                       <p className="text-xs font-bold text-primary uppercase">Dados do Comprador</p>
                       <Input placeholder="Nome Completo" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
@@ -521,7 +504,6 @@ const EventDetails = () => {
                       </div>
                     </div>
 
-                    {/* Endereço de cobrança */}
                     <div className="bg-secondary/30 p-4 rounded-xl border border-border space-y-3">
                       <p className="text-xs font-bold text-primary uppercase">Endereço de Cobrança</p>
                       <div className="grid grid-cols-2 gap-2">
@@ -537,7 +519,6 @@ const EventDetails = () => {
                       </div>
                     </div>
 
-                    {/* Compra Protegida */}
                     <label className="flex items-start gap-3 p-4 rounded-xl border border-border bg-secondary/20 cursor-pointer">
                       <Checkbox
                         checked={purchaseProtection}
@@ -552,7 +533,6 @@ const EventDetails = () => {
                       </span>
                     </label>
 
-                    {/* Resumo com taxas detalhadas */}
                     <div className="space-y-1.5 text-sm">
                       <div className="flex justify-between text-muted-foreground">
                         <span>Subtotal dos ingressos</span>
@@ -578,7 +558,6 @@ const EventDetails = () => {
                       <span>R$ {totalAmount.toFixed(2)}</span>
                     </div>
 
-                    {/* Selos de segurança */}
                     <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Lock className="w-3.5 h-3.5 text-primary" /> Pagamento seguro</span>
                       <span className="flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5 text-primary" /> Dados criptografados</span>
@@ -596,23 +575,26 @@ const EventDetails = () => {
 
                     {paymentMethod === "pix" && (
                       <p className="text-xs text-muted-foreground">
-                        O QR Code do PIX expira em <strong>5 minutos</strong>. A confirmação costuma ser imediata,
+                        O QR Code do PIX expira em <strong>2 minutos</strong>. A confirmação costuma ser imediata,
                         mas em casos raros pode levar até 2 horas.
                       </p>
                     )}
 
-                    {/* Política de cancelamento */}
                     <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-3 space-y-1">
                       <p className="font-semibold text-foreground flex items-center gap-1">
                         <Info className="w-3.5 h-3.5" /> Política de cancelamento
                       </p>
                       <p>
-                        Cancelamento com reembolso integral em até 7 dias após a compra, desde que solicitado com no
-                        mínimo 48 horas de antecedência do início do evento.
+                        Reembolso apenas em caso de cancelamento do evento pelo produtor. Reclamações sobre o
+                        evento devem ser registradas em até <strong>3 dias úteis</strong> após sua realização —
+                        veja os{" "}
+                        <Link to="/termos" target="_blank" className="text-primary hover:underline">
+                          Termos de Serviço
+                        </Link>.
                       </p>
                       <p>
-                        Fora desse prazo, você ainda pode <strong>transferir o ingresso</strong> para outra pessoa pelo
-                        painel "Meus Ingressos", sem custo adicional.
+                        Não pode mais ir? Você pode <strong>transferir o ingresso</strong> para outra pessoa pelo
+                        painel "Meus Ingressos", sem custo adicional, até 2 horas antes do evento.
                       </p>
                     </div>
                       </>
