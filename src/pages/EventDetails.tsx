@@ -23,6 +23,14 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cpfError, formatCpf, onlyDigits } from "@/lib/cpf";
 import { Link } from "react-router-dom";
 import CardCheckoutBrick from "@/components/checkout/CardCheckoutBrick";
+import {
+  captureUtmParams,
+  getStoredUtmParams,
+  loadMetaPixel,
+  trackMetaEvent,
+  loadGa4,
+  trackGa4Event,
+} from "@/lib/pixel-tracking";
 
 type Event = Tables<"events">;
 type TicketType = Tables<"ticket_types">;
@@ -89,6 +97,10 @@ const EventDetails = () => {
   const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
+    // Guarda o UTM do link do anúncio (se veio um agora) assim que a pessoa
+    // pousa na página do evento — sobrevive até o fim da compra.
+    captureUtmParams();
+
     const fetchEventDetails = async () => {
       if (!id) return;
       try {
@@ -104,6 +116,30 @@ const EventDetails = () => {
     };
     fetchEventDetails();
   }, [id]);
+
+  // Carrega o Pixel do Meta / Google Analytics QUE O PRODUTOR DESTE EVENTO
+  // cadastrou (nunca um pixel genérico da PremierPass) e dispara a
+  // visualização assim que os dados do evento chegam.
+  useEffect(() => {
+    if (!event) return;
+    const pixelId = (event as any).meta_pixel_id as string | null;
+    const ga4Id = (event as any).ga4_measurement_id as string | null;
+
+    if (pixelId) {
+      loadMetaPixel(pixelId);
+      trackMetaEvent(pixelId, "ViewContent", {
+        content_name: event.title,
+        content_ids: [event.id],
+        content_type: "product",
+      });
+    }
+    if (ga4Id) {
+      loadGa4(ga4Id);
+      trackGa4Event(ga4Id, "view_item", {
+        items: [{ item_id: event.id, item_name: event.title }],
+      });
+    }
+  }, [event]);
 
   useEffect(() => {
     const fetchOrganizer = async () => {
@@ -138,6 +174,28 @@ const EventDetails = () => {
 
   const cpfValidationError = cpfTouched ? cpfError(customerCpf) : null;
 
+  // Dispara "início de checkout" pro pixel/analytics do produtor deste evento
+  const trackInitiateCheckout = () => {
+    if (!event) return;
+    const pixelId = (event as any).meta_pixel_id as string | null;
+    const ga4Id = (event as any).ga4_measurement_id as string | null;
+    if (pixelId) {
+      trackMetaEvent(pixelId, "InitiateCheckout", {
+        content_name: event.title,
+        content_ids: [event.id],
+        value: totalAmount,
+        currency: "BRL",
+      });
+    }
+    if (ga4Id) {
+      trackGa4Event(ga4Id, "begin_checkout", {
+        value: totalAmount,
+        currency: "BRL",
+        items: [{ item_id: event.id, item_name: event.title }],
+      });
+    }
+  };
+
   const validateCustomerData = () => {
     if (cart.length === 0) {
       toast.error("Adicione ingressos");
@@ -164,6 +222,7 @@ const EventDetails = () => {
   const handlePixCheckout = async () => {
     if (!validateCustomerData()) return;
 
+    trackInitiateCheckout();
     setProcessingPix(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -178,6 +237,7 @@ const EventDetails = () => {
           purchase_protection: purchaseProtection,
           billing_address: address,
           items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
+          ...getStoredUtmParams(),
         },
       });
 
@@ -197,6 +257,7 @@ const EventDetails = () => {
   const handleCardCheckout = async () => {
     if (!validateCustomerData()) return;
 
+    trackInitiateCheckout();
     setProcessing(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
