@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
@@ -11,40 +11,74 @@ const PROTECTION_FEE = 3;
 const log = (step: string, details?: unknown) =>
   console.log(`[CREATE-PIX] ${step}${details ? `: ${JSON.stringify(details)}` : ''}`);
 
+async function applyCoupon(supabase: any, code: string | undefined, eventId: string, subtotal: number) {
+  if (!code) return { discount: 0, couponId: null as string | null, couponCode: null as string | null };
+
+  const { data: coupon } = await supabase
+    .from('coupons')
+    .select('id, code, discount_type, discount_value, valid_from, valid_until, max_uses, used_count, min_purchase_amount, event_id, is_active')
+    .ilike('code', code.trim())
+    .maybeSingle();
+
+  if (!coupon || coupon.is_active === false) return { discount: 0, couponId: null, couponCode: null };
+
+  const now = new Date();
+  if (coupon.valid_from && new Date(coupon.valid_from) > now) return { discount: 0, couponId: null, couponCode: null };
+  if (coupon.valid_until && new Date(coupon.valid_until) < now) return { discount: 0, couponId: null, couponCode: null };
+  if (coupon.max_uses && (coupon.used_count || 0) >= coupon.max_uses) return { discount: 0, couponId: null, couponCode: null };
+  if (coupon.min_purchase_amount && subtotal < Number(coupon.min_purchase_amount)) return { discount: 0, couponId: null, couponCode: null };
+  if (coupon.event_id && coupon.event_id !== eventId) return { discount: 0, couponId: null, couponCode: null };
+
+  const discount = coupon.discount_type === 'percentage'
+    ? subtotal * (Number(coupon.discount_value) / 100)
+    : Math.min(Number(coupon.discount_value), subtotal);
+
+  return { discount: Math.round(discount * 100) / 100, couponId: coupon.id as string, couponCode: coupon.code as string };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-      { auth: { persistSession: false } }
-    );
+  // Reservas já feitas nesta chamada -- devolvidas se algo falhar no meio do caminho.
+  const reserved: { ticket_type_id: string; quantity: number }[] = [];
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    { auth: { persistSession: false } }
+  );
 
+  const releaseAll = async () => {
+    for (const r of reserved) {
+      await supabase.rpc('release_tickets', { p_ticket_type_id: r.ticket_type_id, p_quantity: r.quantity });
+    }
+  };
+
+  try {
     const token = req.headers.get('Authorization')?.replace('Bearer ', '');
     if (!token) throw new Error('Não autenticado');
     const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
     if (userErr || !user) throw new Error('Não autenticado');
 
     const body = await req.json();
-    const { event_id, items, site_id, purchase_protection } = body;
+    const { event_id, items, site_id, coupon_code, purchase_protection, billing_address } = body;
     let { customer_name, customer_cpf, customer_phone } = body;
 
-    const mpAccessToken =
-      Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
+    const mpAccessToken = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
     if (!mpAccessToken) throw new Error('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN não configurado');
 
     if (!event_id) throw new Error('Evento não informado');
     if (!Array.isArray(items) || items.length === 0) throw new Error('Carrinho vazio');
 
-    // Completar dados do comprador pelo perfil quando não enviados
     const { data: profile } = await supabase
       .from('profiles').select('full_name, email, phone').eq('id', user.id).maybeSingle();
     customer_name = customer_name || profile?.full_name || user.email;
     customer_phone = customer_phone || profile?.phone || null;
     customer_cpf = (customer_cpf || '').replace(/\D/g, '') || null;
     if (!customer_name) throw new Error('Nome do comprador obrigatório');
-// Limite de 4 ingressos por CPF por evento (soma pedidos pagos + pendentes)
+
+    // Limite de 4 ingressos por CPF por evento -- conta pedidos pagos E
+    // pendentes (não só pagos), pra não deixar alguém empilhar vários PIX
+    // pendentes ao mesmo tempo pra burlar o limite.
     if (customer_cpf && customer_cpf.length >= 11) {
       const { data: existingOrders } = await supabase
         .from('orders')
@@ -60,9 +94,7 @@ serve(async (req) => {
       );
       const newQty = items.reduce((s: number, i: any) => s + Math.max(1, Math.floor(Number(i.quantity) || 0)), 0);
       if (alreadyBought + newQty > 4) {
-        throw new Error(
-          `Limite de 4 ingressos por CPF atingido para este evento (você já tem ${alreadyBought}).`
-        );
+        throw new Error(`Limite de 4 ingressos por CPF atingido para este evento (você já tem ${alreadyBought}).`);
       }
     }
 
@@ -78,7 +110,6 @@ serve(async (req) => {
     if (ttErr) throw new Error(`Erro ao buscar ingressos: ${ttErr.message}`);
     if (!ticketTypes || ticketTypes.length !== ticketTypeIds.length) throw new Error('Ingresso inválido');
 
-    // Preço autoritativo do servidor + validação de estoque
     let subtotal = 0;
     const orderItemsPayload: any[] = [];
     for (const item of items) {
@@ -87,17 +118,35 @@ serve(async (req) => {
       const qty = Math.max(1, Math.floor(Number(item.quantity) || 0));
       const maxPerOrder = tt.max_per_order || 10;
       if (qty > maxPerOrder) throw new Error(`Máximo de ${maxPerOrder} ingressos por pedido: ${tt.name}`);
-      const stock = Number(tt.quantity_available || tt.quantity || 0);
-      if (stock > 0 && (tt.quantity_sold || 0) + qty > stock) throw new Error(`Ingresso esgotado: ${tt.name}`);
+
+      // Reserva ATÔMICA: trava a linha do ticket_type, confere disponibilidade
+      // e já incrementa quantity_sold numa única operação de banco -- impede
+      // duas compras simultâneas de venderem o mesmo último ingresso.
+      const { data: reserveResult, error: reserveErr } = await supabase
+        .rpc('reserve_tickets', { p_ticket_type_id: tt.id, p_quantity: qty })
+        .single();
+
+      if (reserveErr || !reserveResult?.success) {
+        await releaseAll();
+        throw new Error(`Ingresso esgotado: ${tt.name}`);
+      }
+      reserved.push({ ticket_type_id: tt.id, quantity: qty });
+
       const unit = Number(tt.price);
       subtotal += unit * qty;
       orderItemsPayload.push({ ticket_type_id: tt.id, quantity: qty, unit_price: unit });
     }
 
-    const serviceFee = Math.round(subtotal * SERVICE_FEE * 100) / 100;
+    const { discount, couponId, couponCode } = await applyCoupon(supabase, coupon_code, event_id, subtotal);
+    const subtotalAfterDiscount = Math.max(subtotal - discount, 0);
+
+    const serviceFee = Math.round(subtotalAfterDiscount * SERVICE_FEE * 100) / 100;
     const protectionFee = purchase_protection === true ? PROTECTION_FEE : 0;
-    const totalAmount = Math.round((subtotal + serviceFee + protectionFee) * 100) / 100;
-    if (totalAmount <= 0) throw new Error('Valor inválido para pagamento PIX');
+    const totalAmount = Math.round((subtotalAfterDiscount + serviceFee + protectionFee) * 100) / 100;
+    if (totalAmount <= 0) {
+      await releaseAll();
+      throw new Error('Valor inválido para pagamento PIX');
+    }
 
     const effectiveSiteId = site_id || event.site_id || 'premierpass';
 
@@ -113,14 +162,23 @@ serve(async (req) => {
       customer_email: user.email,
       customer_phone,
       customer_cpf,
+      coupon_id: couponId,
+      coupon_code: couponCode,
+      discount_amount: discount,
+      purchase_protection: protectionFee > 0,
+      protection_fee: protectionFee,
     }).select().single();
-    if (orderErr || !order) throw new Error(`Erro criando pedido: ${orderErr?.message}`);
+    if (orderErr || !order) {
+      await releaseAll();
+      throw new Error(`Erro criando pedido: ${orderErr?.message}`);
+    }
 
     const { error: itemsErr } = await supabase
       .from('order_items')
       .insert(orderItemsPayload.map((oi) => ({ ...oi, order_id: order.id })));
     if (itemsErr) {
       await supabase.from('orders').update({ status: 'failed' }).eq('id', order.id);
+      await releaseAll();
       throw new Error(`Erro criando itens: ${itemsErr.message}`);
     }
 
@@ -135,6 +193,18 @@ serve(async (req) => {
         last_name: rest.join(' ') || 'Cliente',
         ...(customer_cpf && customer_cpf.length >= 11
           ? { identification: { type: 'CPF', number: customer_cpf } }
+          : {}),
+        ...(billing_address?.zip
+          ? {
+              address: {
+                zip_code: billing_address.zip,
+                street_name: billing_address.street,
+                street_number: billing_address.number,
+                neighborhood: billing_address.district,
+                city: billing_address.city,
+                federal_unit: billing_address.state,
+              },
+            }
           : {}),
       },
       description: `Ingresso: ${event.title}`,
@@ -158,11 +228,15 @@ serve(async (req) => {
     if (!mpResponse.ok) {
       log('Erro Mercado Pago', { status: mpResponse.status, mpResult });
       await supabase.from('orders').update({ status: 'failed' }).eq('id', order.id);
+      await releaseAll();
       throw new Error(mpResult.message || mpResult.cause?.[0]?.description || 'Erro no Mercado Pago');
     }
 
     const pixData = mpResult.point_of_interaction?.transaction_data;
-    if (!pixData) throw new Error('Mercado Pago não retornou dados PIX');
+    if (!pixData) {
+      await releaseAll();
+      throw new Error('Mercado Pago não retornou dados PIX');
+    }
 
     await supabase.from('orders').update({
       payment_intent_id: String(mpResult.id),
@@ -171,7 +245,7 @@ serve(async (req) => {
       pix_qr_code_base64: pixData.qr_code_base64,
     }).eq('id', order.id);
 
-    log('PIX gerado', { orderId: order.id, paymentId: mpResult.id, isSandbox });
+    log('PIX gerado', { orderId: order.id, paymentId: mpResult.id, isSandbox, discount, protectionFee });
 
     return new Response(JSON.stringify({
       success: true,
@@ -183,6 +257,7 @@ serve(async (req) => {
       expiration_date: mpResult.date_of_expiration,
       total_amount: totalAmount,
       service_fee: serviceFee,
+      discount_amount: discount,
       protection_fee: protectionFee,
       is_sandbox: isSandbox,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
