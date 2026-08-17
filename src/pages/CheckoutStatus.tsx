@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle, XCircle, Clock, Loader2, RefreshCw, Ticket } from "lucide-react";
@@ -8,6 +8,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
+import { loadMetaPixel, trackMetaEvent, loadGa4, trackGa4Event } from "@/lib/pixel-tracking";
 
 type OrderStatus = 'pending' | 'paid' | 'cancelled' | 'failed' | 'processing';
 
@@ -19,6 +20,8 @@ interface OrderData {
   event_id: string;
   events?: {
     title: string;
+    meta_pixel_id?: string | null;
+    ga4_measurement_id?: string | null;
   };
 }
 
@@ -31,6 +34,7 @@ const CheckoutStatusContent = () => {
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentStatus, setCurrentStatus] = useState<OrderStatus>('processing');
+  const purchaseTrackedRef = useRef(false);
 
   // Fetch order data
   useEffect(() => {
@@ -42,7 +46,7 @@ const CheckoutStatusContent = () => {
 
       const { data, error } = await supabase
         .from("orders")
-        .select("id, status, total_amount, created_at, event_id, events(title)")
+        .select("id, status, total_amount, created_at, event_id, events(title, meta_pixel_id, ga4_measurement_id)")
         .eq("id", orderId)
         .single();
 
@@ -54,7 +58,7 @@ const CheckoutStatusContent = () => {
 
       const orderData = {
         ...data,
-        events: data.events as { title: string } | undefined
+        events: data.events as OrderData["events"],
       } as OrderData;
 
       setOrder(orderData);
@@ -75,6 +79,36 @@ const CheckoutStatusContent = () => {
       setCurrentStatus('pending');
     }
   }, [status]);
+
+  // Dispara o evento de "Compra" pro Pixel do Meta / GA4 QUE O PRODUTOR deste
+  // evento cadastrou — só quando o pagamento está realmente confirmado, e só
+  // uma vez (evita contar a mesma venda duas vezes se a página re-renderizar).
+  useEffect(() => {
+    if (currentStatus !== 'paid' || !order || purchaseTrackedRef.current) return;
+    purchaseTrackedRef.current = true;
+
+    const pixelId = order.events?.meta_pixel_id;
+    const ga4Id = order.events?.ga4_measurement_id;
+
+    if (pixelId) {
+      loadMetaPixel(pixelId);
+      trackMetaEvent(pixelId, "Purchase", {
+        value: order.total_amount,
+        currency: "BRL",
+        content_ids: [order.event_id],
+        content_type: "product",
+      });
+    }
+    if (ga4Id) {
+      loadGa4(ga4Id);
+      trackGa4Event(ga4Id, "purchase", {
+        transaction_id: order.id,
+        value: order.total_amount,
+        currency: "BRL",
+        items: [{ item_id: order.event_id, item_name: order.events?.title }],
+      });
+    }
+  }, [currentStatus, order]);
 
   // Listen for realtime updates on this order
   useEffect(() => {
