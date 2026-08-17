@@ -3,27 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreditCard, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
-// ─────────────────────────────────────────────────────────────────────────
-// Checkout de cartão TRANSPARENTE (formulário dentro do próprio site).
-//
-// Como funciona:
-// 1. Este componente carrega o SDK oficial do Mercado Pago (mercadopago.js)
-//    e renderiza o "Payment Brick" dele dentro da própria página.
-// 2. O comprador digita os dados do cartão ali. O número do cartão NUNCA
-//    passa pelo nosso site nem pelo nosso servidor — o SDK do Mercado Pago
-//    transforma isso num token de uso único direto no navegador da pessoa.
-// 3. Só esse token (não o cartão) é enviado pra Edge Function
-//    "create-mercadopago-card-payment", que cobra o cartão usando a
-//    credencial secreta do Mercado Pago no servidor. O valor cobrado é
-//    SEMPRE recalculado no servidor (preço, cupom e taxa de proteção) —
-//    o "amount" abaixo é só para exibição/parcelamento no formulário.
-//
-// PRÉ-REQUISITO ainda pendente: precisa da CHAVE PÚBLICA do Mercado Pago
-// (Public Key — começa com APP_USR- ou TEST-, é diferente do Access Token,
-// e essa aqui É segura de expor no navegador) cadastrada como variável de
-// ambiente VITE_MERCADOPAGO_PUBLIC_KEY no projeto.
-// ─────────────────────────────────────────────────────────────────────────
+import { getStoredUtmParams } from "@/lib/pixel-tracking";
 
 declare global {
   interface Window {
@@ -34,11 +14,10 @@ declare global {
 interface CardCheckoutBrickProps {
   eventId: string;
   siteId: string;
-  amount: number; // valor total (com taxa de serviço e proteção já incluídas) só para exibição no Brick
+  amount: number;
   items: { ticket_type_id: string; quantity: number }[];
   payerEmail: string;
   purchaseProtection?: boolean;
-  couponCode?: string;
   onSuccess: (orderId: string) => void;
   onError?: (message: string) => void;
 }
@@ -51,8 +30,7 @@ const CardCheckoutBrick = ({
   amount,
   items,
   payerEmail,
-  purchaseProtection,
-  couponCode,
+  purchaseProtection = false,
   onSuccess,
   onError,
 }: CardCheckoutBrickProps) => {
@@ -70,7 +48,6 @@ const CardCheckoutBrick = ({
     let cancelled = false;
 
     const loadSdkAndRenderBrick = async () => {
-      // Carrega o SDK oficial do Mercado Pago (só uma vez)
       if (!window.MercadoPago) {
         await new Promise<void>((resolve, reject) => {
           const script = document.createElement("script");
@@ -120,16 +97,16 @@ const CardCheckoutBrick = ({
                     event_id: eventId,
                     site_id: siteId,
                     items,
+                    purchase_protection: purchaseProtection,
                     token: formData.token,
                     payment_method_id: formData.payment_method_id,
                     issuer_id: formData.issuer_id,
                     installments: formData.installments,
-                    purchase_protection: purchaseProtection === true,
-                    coupon_code: couponCode || undefined,
                     payer: {
                       email: formData.payer.email || payerEmail,
                       identification: formData.payer.identification,
                     },
+                    ...getStoredUtmParams(),
                   },
                 }
               );
@@ -143,7 +120,6 @@ const CardCheckoutBrick = ({
                 toast.error("Pagamento recusado. Tente outro cartão.");
                 onError?.("Pagamento recusado");
               } else {
-                // in_process / pending — o webhook confirma depois
                 toast.info("Pagamento em análise. Você será avisado quando confirmar.");
                 onSuccess(data.order_id);
               }
