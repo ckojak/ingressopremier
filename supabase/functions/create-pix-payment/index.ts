@@ -62,6 +62,7 @@ serve(async (req) => {
     const body = await req.json();
     const { event_id, items, site_id, coupon_code, purchase_protection, billing_address } = body;
     let { customer_name, customer_cpf, customer_phone } = body;
+    const { utm_source, utm_medium, utm_campaign, utm_content, utm_term } = body;
 
     const mpAccessToken = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
     if (!mpAccessToken) throw new Error('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN não configurado');
@@ -167,6 +168,12 @@ serve(async (req) => {
       discount_amount: discount,
       purchase_protection: protectionFee > 0,
       protection_fee: protectionFee,
+      // De qual anúncio/campanha veio essa venda (se veio de algum)
+      utm_source: utm_source || null,
+      utm_medium: utm_medium || null,
+      utm_campaign: utm_campaign || null,
+      utm_content: utm_content || null,
+      utm_term: utm_term || null,
     }).select().single();
     if (orderErr || !order) {
       await releaseAll();
