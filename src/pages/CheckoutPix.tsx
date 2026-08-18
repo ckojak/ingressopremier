@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { format, parseISO, differenceInSeconds } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
+import { trackMetaEvent, trackGa4Event } from "@/lib/pixel-tracking";
 
 interface PixData {
   order_id: string;
@@ -31,17 +32,16 @@ function CheckoutPixContent() {
   const [copied, setCopied] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<string>('pending');
   const [timeLeft, setTimeLeft] = useState<number>(0);
+  const purchaseTrackedRef = useRef(false);
 
   const orderId = searchParams.get('order_id');
 
-  // Load PIX data from sessionStorage
   useEffect(() => {
     const storedData = sessionStorage.getItem('pix_checkout_data');
     if (storedData) {
       const data = JSON.parse(storedData) as PixData;
       setPixData(data);
       
-      // Calculate time left
       if (data.expiration_date) {
         const expDate = parseISO(data.expiration_date);
         const secondsLeft = differenceInSeconds(expDate, new Date());
@@ -56,7 +56,6 @@ function CheckoutPixContent() {
     }
   }, [orderId, navigate]);
 
-  // Countdown timer
   useEffect(() => {
     if (timeLeft <= 0) return;
     
@@ -73,7 +72,37 @@ function CheckoutPixContent() {
     return () => clearInterval(timer);
   }, [timeLeft]);
 
-  // Listen for payment status updates
+  // Dispara o evento de Compra (uma única vez) no Pixel/GA4 QUE O PRODUTOR cadastrou
+  // no evento, assim que o Pix é confirmado como pago.
+  const trackPurchase = async (totalAmount: number) => {
+    if (purchaseTrackedRef.current || !orderId) return;
+    purchaseTrackedRef.current = true;
+
+    try {
+      const { data } = await supabase
+        .from('orders')
+        .select('event_id, events(meta_pixel_id, ga4_measurement_id)')
+        .eq('id', orderId)
+        .single();
+
+      const evt = data?.events as { meta_pixel_id?: string | null; ga4_measurement_id?: string | null } | null;
+
+      trackMetaEvent(evt?.meta_pixel_id, "Purchase", {
+        value: totalAmount,
+        currency: "BRL",
+        content_ids: data?.event_id ? [data.event_id] : undefined,
+        content_type: "product",
+      });
+      trackGa4Event(evt?.ga4_measurement_id, "purchase", {
+        transaction_id: orderId,
+        value: totalAmount,
+        currency: "BRL",
+      });
+    } catch (err) {
+      console.error("Error tracking purchase:", err);
+    }
+  };
+
   useEffect(() => {
     if (!orderId) return;
 
@@ -96,6 +125,7 @@ function CheckoutPixContent() {
                 title: "Pagamento confirmado!",
                 description: "Seus ingressos foram gerados com sucesso.",
               });
+              trackPurchase(pixData?.total_amount ?? 0);
               sessionStorage.removeItem('pix_checkout_data');
               setTimeout(() => navigate('/meus-ingressos'), 2000);
             }
@@ -107,9 +137,9 @@ function CheckoutPixContent() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orderId, navigate, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, navigate, toast, pixData]);
 
-  // Poll for payment status as backup
   useEffect(() => {
     if (!orderId || paymentStatus === 'paid') return;
 
@@ -126,6 +156,7 @@ function CheckoutPixContent() {
           title: "Pagamento confirmado!",
           description: "Seus ingressos foram gerados com sucesso.",
         });
+        trackPurchase(pixData?.total_amount ?? 0);
         sessionStorage.removeItem('pix_checkout_data');
         setTimeout(() => navigate('/meus-ingressos'), 2000);
       }
@@ -133,7 +164,8 @@ function CheckoutPixContent() {
 
     const pollInterval = setInterval(checkStatus, 5000);
     return () => clearInterval(pollInterval);
-  }, [orderId, paymentStatus, navigate, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, paymentStatus, navigate, toast, pixData]);
 
   const handleCopyPixCode = async () => {
     if (!pixData?.pix_copy_paste) return;
@@ -247,7 +279,6 @@ function CheckoutPixContent() {
             </CardHeader>
 
             <CardContent className="space-y-6">
-              {/* Timer */}
               {timeLeft > 0 && (
                 <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <Clock className="h-4 w-4" />
@@ -257,7 +288,6 @@ function CheckoutPixContent() {
                 </div>
               )}
 
-              {/* QR Code */}
               <div className="flex justify-center">
                 <div className="bg-white p-4 rounded-lg">
                   {pixData.pix_qr_code_base64 ? (
@@ -274,7 +304,6 @@ function CheckoutPixContent() {
                 </div>
               </div>
 
-              {/* Total */}
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">Valor total</p>
                 <p className="text-3xl font-bold text-primary">
@@ -282,7 +311,6 @@ function CheckoutPixContent() {
                 </p>
               </div>
 
-              {/* Copy button */}
               <Button 
                 onClick={handleCopyPixCode} 
                 className="w-full gap-2"
@@ -301,7 +329,6 @@ function CheckoutPixContent() {
                 )}
               </Button>
 
-              {/* Status indicator */}
               <div className="flex items-center justify-center gap-2 p-3 bg-muted/50 rounded-lg">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 <span className="text-sm text-muted-foreground">
@@ -309,7 +336,6 @@ function CheckoutPixContent() {
                 </span>
               </div>
 
-              {/* Instructions */}
               <div className="text-sm text-muted-foreground space-y-2">
                 <p className="font-medium text-foreground">Como pagar:</p>
                 <ol className="list-decimal list-inside space-y-1 pl-2">
