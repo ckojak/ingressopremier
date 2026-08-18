@@ -18,6 +18,7 @@ interface CardCheckoutBrickProps {
   items: { ticket_type_id: string; quantity: number }[];
   payerEmail: string;
   purchaseProtection?: boolean;
+  couponCode?: string;
   onSuccess: (orderId: string) => void;
   onError?: (message: string) => void;
 }
@@ -31,6 +32,7 @@ const CardCheckoutBrick = ({
   items,
   payerEmail,
   purchaseProtection = false,
+  couponCode,
   onSuccess,
   onError,
 }: CardCheckoutBrickProps) => {
@@ -98,6 +100,7 @@ const CardCheckoutBrick = ({
                     site_id: siteId,
                     items,
                     purchase_protection: purchaseProtection,
+                    coupon_code: couponCode || undefined,
                     token: formData.token,
                     payment_method_id: formData.payment_method_id,
                     issuer_id: formData.issuer_id,
