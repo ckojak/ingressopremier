@@ -21,6 +21,11 @@ interface CardPaymentRequest {
   installments: number;
   purchase_protection?: boolean;
   coupon_code?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
   payer: {
     email: string;
     identification?: { type: string; number: string };
@@ -200,6 +205,12 @@ serve(async (req) => {
         discount_amount: discount,
         purchase_protection: protectionFee > 0,
         protection_fee: protectionFee,
+        // De qual anúncio/campanha veio essa venda (se veio de algum)
+        utm_source: body.utm_source || null,
+        utm_medium: body.utm_medium || null,
+        utm_campaign: body.utm_campaign || null,
+        utm_content: body.utm_content || null,
+        utm_term: body.utm_term || null,
       })
       .select()
       .single();
