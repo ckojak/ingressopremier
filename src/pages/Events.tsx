@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
@@ -30,7 +30,6 @@ import { toast } from "sonner";
 import EventCardSkeleton from "@/components/skeletons/EventCardSkeleton";
 import ApiErrorFallback from "@/components/ApiErrorFallback";
 
-// Site filter options for PremierPass
 const SITE_FILTER_OPTIONS = [
   { label: "Todos os eventos", value: "all" },
   { label: "PremierPass", value: "premierpass" },
@@ -47,26 +46,27 @@ const dateFilters = [
 ];
 
 const Events = () => {
+  const [searchParams] = useSearchParams();
+  const initialCity = searchParams.get("city") || "all";
+  const initialCategory = searchParams.get("category") || "Todos";
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("Todos");
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [selectedDateFilter, setSelectedDateFilter] = useState("all");
   const [customDate, setCustomDate] = useState<Date | undefined>();
-  const [selectedCity, setSelectedCity] = useState("all");
+  const [selectedCity, setSelectedCity] = useState(initialCity);
   const [selectedSite, setSelectedSite] = useState("all");
   const { showAllSiteEvents } = useSiteContext();
   const currentSite = detectSiteFromHostname();
   const { invalidatePublic } = useInvalidateEvents();
-  
-  // Use centralized events hook
+
   const { data: events = [], isLoading: loading, isFetching, isError, refetch } = usePublicEvents();
-  
-  // Manual refresh function
+
   const handleRefresh = () => {
     invalidatePublic();
     toast.success("Lista de eventos atualizada!");
   };
-  
-  // Extract unique cities from events
+
   const cities = [...new Set(events.map(e => e.city).filter(Boolean))] as string[];
 
   const getDateRange = () => {
@@ -89,17 +89,14 @@ const Events = () => {
   };
 
   const filteredEvents = events.filter((event) => {
-    // Search filter
-    const matchesSearch = 
+    const matchesSearch =
       event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.venue_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.short_description?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Category filter
+
     const matchesCategory = selectedCategory === "Todos" || event.category === selectedCategory;
-    
-    // Date filter
+
     const dateRange = getDateRange();
     let matchesDate = true;
     if (dateRange) {
@@ -107,13 +104,11 @@ const Events = () => {
       matchesDate = eventDate >= dateRange.start && eventDate <= dateRange.end;
     }
 
-    // City filter
     const matchesCity = selectedCity === "all" || event.city === selectedCity;
-    
-    // Site filter (only for PremierPass which shows all sites)
+
     const eventSiteId = (event as any).site_id;
     const matchesSite = selectedSite === "all" || eventSiteId === selectedSite;
-    
+
     return matchesSearch && matchesCategory && matchesDate && matchesCity && matchesSite;
   });
 
@@ -135,14 +130,12 @@ const Events = () => {
         description="Descubra todos os eventos, shows, festivais e festas com ingressos à venda no PremierPass. Filtre por data, cidade e categoria e compre online."
         url="https://premierpass.com.br/eventos"
       />
-      {/* Background decorations */}
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[150px] pointer-events-none" />
       <div className="absolute bottom-1/3 left-0 w-[400px] h-[400px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />
-      
+
       <Header />
       <main className="pt-24 pb-16 relative z-10">
         <div className="container mx-auto px-4">
-          {/* Page Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -157,7 +150,6 @@ const Events = () => {
             </p>
           </motion.div>
 
-          {/* Filters */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -166,7 +158,6 @@ const Events = () => {
           >
             <div className="flex flex-col gap-4">
               <div className="flex flex-col md:flex-row gap-4">
-                {/* Search */}
                 <div className="relative flex-1">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
                   <Input
@@ -177,7 +168,6 @@ const Events = () => {
                   />
                 </div>
 
-                {/* Date Filter */}
                 <Select value={selectedDateFilter} onValueChange={setSelectedDateFilter}>
                   <SelectTrigger className="h-12 w-full md:w-48 glass-premium border-border/40 rounded-xl">
                     <CalendarIcon className="w-4 h-4 mr-2 text-primary" />
@@ -192,7 +182,6 @@ const Events = () => {
                   </SelectContent>
                 </Select>
 
-                {/* Custom Date Picker */}
                 {selectedDateFilter === "custom" && (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -211,7 +200,6 @@ const Events = () => {
                   </Popover>
                 )}
 
-                {/* City Filter */}
                 <Select value={selectedCity} onValueChange={setSelectedCity}>
                   <SelectTrigger className="h-12 w-full md:w-48 glass-premium border-border/40 rounded-xl">
                     <MapPin className="w-4 h-4 mr-2 text-accent" />
@@ -227,7 +215,6 @@ const Events = () => {
                   </SelectContent>
                 </Select>
 
-                {/* Site Filter - only show on PremierPass */}
                 {showAllSiteEvents && (
                   <Select value={selectedSite} onValueChange={setSelectedSite}>
                     <SelectTrigger className="h-12 w-full md:w-48 glass-premium border-border/40 rounded-xl">
@@ -244,7 +231,6 @@ const Events = () => {
                   </Select>
                 )}
 
-                {/* Clear Filters */}
                 {hasActiveFilters && (
                   <Button variant="outline" className="h-12 glass-premium border-border/40 hover:border-primary/40 hover:bg-primary/5 rounded-xl transition-all hover-lift" onClick={clearFilters}>
                     <X className="w-4 h-4 mr-2" />
@@ -253,7 +239,6 @@ const Events = () => {
                 )}
               </div>
 
-              {/* Category Pills */}
               <div className="flex flex-wrap gap-2.5">
                 {categories.map((category) => (
                   <button
@@ -272,7 +257,6 @@ const Events = () => {
             </div>
           </motion.div>
 
-          {/* Results Count + Refresh Button */}
           <div className="mb-6 flex items-center justify-between">
             <span className="text-muted-foreground">
               {loading ? "Carregando..." : `${filteredEvents.length} eventos encontrados`}
@@ -289,7 +273,6 @@ const Events = () => {
             </Button>
           </div>
 
-          {/* Events Grid */}
           {isError ? (
             <ApiErrorFallback
               title="Erro ao carregar eventos"
@@ -311,7 +294,7 @@ const Events = () => {
                 const siteBadge = eventSiteId === "premierpass"
                   ? { label: "PremierPass", className: "bg-primary/20 text-primary border-primary/30" }
                   : null;
-                  
+
                 return (
                 <motion.div
                   key={event.id}
@@ -321,7 +304,6 @@ const Events = () => {
                 >
                   <Link to={`/evento/${event.id}`} className="group block">
                     <div className="gradient-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-500 hover:-translate-y-2 border border-border/20 hover:border-primary/20">
-                      {/* Image */}
                       <div className="relative aspect-[16/10] overflow-hidden">
                         {event.image_url ? (
                           <img
@@ -354,7 +336,6 @@ const Events = () => {
                         )}
                       </div>
 
-                      {/* Content */}
                       <div className="p-5">
                         <h3 className="font-display font-bold text-lg text-foreground mb-3 line-clamp-2 group-hover:text-gradient transition-all duration-300">
                           {event.title}
