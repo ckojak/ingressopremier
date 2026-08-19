@@ -2,6 +2,8 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
 import HeroSection from "@/components/home/HeroSection";
+import FeaturedCarousel from "@/components/home/FeaturedCarousel";
+import DiscoverBar from "@/components/home/DiscoverBar";
 import FeaturedEvents from "@/components/home/FeaturedEvents";
 
 const Index = () => {
@@ -15,6 +17,8 @@ const Index = () => {
       <Header />
       <main>
         <HeroSection />
+        <FeaturedCarousel />
+        <DiscoverBar />
         <FeaturedEvents />
       </main>
       <Footer />
