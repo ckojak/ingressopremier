@@ -13,13 +13,24 @@ import {
   ArrowUpRight,
   Eye,
   Wallet,
-  MessageCircle
+  Lock,
+  Send
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import OrganizerVerificationCard from "@/components/OrganizerVerificationCard";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
@@ -43,8 +54,25 @@ interface ProducerEvent {
   tickets_sold: number;
 }
 
+interface EventBalance {
+  event_id: string;
+  event_title: string;
+  event_start_date: string;
+  gross_amount: number;
+  released_amount: number;
+  withdrawn_amount: number;
+  pending_amount: number;
+  available_amount: number;
+  release_stage: "aguardando_evento" | "metade_liberada" | "total_liberado";
+}
+
 const SERVICE_FEE_RATE = 0.08;
-const WITHDRAWAL_WHATSAPP = "5521979934676";
+
+const releaseStageLabel: Record<EventBalance["release_stage"], { label: string; className: string }> = {
+  aguardando_evento: { label: "Liberado no dia do evento", className: "bg-muted text-muted-foreground" },
+  metade_liberada: { label: "50% liberado — restante 1 dia após o evento", className: "bg-yellow-500/15 text-yellow-500" },
+  total_liberado: { label: "100% liberado", className: "bg-green-500/15 text-green-500" },
+};
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any }> = {
   pending: { label: "Aguardando aprovação", variant: "outline", icon: Clock },
@@ -53,6 +81,9 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   rejected: { label: "Rejeitado", variant: "destructive", icon: AlertTriangle },
   cancelled: { label: "Cancelado", variant: "destructive", icon: AlertTriangle },
 };
+
+const formatBRL = (value: number) =>
+  `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const ProducerDashboard = () => {
   const [stats, setStats] = useState<ProducerStats>({
@@ -66,8 +97,27 @@ const ProducerDashboard = () => {
   const [recentEvents, setRecentEvents] = useState<ProducerEvent[]>([]);
   const [salesData, setSalesData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [producerName, setProducerName] = useState<string>("");
   const [pendingEventTitles, setPendingEventTitles] = useState<string[]>([]);
+
+  const [balances, setBalances] = useState<EventBalance[]>([]);
+  const [balancesLoading, setBalancesLoading] = useState(true);
+  const [withdrawTarget, setWithdrawTarget] = useState<EventBalance | null>(null);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [pixKey, setPixKey] = useState("");
+  const [submittingWithdraw, setSubmittingWithdraw] = useState(false);
+
+  const fetchBalances = async () => {
+    setBalancesLoading(true);
+    try {
+      const { data, error } = await supabase.rpc("get_organizer_balance");
+      if (error) throw error;
+      setBalances((data as EventBalance[]) || []);
+    } catch (error) {
+      console.error("Error fetching balances:", error);
+    } finally {
+      setBalancesLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchProducerData = async () => {
@@ -75,14 +125,6 @@ const ProducerDashboard = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("full_name, email")
-          .eq("id", user.id)
-          .maybeSingle();
-        setProducerName(profile?.full_name || profile?.email || user.email || "Produtor");
-
-        // Fetch events
         const { data: events } = await supabase
           .from("events")
           .select("*")
@@ -92,7 +134,6 @@ const ProducerDashboard = () => {
         const eventsData = events || [];
         const eventIds = eventsData.map(e => e.id);
 
-        // Fetch tickets for these events
         let ticketsCount = 0;
         let revenue = 0;
         let netRevenue = 0;
@@ -104,14 +145,13 @@ const ProducerDashboard = () => {
             .in("event_id", eventIds);
 
           ticketsCount = count || 0;
-          
-          // Get revenue from orders
+
           const { data: orders } = await supabase
             .from("orders")
             .select("total_amount, service_fee")
             .eq("status", "paid")
             .in("event_id", eventIds);
-            
+
           revenue = orders?.reduce((acc, o) => acc + Number(o.total_amount || 0), 0) || 0;
           netRevenue =
             orders?.reduce((acc, o) => {
@@ -134,14 +174,13 @@ const ProducerDashboard = () => {
           eventsData.filter((e: any) => e.status === "pending").map((e: any) => e.title)
         );
 
-        // Get recent events with ticket counts
         const recentEventsWithTickets = await Promise.all(
           eventsData.slice(0, 5).map(async (event) => {
             const { count } = await supabase
               .from("tickets")
               .select("*", { count: "exact", head: true })
               .eq("event_id", event.id);
-            
+
             return {
               id: event.id,
               title: event.title,
@@ -155,7 +194,6 @@ const ProducerDashboard = () => {
 
         setRecentEvents(recentEventsWithTickets);
 
-        // Generate sales chart data (last 14 days)
         if (eventIds.length > 0) {
           const { data: orders } = await supabase
             .from("orders")
@@ -194,7 +232,54 @@ const ProducerDashboard = () => {
     };
 
     fetchProducerData();
+    fetchBalances();
   }, []);
+
+  const openWithdrawDialog = (balance: EventBalance) => {
+    setWithdrawTarget(balance);
+    setWithdrawAmount(balance.available_amount.toFixed(2));
+    setPixKey("");
+  };
+
+  const handleRequestWithdrawal = async () => {
+    if (!withdrawTarget) return;
+    const amount = Number(withdrawAmount.replace(",", "."));
+
+    if (!amount || amount <= 0) {
+      toast.error("Digite um valor válido");
+      return;
+    }
+    if (amount > withdrawTarget.available_amount) {
+      toast.error("Valor maior que o saldo disponível pra esse evento");
+      return;
+    }
+    if (!pixKey.trim()) {
+      toast.error("Informe a chave PIX pra receber");
+      return;
+    }
+
+    setSubmittingWithdraw(true);
+    try {
+      const { error } = await supabase.rpc("request_withdrawal", {
+        p_event_id: withdrawTarget.event_id,
+        p_amount: amount,
+        p_pix_key: pixKey.trim(),
+      });
+
+      if (error) throw error;
+
+      toast.success("Solicitação enviada! Você recebe assim que for processada.");
+      setWithdrawTarget(null);
+      fetchBalances();
+    } catch (error: any) {
+      console.error("Withdrawal request error:", error);
+      toast.error(error.message?.includes("insufficient_balance")
+        ? "Valor maior que o saldo disponível"
+        : "Erro ao solicitar saque. Tente novamente.");
+    } finally {
+      setSubmittingWithdraw(false);
+    }
+  };
 
   const statCards = [
     {
@@ -227,29 +312,7 @@ const ProducerDashboard = () => {
     },
   ];
 
-  const formatBRL = (value: number) =>
-    `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-  const withdrawalMessage = () => {
-    const eventsList = recentEvents.length
-      ? recentEvents.map(e => `- ${e.title} (${e.tickets_sold} ingressos)`).join("\n")
-      : "- (sem eventos listados)";
-    return (
-      `Olá! Sou ${producerName} e gostaria de solicitar o saque da minha receita no PremierPass.\n\n` +
-      `Eventos:\n${eventsList}\n\n` +
-      `Ingressos vendidos: ${stats.totalTicketsSold}\n` +
-      `Faturamento bruto: ${formatBRL(stats.totalRevenue)}\n` +
-      `Valor líquido a receber (já descontada a taxa de serviço de 8%): ${formatBRL(stats.netRevenue)}`
-    );
-  };
-
-  const handleWithdrawal = () => {
-    window.open(
-      `https://wa.me/${WITHDRAWAL_WHATSAPP}?text=${encodeURIComponent(withdrawalMessage())}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
-  };
+  const totalAvailable = balances.reduce((sum, b) => sum + b.available_amount, 0);
 
   return (
     <div className="space-y-8">
@@ -268,7 +331,6 @@ const ProducerDashboard = () => {
         </Link>
       </div>
 
-      {/* Info Alert */}
       <Card className="bg-primary/5 border-primary/20">
         <CardContent className="p-4 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
@@ -283,7 +345,6 @@ const ProducerDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Pending approval banner */}
       {pendingEventTitles.length > 0 && (
         <Card className="bg-yellow-500/10 border-yellow-500/30">
           <CardContent className="p-4 flex items-start gap-3">
@@ -306,38 +367,72 @@ const ProducerDashboard = () => {
         </Card>
       )}
 
-      {/* Identity verification (KYC) */}
       <OrganizerVerificationCard />
 
-      {/* Net revenue + withdrawal */}
       <Card className="bg-card border-border">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-foreground text-lg">
             <Wallet className="w-5 h-5 text-primary" />
-            Receita líquida a receber
+            Saldo disponível pra saque
           </CardTitle>
+          <span className="text-2xl font-bold text-green-500">
+            {balancesLoading ? "..." : formatBRL(totalAvailable)}
+          </span>
         </CardHeader>
-        <CardContent className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-          <div>
-            <p className="text-3xl font-bold text-green-500">
-              {loading ? "..." : formatBRL(stats.netRevenue)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Faturamento bruto {formatBRL(stats.totalRevenue)} menos a taxa de serviço de 8%.
-            </p>
-          </div>
-          <Button
-            onClick={handleWithdrawal}
-            disabled={loading || stats.netRevenue <= 0}
-            className="gap-2 gradient-primary"
-          >
-            <MessageCircle className="w-4 h-4" />
-            Solicitar saque
-          </Button>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground -mt-2 mb-2">
+            50% liberado a partir do dia do evento, os outros 50% a partir de 1 dia após o evento terminar —
+            assim, se der algum problema, ainda dá tempo de resolver antes do saldo todo sair.
+          </p>
+
+          {balancesLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando...</p>
+          ) : balances.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma venda registrada ainda.</p>
+          ) : (
+            balances.map((b) => {
+              const stage = releaseStageLabel[b.release_stage];
+              return (
+                <div
+                  key={b.event_id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-secondary/30"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground truncate">{b.event_title}</p>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <Badge className={`text-xs ${stage.className}`}>{stage.label}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        Vendido: {formatBRL(b.gross_amount)}
+                      </span>
+                      {b.pending_amount > 0 && (
+                        <span className="text-xs text-yellow-500 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {formatBRL(b.pending_amount)} em análise
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Disponível</p>
+                      <p className="font-bold text-green-500">{formatBRL(b.available_amount)}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="gap-1"
+                      disabled={b.available_amount <= 0}
+                      onClick={() => openWithdrawDialog(b)}
+                    >
+                      {b.available_amount <= 0 ? <Lock className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
+                      Sacar
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </CardContent>
       </Card>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat, index) => (
           <motion.div
@@ -366,7 +461,6 @@ const ProducerDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sales Chart */}
         <Card className="bg-card border-border lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
@@ -420,7 +514,6 @@ const ProducerDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Quick Actions */}
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-foreground">Ações Rápidas</CardTitle>
@@ -454,7 +547,6 @@ const ProducerDashboard = () => {
         </Card>
       </div>
 
-      {/* Recent Events */}
       <Card className="bg-card border-border">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-foreground">Meus Eventos Recentes</CardTitle>
@@ -525,6 +617,48 @@ const ProducerDashboard = () => {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!withdrawTarget} onOpenChange={(open) => !open && setWithdrawTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Solicitar saque — {withdrawTarget?.event_title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Disponível pra saque agora: <strong className="text-green-500">
+                {withdrawTarget ? formatBRL(withdrawTarget.available_amount) : ""}
+              </strong>
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="withdraw-amount">Valor a sacar</Label>
+              <Input
+                id="withdraw-amount"
+                inputMode="decimal"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pix-key">Chave PIX pra receber</Label>
+              <Input
+                id="pix-key"
+                placeholder="CPF, e-mail, telefone ou chave aleatória"
+                value={pixKey}
+                onChange={(e) => setPixKey(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWithdrawTarget(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleRequestWithdrawal} disabled={submittingWithdraw} className="gap-2">
+              <Send className="w-4 h-4" />
+              {submittingWithdraw ? "Enviando..." : "Confirmar solicitação"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
