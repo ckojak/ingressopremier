@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Ticket, Flame } from "lucide-react";
+import { Calendar, MapPin, Ticket, Flame, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -21,7 +21,16 @@ const FeaturedCarousel = () => {
   const [api, setApi] = useState<CarouselApi>();
   const autoplayRef = useRef<number | null>(null);
 
-  const highlighted = events.filter((e: any) => e.highlighted).slice(0, 6);
+  const manuallyHighlighted = events.filter((e: any) => e.highlighted);
+  const isBestSellersFallback = manuallyHighlighted.length === 0;
+  const bestSellers = [...events]
+    .filter((e: any) => (e.total_sold ?? 0) > 0)
+    .sort((a: any, b: any) => (b.total_sold ?? 0) - (a.total_sold ?? 0))
+    .slice(0, 5);
+
+  const highlighted = isBestSellersFallback
+    ? bestSellers
+    : manuallyHighlighted.slice(0, 6);
 
   useEffect(() => {
     if (!api) return;
@@ -63,10 +72,21 @@ const FeaturedCarousel = () => {
           transition={{ duration: 0.6 }}
           className="flex items-center gap-2 mb-6"
         >
-          <Flame className="w-5 h-5 text-primary" />
-          <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground">
-            Em <span className="text-gradient">destaque</span>
-          </h2>
+          {isBestSellersFallback ? (
+            <>
+              <TrendingUp className="w-5 h-5 text-primary" />
+              <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground">
+                Mais <span className="text-gradient">vendidos</span>
+              </h2>
+            </>
+          ) : (
+            <>
+              <Flame className="w-5 h-5 text-primary" />
+              <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground">
+                Em <span className="text-gradient">destaque</span>
+              </h2>
+            </>
+          )}
         </motion.div>
 
         <Carousel setApi={setApi} opts={{ loop: true }} className="w-full">
@@ -88,11 +108,19 @@ const FeaturedCarousel = () => {
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
-                      {event.category && (
-                        <span className="inline-block gradient-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full mb-3 shadow-premium">
-                          {event.category}
-                        </span>
-                      )}
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {event.category && (
+                          <span className="inline-block gradient-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full shadow-premium">
+                            {event.category}
+                          </span>
+                        )}
+                        {isBestSellersFallback && (
+                          <span className="inline-flex items-center gap-1 bg-background/60 backdrop-blur-sm text-foreground text-xs font-semibold px-3 py-1 rounded-full border border-border/40">
+                            <TrendingUp className="w-3 h-3" />
+                            Mais vendido
+                          </span>
+                        )}
+                      </div>
                       <h3 className="text-2xl md:text-4xl font-display font-bold text-foreground mb-2 line-clamp-2">
                         {event.title}
                       </h3>
