@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Search, Edit, Trash2, Calendar, MapPin, Send } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Calendar, MapPin, Send, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tables } from "@/integrations/supabase/types";
@@ -62,6 +63,7 @@ const eventSchema = z.object({
   status: z.enum(["draft", "pending", "published", "cancelled", "completed"]),
   meta_pixel_id: z.string().max(50, "ID do Pixel inválido").optional().or(z.literal("")),
   ga4_measurement_id: z.string().max(50, "ID do GA4 inválido").optional().or(z.literal("")),
+  highlighted: z.boolean().optional().default(false),
 });
 
 type Event = Tables<"events">;
@@ -113,6 +115,7 @@ const Events = () => {
     status: "draft" as "draft" | "pending" | "published" | "cancelled" | "completed",
     meta_pixel_id: "",
     ga4_measurement_id: "",
+    highlighted: false,
   });
 
   const { states, loading: statesLoading } = useIBGEStates();
@@ -199,6 +202,7 @@ const Events = () => {
             status: validatedData.status as any,
             meta_pixel_id: validatedData.meta_pixel_id || null,
             ga4_measurement_id: validatedData.ga4_measurement_id || null,
+            highlighted: validatedData.highlighted,
           })
           .eq("id", editingEvent.id);
 
@@ -225,6 +229,7 @@ const Events = () => {
             organizer_id: user.id,
             meta_pixel_id: validatedData.meta_pixel_id || null,
             ga4_measurement_id: validatedData.ga4_measurement_id || null,
+            highlighted: validatedData.highlighted,
           }]);
 
         if (error) throw error;
@@ -384,6 +389,7 @@ const Events = () => {
       status: (event.status === "rejected" ? "draft" : event.status) || "draft",
       meta_pixel_id: (event as any).meta_pixel_id || "",
       ga4_measurement_id: (event as any).ga4_measurement_id || "",
+      highlighted: (event as any).highlighted || false,
     });
     setDialogOpen(true);
   };
@@ -406,6 +412,7 @@ const Events = () => {
       status: "draft",
       meta_pixel_id: "",
       ga4_measurement_id: "",
+      highlighted: false,
     });
   };
 
@@ -665,6 +672,27 @@ const Events = () => {
                   />
                 </div>
 
+                {/* Destaque na home */}
+                <div className="space-y-2 md:col-span-2 pt-2 border-t border-border">
+                  <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-4 h-4 text-primary" />
+                      <div>
+                        <Label htmlFor="highlighted" className="cursor-pointer">Destacar na home (carrossel)</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Aparece no carrossel de destaques da página inicial. Se nenhum evento for marcado,
+                          o carrossel mostra automaticamente os que mais venderam ingresso.
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      id="highlighted"
+                      checked={formData.highlighted}
+                      onCheckedChange={(checked) => setFormData({ ...formData, highlighted: checked })}
+                    />
+                  </div>
+                </div>
+
                 {/* Rastreamento de anúncios (opcional) — cada produtor usa o próprio Pixel/Analytics */}
                 <div className="space-y-2 md:col-span-2 pt-2 border-t border-border">
                   <Label className="text-sm font-semibold">Rastreamento de Anúncios (opcional)</Label>
@@ -746,7 +774,12 @@ const Events = () => {
                     )}
                     <div className="flex-1 space-y-2">
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-lg font-semibold text-foreground">{event.title}</h3>
+                        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                          {event.title}
+                          {(event as any).highlighted && (
+                            <Flame className="w-4 h-4 text-primary" aria-label="Destacado na home" />
+                          )}
+                        </h3>
                         <Badge className={statusColors[event.status || "draft"]}>
                           {statusLabels[event.status || "draft"]}
                         </Badge>
