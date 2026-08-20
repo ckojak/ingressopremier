@@ -8,9 +8,9 @@ type Event = Tables<"events">;
 export interface EventWithPrice extends Event {
   min_price?: number;
   total_available?: number;
+  total_sold?: number;
 }
 
-// Query keys for events
 export const eventKeys = {
   all: ["events"] as const,
   public: () => [...eventKeys.all, "public"] as const,
@@ -18,7 +18,6 @@ export const eventKeys = {
   ticketTypes: () => ["ticket_types"] as const,
 };
 
-// Hook to fetch public events (published, future dates)
 export function usePublicEvents() {
   const { getVisibleSiteIds } = useSiteContext();
 
@@ -27,7 +26,6 @@ export function usePublicEvents() {
     queryFn: async (): Promise<EventWithPrice[]> => {
       const visibleSiteIds = getVisibleSiteIds();
 
-      // Fetch published events
       const { data, error } = await supabase
         .from("events")
         .select("*")
@@ -37,12 +35,10 @@ export function usePublicEvents() {
 
       if (error) throw error;
 
-      // Filter by visible site_ids
       const filteredData = (data || []).filter((event: any) =>
         visibleSiteIds.includes(event.site_id) || !event.site_id
       );
 
-      // Fetch ticket prices and availability
       if (filteredData.length > 0) {
         const eventIds = filteredData.map((e) => e.id);
         const { data: ticketData } = await supabase
@@ -51,42 +47,45 @@ export function usePublicEvents() {
           .in("event_id", eventIds)
           .eq("is_active", true);
 
-        const priceAndAvailabilityByEvent: Record<
+        const statsByEvent: Record<
           string,
-          { minPrice: number; totalAvailable: number }
+          { minPrice: number; totalAvailable: number; totalSold: number }
         > = {};
-        
+
         ticketData?.forEach((ticket) => {
           const price = Number(ticket.price);
-          const available = ticket.quantity_available - (ticket.quantity_sold || 0);
-          if (!priceAndAvailabilityByEvent[ticket.event_id]) {
-            priceAndAvailabilityByEvent[ticket.event_id] = {
+          const sold = ticket.quantity_sold || 0;
+          const available = ticket.quantity_available - sold;
+          if (!statsByEvent[ticket.event_id]) {
+            statsByEvent[ticket.event_id] = {
               minPrice: price,
               totalAvailable: available,
+              totalSold: sold,
             };
           } else {
-            if (price < priceAndAvailabilityByEvent[ticket.event_id].minPrice) {
-              priceAndAvailabilityByEvent[ticket.event_id].minPrice = price;
+            if (price < statsByEvent[ticket.event_id].minPrice) {
+              statsByEvent[ticket.event_id].minPrice = price;
             }
-            priceAndAvailabilityByEvent[ticket.event_id].totalAvailable += available;
+            statsByEvent[ticket.event_id].totalAvailable += available;
+            statsByEvent[ticket.event_id].totalSold += sold;
           }
         });
 
         return filteredData.map((event) => ({
           ...event,
-          min_price: priceAndAvailabilityByEvent[event.id]?.minPrice,
-          total_available: priceAndAvailabilityByEvent[event.id]?.totalAvailable ?? 0,
+          min_price: statsByEvent[event.id]?.minPrice,
+          total_available: statsByEvent[event.id]?.totalAvailable ?? 0,
+          total_sold: statsByEvent[event.id]?.totalSold ?? 0,
         }));
       }
 
       return [];
     },
-    staleTime: 30 * 1000, // 30 seconds - shorter for faster updates
+    staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
   });
 }
 
-// Hook to invalidate events cache - use after mutations
 export function useInvalidateEvents() {
   const queryClient = useQueryClient();
 
