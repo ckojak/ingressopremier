@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { DollarSign, TrendingUp, Calendar, Search, Download } from "lucide-react";
+import { DollarSign, TrendingUp, Calendar, Search, Download, RotateCcw, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,10 +13,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useSiteContext } from "@/hooks/useSiteContext";
+import { toast } from "sonner";
 
 interface Order {
   id: string;
@@ -53,56 +64,76 @@ const Sales = () => {
     totalOrders: 0,
     paidOrders: 0,
   });
+  const [refundTarget, setRefundTarget] = useState<Order | null>(null);
+  const [refunding, setRefunding] = useState(false);
   const { getStatsSiteIds } = useSiteContext();
 
+  const fetchOrders = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const statsSiteIds = getStatsSiteIds();
+
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*, events!inner(title, organizer_id, site_id)")
+        .eq("events.organizer_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      const filteredData = (data || []).filter((order: any) => {
+        const eventSiteId = order.events?.site_id || 'premierpass';
+        return statsSiteIds.includes(eventSiteId);
+      });
+
+      const formattedOrders = filteredData.map((order: any) => ({
+        ...order,
+        event: { title: order.events?.title || "" }
+      }));
+
+      setOrders(formattedOrders);
+
+      const paidOrders = formattedOrders.filter(o => o.status === "paid");
+      const totalRevenue = paidOrders.reduce((acc, o) => acc + Number(o.total_amount), 0);
+
+      setStats({
+        totalRevenue,
+        totalOrders: formattedOrders.length,
+        paidOrders: paidOrders.length,
+      });
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Get site_ids for stats (isolated per site)
-        const statsSiteIds = getStatsSiteIds();
-
-        const { data, error } = await supabase
-          .from("orders")
-          .select("*, events!inner(title, organizer_id, site_id)")
-          .eq("events.organizer_id", user.id)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-
-        // Filter by site_id in memory (since site_id may not be in generated types)
-        const filteredData = (data || []).filter((order: any) => {
-          const eventSiteId = order.events?.site_id || 'premierpass';
-          return statsSiteIds.includes(eventSiteId);
-        });
-
-        const formattedOrders = filteredData.map((order: any) => ({
-          ...order,
-          event: { title: order.events?.title || "" }
-        }));
-
-        setOrders(formattedOrders);
-
-        // Calculate stats
-        const paidOrders = formattedOrders.filter(o => o.status === "paid");
-        const totalRevenue = paidOrders.reduce((acc, o) => acc + Number(o.total_amount), 0);
-        
-        setStats({
-          totalRevenue,
-          totalOrders: formattedOrders.length,
-          paidOrders: paidOrders.length,
-        });
-      } catch (error) {
-        console.error("Error fetching orders:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchOrders();
   }, []);
+
+  const handleRefund = async () => {
+    if (!refundTarget) return;
+    setRefunding(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("refund-order", {
+        body: { order_id: refundTarget.id },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success("Reembolso realizado. O ingresso já foi invalidado.");
+      setRefundTarget(null);
+      fetchOrders();
+    } catch (err: any) {
+      toast.error(err.message || "Não foi possível reembolsar este pedido");
+    } finally {
+      setRefunding(false);
+    }
+  };
 
   const filteredOrders = orders.filter((order) =>
     order.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -219,6 +250,7 @@ const Sales = () => {
                   <TableHead>Valor</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Data</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -246,6 +278,19 @@ const Sales = () => {
                         ? format(new Date(order.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
                         : "-"}
                     </TableCell>
+                    <TableCell className="text-right">
+                      {order.status === "paid" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-destructive hover:text-destructive"
+                          onClick={() => setRefundTarget(order)}
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          Reembolsar
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -253,6 +298,32 @@ const Sales = () => {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={!!refundTarget} onOpenChange={(open) => !open && setRefundTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reembolsar este pedido?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vai devolver <strong>R$ {refundTarget ? Number(refundTarget.total_amount).toFixed(2) : ""}</strong> pro
+              Mercado Pago do comprador <strong>{refundTarget?.customer_name}</strong>, e o ingresso dele será
+              invalidado automaticamente (não entra mais no evento). Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={refunding}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleRefund();
+              }}
+              disabled={refunding}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {refunding ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar reembolso"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
