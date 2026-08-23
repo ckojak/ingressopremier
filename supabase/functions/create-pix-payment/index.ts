@@ -14,10 +14,14 @@ const log = (step: string, details?: unknown) =>
 async function applyCoupon(supabase: any, code: string | undefined, eventId: string, subtotal: number) {
   if (!code) return { discount: 0, couponId: null as string | null, couponCode: null as string | null };
 
+  // Escapa os curingas do LIKE (% e _). Sem isso, mandar "%" como cupom casava
+  // com QUALQUER cupom ativo -- desconto de graça sem saber o código.
+  const safeCode = code.trim().replace(/([\\%_])/g, '\\$1');
+
   const { data: coupon } = await supabase
     .from('coupons')
     .select('id, code, discount_type, discount_value, valid_from, valid_until, max_uses, used_count, min_purchase_amount, event_id, is_active')
-    .ilike('code', code.trim())
+    .ilike('code', safeCode)
     .maybeSingle();
 
   if (!coupon || coupon.is_active === false) return { discount: 0, couponId: null, couponCode: null };
@@ -70,6 +74,20 @@ serve(async (req) => {
     if (!event_id) throw new Error('Evento não informado');
     if (!Array.isArray(items) || items.length === 0) throw new Error('Carrinho vazio');
 
+    // Normaliza o carrinho: exige quantidade INTEIRA POSITIVA e SOMA itens repetidos
+    // do mesmo tipo de ingresso. Antes dava pra mandar o mesmo ticket_type_id três
+    // vezes com 10 cada -- passava nas três validações de max_per_order e levava 30.
+    // Também bloqueia quantidade negativa, que corrompia o estoque no reserve_tickets.
+    const mergedQty = new Map<string, number>();
+    for (const raw of items) {
+      const ttId = String(raw?.ticket_type_id || '');
+      const qty = Number(raw?.quantity);
+      if (!ttId) throw new Error('Item inválido no carrinho');
+      if (!Number.isInteger(qty) || qty <= 0) throw new Error('Quantidade inválida no carrinho');
+      mergedQty.set(ttId, (mergedQty.get(ttId) || 0) + qty);
+    }
+    const normalizedItems = Array.from(mergedQty, ([ticket_type_id, quantity]) => ({ ticket_type_id, quantity }));
+
     const { data: profile } = await supabase
       .from('profiles').select('full_name, email, phone').eq('id', user.id).maybeSingle();
     customer_name = customer_name || profile?.full_name || user.email;
@@ -93,13 +111,13 @@ serve(async (req) => {
           sum + (o.order_items || []).reduce((s: number, oi: any) => s + oi.quantity, 0),
         0
       );
-      const newQty = items.reduce((s: number, i: any) => s + Math.max(1, Math.floor(Number(i.quantity) || 0)), 0);
+      const newQty = normalizedItems.reduce((s: number, i) => s + i.quantity, 0);
       if (alreadyBought + newQty > 4) {
         throw new Error(`Limite de 4 ingressos por CPF atingido para este evento (você já tem ${alreadyBought}).`);
       }
     }
 
-    const ticketTypeIds = items.map((i: any) => i.ticket_type_id);
+    const ticketTypeIds = normalizedItems.map((i) => i.ticket_type_id);
     const [{ data: event }, { data: ticketTypes, error: ttErr }] = await Promise.all([
       supabase.from('events').select('id, title, site_id').eq('id', event_id).maybeSingle(),
       supabase
@@ -113,10 +131,10 @@ serve(async (req) => {
 
     let subtotal = 0;
     const orderItemsPayload: any[] = [];
-    for (const item of items) {
+    for (const item of normalizedItems) {
       const tt = ticketTypes.find((t: any) => t.id === item.ticket_type_id);
       if (!tt || tt.event_id !== event_id || !tt.is_active) throw new Error('Ingresso indisponível');
-      const qty = Math.max(1, Math.floor(Number(item.quantity) || 0));
+      const qty = item.quantity;
       const maxPerOrder = tt.max_per_order || 10;
       if (qty > maxPerOrder) throw new Error(`Máximo de ${maxPerOrder} ingressos por pedido: ${tt.name}`);
 
