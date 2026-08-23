@@ -63,12 +63,25 @@ serve(async (req) => {
       throw new Error(mpError?.message || 'Erro ao reembolsar no Mercado Pago');
     }
 
-    // ── Marca o pedido como reembolsado e invalida os ingressos dele ──
-    await supabase.from('orders').update({ status: 'refunded' }).eq('id', order.id);
+    // ── Marca como reembolsado com "compare-and-swap": o .eq('status','paid')
+    //    garante que só UM caminho (aqui ou o webhook) muda o status. Quem mudar
+    //    é quem devolve o estoque -- assim nunca devolvemos em dobro. ──
+    const { data: updatedRows } = await supabase
+      .from('orders')
+      .update({
+        status: 'refunded',
+        refunded_at: new Date().toISOString(),
+        refunded_by: user.id,
+      })
+      .eq('id', order.id)
+      .eq('status', 'paid')
+      .select('id');
+
+    const fuiEuQueMudei = Array.isArray(updatedRows) && updatedRows.length > 0;
 
     const { data: orderItems } = await supabase
       .from('order_items')
-      .select('id')
+      .select('id, ticket_type_id, quantity')
       .eq('order_id', order.id);
 
     const orderItemIds = (orderItems || []).map((oi) => oi.id);
@@ -77,6 +90,22 @@ serve(async (req) => {
         .from('tickets')
         .update({ status: 'cancelled' })
         .in('order_item_id', orderItemIds);
+    }
+
+    // ── Devolve o estoque ao lote. Antes isso NÃO acontecia: cada estorno
+    //    queimava um lugar pra sempre e você deixava de vender um ingresso livre. ──
+    if (fuiEuQueMudei) {
+      for (const oi of (orderItems || [])) {
+        if (!oi.ticket_type_id || !oi.quantity) continue;
+        const { error: releaseError } = await supabase.rpc('release_tickets', {
+          p_ticket_type_id: oi.ticket_type_id,
+          p_quantity: oi.quantity,
+        });
+        if (releaseError) {
+          console.error('Erro ao devolver estoque no estorno:', { oi, releaseError });
+        }
+      }
+      console.log('Estoque devolvido ao lote apos estorno:', { orderId: order.id });
     }
 
     return new Response(JSON.stringify({ success: true }), {
