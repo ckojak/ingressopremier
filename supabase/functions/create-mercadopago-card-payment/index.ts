@@ -40,10 +40,14 @@ async function validateCouponServerSide(
 ) {
   if (!code) return { discount: 0, couponId: null as string | null, couponCode: null as string | null };
 
+  // Escapa os curingas do LIKE (% e _). Sem isso, mandar "%" como cupom casava
+  // com QUALQUER cupom ativo -- desconto de graça sem saber o código.
+  const safeCode = code.trim().replace(/([\\%_])/g, '\\$1');
+
   const { data: coupon } = await supabase
     .from('coupons')
     .select('id, code, discount_type, discount_value, valid_from, valid_until, max_uses, used_count, min_purchase_amount, event_id, is_active')
-    .ilike('code', code.trim())
+    .ilike('code', safeCode)
     .maybeSingle();
 
   if (!coupon || coupon.is_active === false) {
@@ -113,6 +117,19 @@ serve(async (req) => {
       throw new Error('Dados de pagamento incompletos');
     }
 
+    // Normaliza o carrinho: exige quantidade INTEIRA POSITIVA e SOMA itens repetidos
+    // do mesmo tipo de ingresso, senão dava pra repetir o mesmo ticket_type_id e
+    // burlar o max_per_order (3x10 passava em três validações de 10 e levava 30).
+    const mergedQty = new Map<string, number>();
+    for (const raw of items) {
+      const ttId = String(raw?.ticket_type_id || '');
+      const qty = Number(raw?.quantity);
+      if (!ttId) throw new Error('Item inválido no carrinho');
+      if (!Number.isInteger(qty) || qty <= 0) throw new Error('Quantidade inválida no carrinho');
+      mergedQty.set(ttId, (mergedQty.get(ttId) || 0) + qty);
+    }
+    const normalizedItems = Array.from(mergedQty, ([ticket_type_id, quantity]) => ({ ticket_type_id, quantity }));
+
     const accessToken = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
     if (!accessToken) {
       throw new Error('Mercado Pago não configurado');
@@ -121,7 +138,7 @@ serve(async (req) => {
     let totalAmount = 0;
     const validatedItems: { ticket_type_id: string; quantity: number; unit_price: number; name: string }[] = [];
 
-    for (const item of items) {
+    for (const item of normalizedItems) {
       const { data: ticketType, error: ttError } = await supabase
         .from('ticket_types')
         .select('id, name, price, quantity_available, quantity_sold, max_per_order, event_id')
