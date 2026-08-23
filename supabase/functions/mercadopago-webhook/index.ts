@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 
@@ -13,7 +13,6 @@ const logStep = (step: string, details?: any) => {
   console.log(`[MERCADOPAGO-WEBHOOK][${timestamp}] ${step}${detailsStr}`);
 };
 
-// Verify Mercado Pago webhook signature
 async function verifyWebhookSignature(
   xSignature: string | null,
   xRequestId: string | null,
@@ -24,62 +23,32 @@ async function verifyWebhookSignature(
     logStep('Assinatura ou Request ID ausentes', { xSignature: !!xSignature, xRequestId: !!xRequestId });
     return false;
   }
-
   try {
-    // Parse x-signature header: "ts=xxx,v1=xxx"
     const parts: Record<string, string> = {};
     xSignature.split(',').forEach(part => {
       const [key, value] = part.split('=');
-      if (key && value) {
-        parts[key.trim()] = value.trim();
-      }
+      if (key && value) parts[key.trim()] = value.trim();
     });
-
     const ts = parts['ts'];
     const v1 = parts['v1'];
-
     if (!ts || !v1) {
       logStep('Formato de assinatura inválido', { parts });
       return false;
     }
-
-    // Build the manifest string as per Mercado Pago documentation
-    // Format: id:data.id;request-id:x-request-id;ts:ts_value;
     const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
-    
-    // Generate HMAC SHA256
     const encoder = new TextEncoder();
-    const keyData = encoder.encode(secret);
-    const messageData = encoder.encode(manifest);
-    
     const cryptoKey = await crypto.subtle.importKey(
-      "raw",
-      keyData,
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
+      "raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
     );
-    
-    const signature = await crypto.subtle.sign("HMAC", cryptoKey, messageData);
-    const hashArray = Array.from(new Uint8Array(signature));
-    const calculatedSignature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-    const isValid = calculatedSignature === v1;
-    logStep('Verificação de assinatura', { 
-      isValid, 
-      manifest: manifest.substring(0, 50) + '...',
-      receivedSignature: v1.substring(0, 20) + '...',
-      calculatedSignature: calculatedSignature.substring(0, 20) + '...'
-    });
-
-    return isValid;
+    const signature = await crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(manifest));
+    const calculatedSignature = Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return calculatedSignature === v1;
   } catch (error) {
     logStep('Erro ao verificar assinatura', { error: String(error) });
     return false;
   }
 }
 
-// Credenciais exclusivas da conta PremierPass (sem fallback para contas legadas)
 const getMercadoPagoCredentials = () => ({
   accessToken: Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN'),
   webhookSecret: Deno.env.get('PREMIERPASS_MERCADOPAGO_WEBHOOK_SECRET'),
@@ -91,183 +60,100 @@ serve(async (req) => {
   }
 
   try {
-    // Get signature headers first
     const xSignature = req.headers.get('x-signature');
     const xRequestId = req.headers.get('x-request-id');
-    
-    logStep('Headers de assinatura recebidos', { 
-      hasSignature: !!xSignature, 
-      hasRequestId: !!xRequestId 
-    });
-
     const body = await req.json();
-    logStep('Webhook recebido', { 
-      type: body.type, 
-      action: body.action,
-      data_id: body.data?.id
-    });
+    logStep('Webhook recebido', { type: body.type, action: body.action, data_id: body.data?.id });
 
-    // Mercado Pago envia notificações com type e data.id
     const { type, data } = body;
-
     if (type !== 'payment') {
-      logStep('Tipo de notificação ignorado', { type });
       return new Response(JSON.stringify({ received: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
       });
     }
 
     const paymentId = data?.id;
-    if (!paymentId) {
-      throw new Error('Payment ID não encontrado');
-    }
+    if (!paymentId) throw new Error('Payment ID não encontrado');
     const paymentIdStr = String(paymentId);
 
-    // Create Supabase client to look up order and determine site_id
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Plataforma single-tenant (PremierPass)
     const siteId = 'premierpass';
     const credentials = getMercadoPagoCredentials();
-
-    logStep('Site identificado', { siteId, hasCredentials: !!credentials.accessToken });
-
     if (!credentials.accessToken) {
       throw new Error(`MERCADOPAGO_ACCESS_TOKEN não configurado para site: ${siteId}`);
     }
-
-    // Detectar modo de ambiente
     const isSandbox = credentials.accessToken.startsWith('TEST-');
-    logStep('Ambiente detectado', { 
-      siteId,
-      isSandbox, 
-      environment: isSandbox ? 'SANDBOX' : 'PRODUÇÃO',
-      webhookSecretConfigured: !!credentials.webhookSecret
-    });
 
-    // Verify webhook signature if secret is configured
     if (credentials.webhookSecret) {
       const dataId = body.data?.id?.toString() || '';
       const isValidSignature = await verifyWebhookSignature(xSignature, xRequestId, dataId, credentials.webhookSecret);
-      
       if (!isValidSignature) {
-        logStep('ALERTA DE SEGURANÇA: Assinatura de webhook inválida - possível tentativa de fraude', { siteId });
+        logStep('ALERTA DE SEGURANÇA: Assinatura de webhook inválida', { siteId });
         return new Response(JSON.stringify({ error: 'Assinatura inválida' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 401
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401
         });
       }
-      
-      logStep('Assinatura do webhook verificada com sucesso', { siteId });
     } else {
       logStep('AVISO: Webhook secret não configurado - verificação de assinatura desabilitada', { siteId });
     }
 
-    logStep('Buscando detalhes do pagamento', { paymentId, siteId });
-
-    // Buscar detalhes do pagamento no Mercado Pago usando credenciais do site correto
     const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-      headers: {
-        'Authorization': `Bearer ${credentials.accessToken}`
-      }
+      headers: { 'Authorization': `Bearer ${credentials.accessToken}` }
     });
-
     if (!paymentResponse.ok) {
       const errorText = await paymentResponse.text();
-      logStep('Erro ao buscar pagamento', { error: errorText, siteId });
       throw new Error(`Erro ao buscar pagamento: ${errorText}`);
     }
-
     const payment = await paymentResponse.json();
-    logStep('Detalhes do pagamento', { 
-      id: payment.id, 
-      status: payment.status,
-      status_detail: payment.status_detail,
-      payment_method_id: payment.payment_method_id,
-      payment_type_id: payment.payment_type_id,
-      external_reference: payment.external_reference,
-      transaction_amount: payment.transaction_amount,
-      currency_id: payment.currency_id,
-      payer_email: payment.payer?.email,
-      date_created: payment.date_created,
-      date_approved: payment.date_approved,
+    logStep('Detalhes do pagamento', {
+      id: payment.id, status: payment.status, status_detail: payment.status_detail,
+      external_reference: payment.external_reference, transaction_amount: payment.transaction_amount,
       live_mode: payment.live_mode
     });
 
     const orderId = payment.external_reference;
     if (!orderId) {
-      logStep('Order ID não encontrado no external_reference');
       return new Response(JSON.stringify({ received: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
       });
     }
 
-    // Reusar supabaseClient já criado anteriormente
-
-    // Buscar pedido
     const { data: order, error: orderError } = await supabaseClient
       .from('orders')
       .select('*, order_items(*)')
       .eq('id', orderId)
       .single();
+    if (orderError || !order) throw new Error('Pedido não encontrado');
 
-    if (orderError || !order) {
-      logStep('Pedido não encontrado', { orderId, error: orderError });
-      throw new Error('Pedido não encontrado');
-    }
-
-    logStep('Pedido encontrado', { 
-      orderId, 
-      currentStatus: order.status,
-      orderItemsCount: order.order_items?.length || 0,
-      orderItems: order.order_items
-    });
-
-    // Atualizar status baseado no pagamento
+    const previousStatus = order.status;
     let newStatus = order.status;
-    
-    if (payment.status === 'approved') {
-      newStatus = 'paid';
-    } else if (payment.status === 'pending' || payment.status === 'in_process') {
-      newStatus = 'pending';
-    } else if (payment.status === 'rejected' || payment.status === 'cancelled') {
-      newStatus = 'cancelled';
-    } else if (payment.status === 'refunded' || payment.status === 'charged_back') {
-      newStatus = 'refunded';
-    }
+    if (payment.status === 'approved') newStatus = 'paid';
+    else if (payment.status === 'pending' || payment.status === 'in_process') newStatus = 'pending';
+    else if (payment.status === 'rejected' || payment.status === 'cancelled') newStatus = 'cancelled';
+    else if (payment.status === 'refunded' || payment.status === 'charged_back') newStatus = 'refunded';
 
-    // Registrar log do webhook para monitoramento no painel admin
     try {
       await supabaseClient.from('webhook_logs').insert({
-        payment_id: paymentIdStr,
-        order_id: order.id,
-        site_id: order.site_id || siteId,
-        payment_status: payment.status,
-        event_type: type,
-        amount: payment.transaction_amount,
-        payer_email: payment.payer?.email ?? order.customer_email,
-        is_sandbox: isSandbox,
+        payment_id: paymentIdStr, order_id: order.id, site_id: order.site_id || siteId,
+        payment_status: payment.status, event_type: type, amount: payment.transaction_amount,
+        payer_email: payment.payer?.email ?? order.customer_email, is_sandbox: isSandbox,
         details: {
-          status_detail: payment.status_detail,
-          payment_method_id: payment.payment_method_id,
-          payment_type_id: payment.payment_type_id,
-          live_mode: payment.live_mode,
+          status_detail: payment.status_detail, payment_method_id: payment.payment_method_id,
+          payment_type_id: payment.payment_type_id, live_mode: payment.live_mode,
         },
       });
     } catch (logError) {
       logStep('Falha ao registrar webhook_log', { error: String(logError) });
     }
 
-    // Atualizar status se diferente
-    if (newStatus !== order.status) {
+    if (newStatus !== previousStatus) {
       const { error: updateError } = await supabaseClient
         .from('orders')
-        .update({ 
+        .update({
           status: newStatus,
           payment_intent_id: paymentIdStr,
           mp_payment_id: paymentIdStr,
@@ -275,43 +161,43 @@ serve(async (req) => {
           paid_at: newStatus === 'paid' ? (payment.date_approved ?? new Date().toISOString()) : order.paid_at
         })
         .eq('id', orderId);
+      if (updateError) throw new Error('Erro ao atualizar pedido');
+      logStep('Status do pedido atualizado', { orderId, previousStatus, newStatus });
 
-      if (updateError) {
-        logStep('Erro ao atualizar pedido', updateError);
-        throw new Error('Erro ao atualizar pedido');
+      // O estoque já foi reservado atomicamente (reserve_tickets) no momento em
+      // que o Pix/cartão foi gerado -- então aqui NÃO incrementamos quantity_sold
+      // de novo (isso duplicaria a contagem). Só devolvemos o estoque reservado
+      // se o pagamento acabou não indo pra frente.
+      if ((newStatus === 'cancelled' || newStatus === 'refunded') && previousStatus === 'pending') {
+        for (const item of order.order_items) {
+          const { error: releaseError } = await supabaseClient.rpc('release_tickets', {
+            p_ticket_type_id: item.ticket_type_id,
+            p_quantity: item.quantity,
+          });
+          if (releaseError) {
+            logStep('Erro ao liberar estoque reservado', { item, releaseError });
+          }
+        }
+        logStep('Estoque reservado devolvido (pagamento não confirmado)', { orderId });
       }
-
-      logStep('Status do pedido atualizado', { orderId, newStatus });
     }
 
-    // Se aprovado, gerar ingressos (independente se o status mudou ou não)
     if (newStatus === 'paid') {
-      // Verificar se já existem ingressos para este pedido
       const { data: existingTickets, error: checkError } = await supabaseClient
         .from('tickets')
         .select('id')
         .in('order_item_id', order.order_items.map((item: any) => item.id))
         .limit(1);
-
-      if (checkError) {
-        logStep('Erro ao verificar ingressos existentes', checkError);
-      }
+      if (checkError) logStep('Erro ao verificar ingressos existentes', checkError);
 
       if (existingTickets && existingTickets.length > 0) {
-        logStep('Ingressos já existem para este pedido, pulando criação', { 
-          existingCount: existingTickets.length 
-        });
+        logStep('Ingressos já existem para este pedido, pulando criação', { existingCount: existingTickets.length });
       } else {
-        logStep('Gerando ingressos para pedido aprovado', {
-          orderItemsCount: order.order_items.length,
-          orderItems: order.order_items
-        });
+        logStep('Gerando ingressos para pedido aprovado', { orderItemsCount: order.order_items.length });
 
         for (const item of order.order_items) {
           for (let i = 0; i < item.quantity; i++) {
-            // Gerar código único do ingresso
             const ticketCode = generateTicketCode();
-
             const { data: newTicket, error: ticketError } = await supabaseClient
               .from('tickets')
               .insert({
@@ -330,38 +216,30 @@ serve(async (req) => {
               })
               .select()
               .single();
-
             if (ticketError) {
-              logStep('Erro ao criar ingresso', { 
-                error: ticketError,
-                item: item,
-                ticketCode: ticketCode
-              });
+              logStep('Erro ao criar ingresso', { error: ticketError, item, ticketCode });
             } else {
               logStep('Ingresso criado', { ticketId: newTicket?.id, ticketCode });
             }
           }
+          // NOTA: quantity_sold NÃO é incrementado aqui -- já foi reservado
+          // atomicamente por reserve_tickets() na hora de gerar o Pix/cobrar o cartão.
+        }
 
-          // Atualizar quantidade vendida
-          const { data: ticketTypeData } = await supabaseClient
-            .from('ticket_types')
-            .select('quantity_sold')
-            .eq('id', item.ticket_type_id)
-            .single();
-
-          await supabaseClient
-            .from('ticket_types')
-            .update({ quantity_sold: (ticketTypeData?.quantity_sold || 0) + item.quantity })
-            .eq('id', item.ticket_type_id);
+        if (order.coupon_id) {
+          const { data: couponRow } = await supabaseClient
+            .from('coupons').select('used_count').eq('id', order.coupon_id).maybeSingle();
+          if (couponRow) {
+            await supabaseClient.from('coupons')
+              .update({ used_count: (couponRow.used_count || 0) + 1 })
+              .eq('id', order.coupon_id);
+            logStep('Uso do cupom registrado', { couponId: order.coupon_id });
+          }
         }
 
         logStep('Ingressos gerados com sucesso');
-
-        // Enviar email de confirmação
         try {
-          await supabaseClient.functions.invoke('send-ticket-email', {
-            body: { orderId }
-          });
+          await supabaseClient.functions.invoke('send-ticket-email', { body: { orderId } });
           logStep('Email de confirmação enviado');
         } catch (emailError) {
           logStep('Erro ao enviar email', emailError);
@@ -370,28 +248,21 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ received: true, status: newStatus }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
     });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     logStep('Erro geral', { message: errorMessage });
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
-      }
-    );
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500
+    });
   }
 });
 
 function generateTicketCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
-  for (let i = 0; i < 12; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
+  for (let i = 0; i < 12; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
   return result;
 }
