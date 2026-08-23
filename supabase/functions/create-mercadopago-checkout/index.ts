@@ -9,14 +9,15 @@ const corsHeaders = {
 interface CheckoutItem {
   ticket_type_id: string;
   quantity: number;
-  unit_price?: number; // ignorado: o preço é sempre buscado no banco
+  unit_price?: number;
 }
 
 interface CheckoutRequest {
   event_id: string;
   items: CheckoutItem[];
   site_id?: string;
-  customer_cpf?: string; // NOVO
+  customer_cpf?: string;
+  customer_phone?: string;
 }
 
 interface TicketType {
@@ -36,25 +37,40 @@ const logStep = (step: string, details?: unknown) => {
   console.log(`[MERCADOPAGO-CHECKOUT] ${step}${detailsStr}`);
 };
 
-// Credenciais exclusivas da conta PremierPass (sem fallback para contas legadas)
 const getMercadoPagoCredentials = () => Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
+
+// Quebra um telefone BR (com ou sem +55, DDI, DDD, traços, espaços) em area_code + number pro formato do Mercado Pago
+const parsePhone = (raw?: string | null): { area_code: string; number: string } | null => {
+  if (!raw) return null;
+  let digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('55') && digits.length > 11) digits = digits.slice(2);
+  if (digits.length < 10) return null;
+  const area_code = digits.slice(0, 2);
+  const number = digits.slice(2);
+  return { area_code, number };
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Reservas já feitas nesta chamada -- devolvidas se algo falhar no meio do caminho.
+  const reserved: { ticket_type_id: string; quantity: number }[] = [];
+  const supabaseAdmin = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+  const releaseAll = async () => {
+    for (const r of reserved) {
+      await supabaseAdmin.rpc('release_tickets', { p_ticket_type_id: r.ticket_type_id, p_quantity: r.quantity });
+    }
+  };
+
   try {
-    // Cliente para autenticação (usando anon key)
     const supabaseAuth = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-    );
-
-    // Cliente para operações de banco (usando service role para bypass RLS)
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
     const authHeader = req.headers.get('Authorization');
@@ -64,7 +80,7 @@ serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token);
-    
+
     if (userError || !user) {
       logStep('Erro de autenticação', userError);
       throw new Error('Usuário não autenticado');
@@ -72,14 +88,13 @@ serve(async (req) => {
 
     logStep('Usuário autenticado', { id: user.id, email: user.email });
 
-    const { event_id, items, site_id, purchase_protection }: CheckoutRequest & { purchase_protection?: boolean } = await req.json();
+    const { event_id, items, site_id, customer_cpf, customer_phone }: CheckoutRequest = await req.json();
     logStep('Request recebido', { event_id, items, site_id });
 
     if (!event_id || !items || items.length === 0) {
       throw new Error('Dados inválidos: event_id e items são obrigatórios');
     }
 
-    // Buscar detalhes do evento
     const { data: event, error: eventError } = await supabaseAdmin
       .from('events')
       .select('*')
@@ -93,22 +108,19 @@ serve(async (req) => {
 
     logStep('Evento encontrado', { title: event.title });
 
-    // Determine site_id from event or request - default to premierpass
     const effectiveSiteId = 'premierpass';
     const mercadopagoAccessToken = getMercadoPagoCredentials();
-    
+
     if (!mercadopagoAccessToken) {
       throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado para o site: ' + effectiveSiteId);
     }
 
-    // Detectar ambiente
     const isSandbox = mercadopagoAccessToken.startsWith('TEST-');
-    logStep('Ambiente detectado', { 
+    logStep('Ambiente detectado', {
       site: effectiveSiteId,
-      ambiente: isSandbox ? 'SANDBOX' : 'PRODUÇÃO' 
+      ambiente: isSandbox ? 'SANDBOX' : 'PRODUÇÃO'
     });
 
-    // Buscar tipos de ingresso
     const ticketTypeIds = items.map(item => item.ticket_type_id);
     const { data: ticketTypes, error: ticketTypesError } = await supabaseAdmin
       .from('ticket_types')
@@ -120,27 +132,6 @@ serve(async (req) => {
       throw new Error('Tipos de ingresso não encontrados');
     }
 
-    // Verificar disponibilidade
-    for (const item of items) {
-      const ticketType = ticketTypes.find((tt: TicketType) => tt.id === item.ticket_type_id);
-      if (!ticketType) {
-        throw new Error(`Tipo de ingresso ${item.ticket_type_id} não encontrado`);
-      }
-      if (ticketType.event_id !== event_id || !ticketType.is_active) {
-        throw new Error(`Ingresso indisponível: ${ticketType.name}`);
-      }
-      const maxPerOrder = ticketType.max_per_order || 10;
-      if (item.quantity > maxPerOrder) {
-        throw new Error(`Máximo de ${maxPerOrder} ingressos por pedido: ${ticketType.name}`);
-      }
-      const stock = Number(ticketType.quantity_available || 0);
-      const available = stock - (ticketType.quantity_sold || 0);
-      if (stock > 0 && item.quantity > available) {
-        throw new Error(`Quantidade insuficiente para ${ticketType.name}. Disponível: ${available}`);
-      }
-    }
-
-    // Calcular totais
     let subtotal = 0;
     const mpItems: {
       id: string;
@@ -153,12 +144,34 @@ serve(async (req) => {
 
     for (const item of items) {
       const ticketType = ticketTypes.find((tt: TicketType) => tt.id === item.ticket_type_id);
-      if (!ticketType) continue;
+      if (!ticketType) {
+        throw new Error(`Tipo de ingresso ${item.ticket_type_id} não encontrado`);
+      }
+      if (ticketType.event_id !== event_id || !ticketType.is_active) {
+        throw new Error(`Ingresso indisponível: ${ticketType.name}`);
+      }
+      const maxPerOrder = ticketType.max_per_order || 10;
+      if (item.quantity > maxPerOrder) {
+        throw new Error(`Máximo de ${maxPerOrder} ingressos por pedido: ${ticketType.name}`);
+      }
 
-      // Preço autoritativo vindo do banco (nunca confiar no cliente)
+      // Reserva ATÔMICA: trava a linha do ticket_type, confere disponibilidade
+      // e já incrementa quantity_sold numa única operação de banco -- impede
+      // duas compras simultâneas de venderem o mesmo último ingresso.
+      // (Antes, esse fluxo só conferia "quantity_available - quantity_sold" em
+      // memória, sem travar nada -- por isso o Checkout Pro podia oversell.)
+      const { data: reserveResult, error: reserveErr } = await supabaseAdmin
+        .rpc('reserve_tickets', { p_ticket_type_id: ticketType.id, p_quantity: item.quantity })
+        .single();
+
+      if (reserveErr || !reserveResult?.success) {
+        await releaseAll();
+        throw new Error(`Ingresso esgotado: ${ticketType.name}`);
+      }
+      reserved.push({ ticket_type_id: ticketType.id, quantity: item.quantity });
+
       const unitPrice = Number(ticketType.price);
-      const itemTotal = unitPrice * item.quantity;
-      subtotal += itemTotal;
+      subtotal += unitPrice * item.quantity;
 
       mpItems.push({
         id: ticketType.id,
@@ -170,11 +183,12 @@ serve(async (req) => {
       });
     }
 
-    // Taxa de serviço: 8% (igual ao exibido no frontend e no PIX)
     const serviceFee = Math.round(subtotal * 0.08 * 100) / 100;
-    const protectionFee = purchase_protection === true ? 3 : 0;
-    const totalAmount = Math.round((subtotal + serviceFee + protectionFee) * 100) / 100;
-    if (totalAmount <= 0) throw new Error('Valor inválido para pagamento');
+    const totalAmount = Math.round((subtotal + serviceFee) * 100) / 100;
+    if (totalAmount <= 0) {
+      await releaseAll();
+      throw new Error('Valor inválido para pagamento');
+    }
 
     mpItems.push({
       id: 'service-fee',
@@ -185,27 +199,18 @@ serve(async (req) => {
       unit_price: serviceFee
     });
 
-    if (protectionFee > 0) {
-      mpItems.push({
-        id: 'purchase-protection',
-        title: 'Compra Protegida',
-        description: 'Proteção opcional de reembolso',
-        quantity: 1,
-        currency_id: 'BRL',
-        unit_price: protectionFee
-      });
-    }
+    logStep('Totais calculados', { subtotal, serviceFee, totalAmount });
 
-    logStep('Totais calculados', { subtotal, serviceFee, protectionFee, totalAmount });
-
-    // Buscar perfil do usuário (dados do comprador)
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('full_name, email, phone')
       .eq('id', user.id)
       .maybeSingle();
 
-    // Criar pedido pendente no Supabase com site_id para isolamento multi-tenant
+    const finalCpf = (customer_cpf || '').replace(/\D/g, '') || null;
+    const finalPhoneRaw = customer_phone || profile?.phone || null;
+    const finalName = profile?.full_name || user.email || 'Cliente';
+
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
       .insert({
@@ -216,9 +221,10 @@ serve(async (req) => {
         service_fee: serviceFee,
         status: 'pending',
         payment_method: 'mercadopago',
-        customer_name: profile?.full_name || user.email,
+        customer_name: finalName,
         customer_email: user.email,
-        customer_phone: profile?.phone || null,
+        customer_phone: finalPhoneRaw,
+        customer_cpf: finalCpf,
         payment_intent_id: null
       })
       .select()
@@ -226,12 +232,12 @@ serve(async (req) => {
 
     if (orderError || !order) {
       logStep('Erro ao criar pedido', orderError);
+      await releaseAll();
       throw new Error('Erro ao criar pedido');
     }
 
     logStep('Pedido criado', { orderId: order.id });
 
-    // Criar itens do pedido
     const orderItems = items.map(item => {
       const ticketType = ticketTypes.find((tt: TicketType) => tt.id === item.ticket_type_id);
       return {
@@ -248,21 +254,33 @@ serve(async (req) => {
 
     if (orderItemsError) {
       logStep('Erro ao criar itens do pedido', orderItemsError);
+      await supabaseAdmin.from('orders').update({ status: 'failed' }).eq('id', order.id);
+      await releaseAll();
       throw new Error('Erro ao criar itens do pedido');
     }
 
     logStep('Itens do pedido criados');
 
-    const origin = req.headers.get('origin') || 'https://adminpremierpass.lovable.app';
+    const origin = req.headers.get('origin') || 'https://premierpass.com.br';
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 
-    // Criar preferência no Mercado Pago
+    const [firstName, ...restName] = String(finalName).trim().split(' ');
+    const surname = restName.join(' ') || 'Cliente';
+    const parsedPhone = parsePhone(finalPhoneRaw);
+
+    const payer: Record<string, unknown> = {
+      email: user.email,
+      name: firstName,
+      surname,
+    };
+    if (parsedPhone) payer.phone = parsedPhone;
+    if (finalCpf && finalCpf.length >= 11) {
+      payer.identification = { type: 'CPF', number: finalCpf };
+    }
+
     const preferenceData = {
       items: mpItems,
-      payer: {
-        email: user.email,
-        name: profile?.full_name || user.email,
-      },
+      payer,
       back_urls: {
         success: `${origin}/checkout/status?order_id=${order.id}&status=success`,
         failure: `${origin}/evento/${event_id}`,
@@ -274,19 +292,20 @@ serve(async (req) => {
       statement_descriptor: 'PREMIERPASS',
       payment_methods: {
         excluded_payment_types: [
-          { id: 'ticket' }, // Exclui boleto
-          { id: 'bank_transfer' } // Exclui PIX (será usado via checkout transparente)
+          { id: 'ticket' },
+          { id: 'bank_transfer' }
         ],
         installments: 12,
         default_installments: 1
       },
-      // Validade da preferência: 2 minutos
-      date_of_expiration: new Date(Date.now() + 2 * 60 * 1000).toISOString()
+      date_of_expiration: new Date(Date.now() + 30 * 60 * 1000).toISOString()
     };
 
-    logStep('Criando preferência no Mercado Pago', { 
+    logStep('Criando preferência no Mercado Pago', {
       external_reference: order.id,
-      payment_methods: preferenceData.payment_methods 
+      payer_has_cpf: !!payer.identification,
+      payer_has_phone: !!payer.phone,
+      payment_methods: preferenceData.payment_methods
     });
 
     const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
@@ -301,21 +320,20 @@ serve(async (req) => {
     if (!mpResponse.ok) {
       const errorData = await mpResponse.text();
       logStep('Erro Mercado Pago', { status: mpResponse.status, error: errorData });
+      await supabaseAdmin.from('orders').update({ status: 'failed' }).eq('id', order.id);
+      await releaseAll();
       throw new Error(`Erro ao criar preferência: ${errorData}`);
     }
 
     const preference = await mpResponse.json();
-    
-    // SIMPLIFICADO: Usar apenas a detecção pelo prefixo do token (mais confiável)
-    // Token TEST- = sandbox, Token APP_USR- = produção
+
     const checkoutUrl = isSandbox ? preference.sandbox_init_point : preference.init_point;
-    
-    logStep('Checkout configurado', { 
+
+    logStep('Checkout configurado', {
       ambiente: isSandbox ? 'SANDBOX' : 'PRODUÇÃO',
       url: checkoutUrl
     });
 
-    // Atualizar pedido com ID da preferência
     await supabaseAdmin
       .from('orders')
       .update({ payment_intent_id: preference.id })
