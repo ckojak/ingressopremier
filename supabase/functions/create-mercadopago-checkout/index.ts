@@ -95,6 +95,20 @@ serve(async (req) => {
       throw new Error('Dados inválidos: event_id e items são obrigatórios');
     }
 
+    // Normaliza o carrinho: exige quantidade INTEIRA POSITIVA e SOMA itens repetidos
+    // do mesmo tipo de ingresso. Sem isso: (a) mandar o mesmo ticket_type_id 3x com 10
+    // cada burlava o max_per_order e levava 30; (b) quantidade negativa passava direto
+    // pro reserve_tickets e DIMINUÍA o quantity_sold, corrompendo o estoque.
+    const mergedQty = new Map<string, number>();
+    for (const raw of items) {
+      const ttId = String(raw?.ticket_type_id || '');
+      const qty = Number(raw?.quantity);
+      if (!ttId) throw new Error('Item inválido no carrinho');
+      if (!Number.isInteger(qty) || qty <= 0) throw new Error('Quantidade inválida no carrinho');
+      mergedQty.set(ttId, (mergedQty.get(ttId) || 0) + qty);
+    }
+    const normalizedItems = Array.from(mergedQty, ([ticket_type_id, quantity]) => ({ ticket_type_id, quantity }));
+
     const { data: event, error: eventError } = await supabaseAdmin
       .from('events')
       .select('*')
@@ -121,7 +135,7 @@ serve(async (req) => {
       ambiente: isSandbox ? 'SANDBOX' : 'PRODUÇÃO'
     });
 
-    const ticketTypeIds = items.map(item => item.ticket_type_id);
+    const ticketTypeIds = normalizedItems.map(item => item.ticket_type_id);
     const { data: ticketTypes, error: ticketTypesError } = await supabaseAdmin
       .from('ticket_types')
       .select('*')
@@ -142,7 +156,7 @@ serve(async (req) => {
       unit_price: number;
     }[] = [];
 
-    for (const item of items) {
+    for (const item of normalizedItems) {
       const ticketType = ticketTypes.find((tt: TicketType) => tt.id === item.ticket_type_id);
       if (!ticketType) {
         throw new Error(`Tipo de ingresso ${item.ticket_type_id} não encontrado`);
@@ -238,7 +252,7 @@ serve(async (req) => {
 
     logStep('Pedido criado', { orderId: order.id });
 
-    const orderItems = items.map(item => {
+    const orderItems = normalizedItems.map(item => {
       const ticketType = ticketTypes.find((tt: TicketType) => tt.id === item.ticket_type_id);
       return {
         order_id: order.id,
