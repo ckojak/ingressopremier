@@ -34,7 +34,7 @@ const Footer = () => {
             </p>
             <div className="flex gap-3">
               <a 
-                href="https://www.instagram.com/premierpass" 
+                href="https://www.instagram.com/premierpass.oficial" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="w-11 h-11 rounded-xl glass-premium flex items-center justify-center hover:bg-primary/10 hover:border-primary/30 transition-all duration-300 hover-lift group"
