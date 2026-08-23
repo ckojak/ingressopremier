@@ -88,17 +88,27 @@ serve(async (req) => {
     }
     const isSandbox = credentials.accessToken.startsWith('TEST-');
 
+    // Com o secret configurado: assinatura inválida = rejeitado, sem exceção.
+    //
+    // Sem o secret: registramos um alerta bem visível mas seguimos, porque o dado
+    // que realmente importa NÃO vem do corpo da requisição -- logo abaixo buscamos
+    // o pagamento direto na API do Mercado Pago com o nosso access token, e é de
+    // LÁ que saem status, valor e external_reference. Ou seja, mesmo sem assinatura
+    // ninguém consegue forjar "pedido pago": teria que existir um pagamento real e
+    // aprovado apontando pro pedido dele. Rejeitar aqui sem o secret só derrubaria
+    // as confirmações de pagamento sem ganho real de segurança.
     if (credentials.webhookSecret) {
       const dataId = body.data?.id?.toString() || '';
       const isValidSignature = await verifyWebhookSignature(xSignature, xRequestId, dataId, credentials.webhookSecret);
       if (!isValidSignature) {
-        logStep('ALERTA DE SEGURANÇA: Assinatura de webhook inválida', { siteId });
+        logStep('ALERTA DE SEGURANÇA: Assinatura de webhook inválida - REJEITADO', { siteId });
         return new Response(JSON.stringify({ error: 'Assinatura inválida' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401
         });
       }
     } else {
-      logStep('AVISO: Webhook secret não configurado - verificação de assinatura desabilitada', { siteId });
+      logStep('*** ATENCAO CONFIGURACAO *** PREMIERPASS_MERCADOPAGO_WEBHOOK_SECRET ausente: ' +
+              'verificacao de assinatura DESLIGADA. Cadastre o secret no Supabase.', { siteId });
     }
 
     const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
@@ -128,6 +138,30 @@ serve(async (req) => {
       .eq('id', orderId)
       .single();
     if (orderError || !order) throw new Error('Pedido não encontrado');
+
+    // CONFERÊNCIA DE VALOR: antes marcávamos como pago só olhando o status do MP,
+    // sem checar QUANTO foi pago. Aqui rejeitamos pagamento a menor (fraude),
+    // mas aceitamos pagamento igual ou maior (com folga de 1 centavo pra arredondamento).
+    if (payment.status === 'approved') {
+      const valorPago = Number(payment.transaction_amount || 0);
+      const valorEsperado = Number(order.total_amount || 0);
+      if (valorPago + 0.01 < valorEsperado) {
+        logStep('ALERTA DE SEGURANÇA: valor pago menor que o pedido - NÃO liberando ingresso', {
+          orderId, valorPago, valorEsperado, paymentId: paymentIdStr
+        });
+        try {
+          await supabaseClient.from('webhook_logs').insert({
+            payment_id: paymentIdStr, order_id: order.id, site_id: order.site_id || siteId,
+            payment_status: 'underpaid_rejeitado', event_type: type, amount: valorPago,
+            payer_email: payment.payer?.email ?? order.customer_email, is_sandbox: isSandbox,
+            details: { motivo: 'valor pago menor que total_amount', valorPago, valorEsperado },
+          });
+        } catch (_) { /* log é best-effort */ }
+        return new Response(JSON.stringify({ received: true, ignored: 'valor_divergente' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
+        });
+      }
+    }
 
     const previousStatus = order.status;
     let newStatus = order.status;
@@ -168,7 +202,12 @@ serve(async (req) => {
       // que o Pix/cartão foi gerado -- então aqui NÃO incrementamos quantity_sold
       // de novo (isso duplicaria a contagem). Só devolvemos o estoque reservado
       // se o pagamento acabou não indo pra frente.
-      if ((newStatus === 'cancelled' || newStatus === 'refunded') && previousStatus === 'pending') {
+      // Inclui previousStatus 'paid' pra cobrir estorno/chargeback feito direto no
+      // painel do Mercado Pago (fora do nosso /admin). Quando o estorno vem pela
+      // função refund-order, ela já mudou o status antes -- então newStatus ===
+      // previousStatus e este bloco nem roda, evitando devolver estoque em dobro.
+      if ((newStatus === 'cancelled' || newStatus === 'refunded') &&
+          (previousStatus === 'pending' || previousStatus === 'paid')) {
         for (const item of order.order_items) {
           const { error: releaseError } = await supabaseClient.rpc('release_tickets', {
             p_ticket_type_id: item.ticket_type_id,
