@@ -40,6 +40,12 @@ interface TicketEmailRequest {
   siteUrl?: string;
 }
 
+const negarTicket = (msg: string, status: number) =>
+  new Response(JSON.stringify({ error: msg }), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders },
+  });
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -56,7 +62,57 @@ serve(async (req) => {
     });
 
     const requestBody: TicketEmailRequest = await req.json();
-    logStep("Request received", { type: requestBody.type });
+
+    // ══════════════════════════════════════════════════════════════════
+    // AUTENTICACAO. Antes disto a funcao era aberta: qualquer pessoa da
+    // internet disparava e-mail com a marca PremierPass pra qualquer
+    // endereco. O webhook continua funcionando porque chama com a chave
+    // de servico (isInternal).
+    // ══════════════════════════════════════════════════════════════════
+    const authHeader = req.headers.get("Authorization") || "";
+    const jwt = authHeader.replace("Bearer ", "").trim();
+    const isInternal = !!jwt && jwt === supabaseServiceKey;
+
+    if (!isInternal) {
+      if (!jwt) return negarTicket("Nao autenticado", 401);
+      const { data: got } = await supabaseClient.auth.getUser(jwt);
+      const user = got?.user;
+      if (!user) return negarTicket("Nao autenticado", 401);
+
+      const { data: ehAdmin } = await supabaseClient.rpc("has_role", {
+        _user_id: user.id, _role: "admin",
+      });
+
+      if (requestBody.orderId) {
+        // Reenvio do e-mail de um pedido: so o dono do pedido, um admin,
+        // ou o organizador do evento.
+        const { data: ord } = await supabaseClient
+          .from("orders")
+          .select("user_id, event_id, events(organizer_id)")
+          .eq("id", requestBody.orderId)
+          .maybeSingle();
+        if (!ord) return negarTicket("Pedido nao encontrado", 404);
+        const ehDono = ord.user_id === user.id;
+        const ehOrganizador = (ord as any).events?.organizer_id === user.id;
+        if (!ehDono && !ehAdmin && !ehOrganizador) {
+          return negarTicket("Este pedido nao e seu", 403);
+        }
+      } else {
+        // Caminho de cortesia: destinatario e conteudo vem livres na
+        // requisicao, entao exige admin/organizador -- nunca cliente comum.
+        const { data: ehOrg } = await supabaseClient.rpc("has_role", {
+          _user_id: user.id, _role: "organizer",
+        });
+        const { data: ehProd } = await supabaseClient.rpc("has_role", {
+          _user_id: user.id, _role: "producer",
+        });
+        if (!ehAdmin && !ehOrg && !ehProd) {
+          return negarTicket("Sem permissao para enviar cortesia", 403);
+        }
+      }
+    }
+
+    logStep("Request received", { type: requestBody.type, isInternal });
 
     // Handle complimentary tickets
     if (requestBody.type === "complimentary") {
