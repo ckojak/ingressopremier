@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
@@ -30,15 +31,130 @@ interface NotificationRequest {
   };
 }
 
+const negar = (msg: string, status: number) =>
+  new Response(JSON.stringify({ error: msg }), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders },
+  });
+
+// Escapa HTML pra que nome/titulo vindos do usuario nao consigam injetar
+// link ou markup dentro do corpo do e-mail.
+const escapeHtml = (v: string) =>
+  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { type, data }: NotificationRequest = await req.json();
+    const { type, data: rawData }: NotificationRequest = await req.json();
 
-    console.log(`Processing notification type: ${type}`, data);
+    // ══════════════════════════════════════════════════════════════════
+    // AUTENTICACAO. Antes disto a funcao era aberta: qualquer pessoa da
+    // internet, sem nenhuma credencial, mandava e-mail com a marca
+    // PremierPass pra qualquer endereco. Prato cheio pra golpe contra os
+    // seus proprios clientes e pro dominio cair em blacklist de spam.
+    // ══════════════════════════════════════════════════════════════════
+    const authHeader = req.headers.get("Authorization") || "";
+    const jwt = authHeader.replace("Bearer ", "").trim();
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const admin = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceKey, {
+      auth: { persistSession: false },
+    });
+
+    const isInternal = !!jwt && jwt === serviceKey;
+    let callerId = "";
+    let callerEmail = "";
+
+    if (!isInternal) {
+      if (!jwt) return negar("Nao autenticado", 401);
+      const { data: got } = await admin.auth.getUser(jwt);
+      if (!got?.user?.email) return negar("Nao autenticado", 401);
+      callerId = got.user.id;
+      callerEmail = got.user.email.toLowerCase();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // AUTORIZACAO: quem pode disparar qual aviso, e para quem.
+    // O destinatario nunca e aceito cegamente do corpo da requisicao.
+    // ══════════════════════════════════════════════════════════════════
+    const destinoPedido = String(
+      (rawData as any)?.recipientEmail || (rawData as any)?.customerEmail ||
+      (rawData as any)?.producerEmail || ""
+    ).toLowerCase().trim();
+
+    let destinatarios: string[] = [];
+
+    if (isInternal) {
+      destinatarios = destinoPedido ? [destinoPedido] : [];
+    } else {
+      const { data: ehAdmin } = await admin.rpc("has_role", {
+        _user_id: callerId, _role: "admin",
+      });
+
+      if (ehAdmin) {
+        destinatarios = destinoPedido ? [destinoPedido] : [];
+      } else if (type === "event_approved" || type === "event_rejected") {
+        return negar("Somente administrador aprova ou rejeita evento", 403);
+      } else if (type === "event_submitted") {
+        // Produtor avisando que enviou um evento: so se o evento for dele.
+        // E os destinatarios vem do BANCO, nunca da requisicao -- senao dava
+        // pra usar este tipo pra mandar e-mail pra qualquer endereco.
+        const eventId = String((rawData as any)?.eventId || "");
+        const { data: ev } = await admin
+          .from("events").select("organizer_id").eq("id", eventId).maybeSingle();
+        if (!ev || ev.organizer_id !== callerId) return negar("Evento nao e seu", 403);
+
+        const { data: adminRoles } = await admin
+          .from("user_roles").select("user_id").eq("role", "admin");
+        const adminIds = (adminRoles || []).map((r: any) => r.user_id).filter(Boolean);
+        if (adminIds.length) {
+          const { data: adminProfiles } = await admin
+            .from("profiles").select("email").in("id", adminIds);
+          destinatarios = (adminProfiles || [])
+            .map((r: any) => r.email).filter(Boolean);
+        }
+      } else if (type === "transfer_accepted" || type === "transfer_rejected") {
+        // So da pra avisar a contraparte de uma transferencia REAL que envolve voce.
+        const { data: transfers } = await admin
+          .from("ticket_transfers")
+          .select("from_user_id, to_user_email")
+          .or(`from_user_id.eq.${callerId},to_user_email.eq.${callerEmail}`);
+
+        const permitidos = new Set<string>([callerEmail]);
+        const fromIds: string[] = [];
+        for (const t of (transfers || []) as any[]) {
+          if (t.to_user_email) permitidos.add(String(t.to_user_email).toLowerCase());
+          if (t.from_user_id) fromIds.push(t.from_user_id);
+        }
+        if (fromIds.length) {
+          const { data: profs } = await admin
+            .from("profiles").select("email").in("id", fromIds);
+          for (const pr of (profs || []) as any[]) {
+            if (pr.email) permitidos.add(String(pr.email).toLowerCase());
+          }
+        }
+        if (!destinoPedido || !permitidos.has(destinoPedido)) {
+          return negar("Destinatario nao permitido para esta transferencia", 403);
+        }
+        destinatarios = [destinoPedido];
+      } else {
+        // Qualquer outro aviso so vai pro proprio e-mail de quem chamou.
+        destinatarios = [callerEmail];
+      }
+    }
+
+    // Todo texto que vier de fora entra escapado nos templates abaixo.
+    const data: any = {};
+    for (const [k, v] of Object.entries((rawData || {}) as Record<string, unknown>)) {
+      data[k] = typeof v === "string" ? escapeHtml(v) : v;
+    }
+
+    console.log(`Processing notification type: ${type}`, {
+      destinatarios: destinatarios.length, isInternal,
+    });
 
     let emailHtml = "";
     let emailSubject = "";
@@ -212,9 +328,12 @@ const handler = async (req: Request): Promise<Response> => {
         </html>
       `;
     } else if (type === "event_submitted") {
-      // Send to all admins
-      const adminEmails = data.adminEmails || [];
-      
+      // Destinatarios vem da lista JA VALIDADA la em cima (buscada no banco pelo
+      // papel 'admin'), nunca do data.adminEmails que veio na requisicao -- senao
+      // este tipo virava um jeito de mandar e-mail com a marca PremierPass pra
+      // qualquer endereco, bastando ser dono de um evento qualquer.
+      const adminEmails = destinatarios;
+
       for (const adminEmail of adminEmails) {
         const submitEmailHtml = `
           <!DOCTYPE html>
@@ -402,9 +521,12 @@ const handler = async (req: Request): Promise<Response> => {
       `;
     }
 
-    if (!toEmail) {
+    // O destinatario final e SEMPRE a lista validada acima -- o toEmail que os
+    // templates montaram a partir do corpo da requisicao e descartado de proposito.
+    if (!destinatarios.length) {
       throw new Error("No recipient email provided");
     }
+    toEmail = destinatarios[0];
 
     // Send email via Resend API
     const emailResponse = await fetch("https://api.resend.com/emails", {
@@ -415,7 +537,7 @@ const handler = async (req: Request): Promise<Response> => {
       },
       body: JSON.stringify({
         from: "PremierPass <onboarding@resend.dev>",
-        to: [toEmail],
+        to: destinatarios,
         subject: emailSubject,
         html: emailHtml,
       }),
