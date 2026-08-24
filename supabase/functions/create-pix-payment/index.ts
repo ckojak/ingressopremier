@@ -11,6 +11,25 @@ const PROTECTION_FEE = 3;
 const log = (step: string, details?: unknown) =>
   console.log(`[CREATE-PIX] ${step}${details ? `: ${JSON.stringify(details)}` : ''}`);
 
+// Formata a data de expiração com offset explícito -03:00 (Brasília), no formato
+// que o Mercado Pago realmente espera pro campo date_of_expiration. Usar
+// .toISOString() (que manda "Z"/UTC puro) fazia o PIX expirar em segundos
+// em vez dos 5 minutos configurados -- bug confirmado em produção.
+function mpExpirationDate(msFromNow: number): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const target = new Date(Date.now() + msFromNow);
+  const brasiliaOffsetMs = -3 * 60 * 60 * 1000; // Brasília não tem horário de verão desde 2019
+  const local = new Date(target.getTime() + brasiliaOffsetMs);
+  const y = local.getUTCFullYear();
+  const mo = pad(local.getUTCMonth() + 1);
+  const d = pad(local.getUTCDate());
+  const h = pad(local.getUTCHours());
+  const mi = pad(local.getUTCMinutes());
+  const s = pad(local.getUTCSeconds());
+  const ms = String(local.getUTCMilliseconds()).padStart(3, '0');
+  return `${y}-${mo}-${d}T${h}:${mi}:${s}.${ms}-03:00`;
+}
+
 async function applyCoupon(supabase: any, code: string | undefined, eventId: string, subtotal: number) {
   if (!code) return { discount: 0, couponId: null as string | null, couponCode: null as string | null };
 
@@ -236,7 +255,7 @@ serve(async (req) => {
       external_reference: order.id,
       notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago-webhook`,
       statement_descriptor: 'PREMIERPASS',
-      date_of_expiration: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      date_of_expiration: mpExpirationDate(5 * 60 * 1000),
     };
 
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
