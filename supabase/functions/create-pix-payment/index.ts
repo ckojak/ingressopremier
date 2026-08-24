@@ -11,30 +11,9 @@ const PROTECTION_FEE = 3;
 const log = (step: string, details?: unknown) =>
   console.log(`[CREATE-PIX] ${step}${details ? `: ${JSON.stringify(details)}` : ''}`);
 
-// Formata a data de expiração com offset explícito -03:00 (Brasília), no formato
-// que o Mercado Pago realmente espera pro campo date_of_expiration. Usar
-// .toISOString() (que manda "Z"/UTC puro) fazia o PIX expirar em segundos
-// em vez dos 5 minutos configurados -- bug confirmado em produção.
-function mpExpirationDate(msFromNow: number): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const target = new Date(Date.now() + msFromNow);
-  const brasiliaOffsetMs = -3 * 60 * 60 * 1000; // Brasília não tem horário de verão desde 2019
-  const local = new Date(target.getTime() + brasiliaOffsetMs);
-  const y = local.getUTCFullYear();
-  const mo = pad(local.getUTCMonth() + 1);
-  const d = pad(local.getUTCDate());
-  const h = pad(local.getUTCHours());
-  const mi = pad(local.getUTCMinutes());
-  const s = pad(local.getUTCSeconds());
-  const ms = String(local.getUTCMilliseconds()).padStart(3, '0');
-  return `${y}-${mo}-${d}T${h}:${mi}:${s}.${ms}-03:00`;
-}
-
 async function applyCoupon(supabase: any, code: string | undefined, eventId: string, subtotal: number) {
   if (!code) return { discount: 0, couponId: null as string | null, couponCode: null as string | null };
 
-  // Escapa os curingas do LIKE (% e _). Sem isso, mandar "%" como cupom casava
-  // com QUALQUER cupom ativo -- desconto de graça sem saber o código.
   const safeCode = code.trim().replace(/([\\%_])/g, '\\$1');
 
   const { data: coupon } = await supabase
@@ -62,7 +41,6 @@ async function applyCoupon(supabase: any, code: string | undefined, eventId: str
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-  // Reservas já feitas nesta chamada -- devolvidas se algo falhar no meio do caminho.
   const reserved: { ticket_type_id: string; quantity: number }[] = [];
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -93,10 +71,6 @@ serve(async (req) => {
     if (!event_id) throw new Error('Evento não informado');
     if (!Array.isArray(items) || items.length === 0) throw new Error('Carrinho vazio');
 
-    // Normaliza o carrinho: exige quantidade INTEIRA POSITIVA e SOMA itens repetidos
-    // do mesmo tipo de ingresso. Antes dava pra mandar o mesmo ticket_type_id três
-    // vezes com 10 cada -- passava nas três validações de max_per_order e levava 30.
-    // Também bloqueia quantidade negativa, que corrompia o estoque no reserve_tickets.
     const mergedQty = new Map<string, number>();
     for (const raw of items) {
       const ttId = String(raw?.ticket_type_id || '');
@@ -114,9 +88,6 @@ serve(async (req) => {
     customer_cpf = (customer_cpf || '').replace(/\D/g, '') || null;
     if (!customer_name) throw new Error('Nome do comprador obrigatório');
 
-    // Limite de 4 ingressos por CPF por evento -- conta pedidos pagos E
-    // pendentes (não só pagos), pra não deixar alguém empilhar vários PIX
-    // pendentes ao mesmo tempo pra burlar o limite.
     if (customer_cpf && customer_cpf.length >= 11) {
       const { data: existingOrders } = await supabase
         .from('orders')
@@ -157,9 +128,6 @@ serve(async (req) => {
       const maxPerOrder = tt.max_per_order || 10;
       if (qty > maxPerOrder) throw new Error(`Máximo de ${maxPerOrder} ingressos por pedido: ${tt.name}`);
 
-      // Reserva ATÔMICA: trava a linha do ticket_type, confere disponibilidade
-      // e já incrementa quantity_sold numa única operação de banco -- impede
-      // duas compras simultâneas de venderem o mesmo último ingresso.
       const { data: reserveResult, error: reserveErr } = await supabase
         .rpc('reserve_tickets', { p_ticket_type_id: tt.id, p_quantity: qty })
         .single();
@@ -205,7 +173,6 @@ serve(async (req) => {
       discount_amount: discount,
       purchase_protection: protectionFee > 0,
       protection_fee: protectionFee,
-      // De qual anúncio/campanha veio essa venda (se veio de algum)
       utm_source: utm_source || null,
       utm_medium: utm_medium || null,
       utm_campaign: utm_campaign || null,
@@ -255,7 +222,12 @@ serve(async (req) => {
       external_reference: order.id,
       notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago-webhook`,
       statement_descriptor: 'PREMIERPASS',
-      date_of_expiration: mpExpirationDate(5 * 60 * 1000),
+      // date_of_expiration REMOVIDO DE PROPÓSITO: descobrimos que com esse campo
+      // setado (em qualquer formato testado), o PIX expira em ~60s em produção,
+      // muito antes do prazo pedido. Causa exata ainda em investigação (config
+      // da conta MP ou bug da integração). Sem o campo, o Mercado Pago aplica o
+      // prazo padrão dele pra PIX, que resolve o sintoma na prática. Reavaliar
+      // depois que o suporte do MP confirmar a causa.
     };
 
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
@@ -289,7 +261,7 @@ serve(async (req) => {
       pix_qr_code_base64: pixData.qr_code_base64,
     }).eq('id', order.id);
 
-    log('PIX gerado', { orderId: order.id, paymentId: mpResult.id, isSandbox, discount, protectionFee });
+    log('PIX gerado', { orderId: order.id, paymentId: mpResult.id, isSandbox, discount, protectionFee, expiresAt: mpResult.date_of_expiration });
 
     return new Response(JSON.stringify({
       success: true,
