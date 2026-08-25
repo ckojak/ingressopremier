@@ -53,6 +53,7 @@ const ProducerDashboard = lazy(() => import("./pages/admin/ProducerDashboard"));
 const ProducerWelcome = lazy(() => import("./pages/admin/ProducerWelcome"));
 const WebhookLogs = lazy(() => import("./pages/admin/WebhookLogs"));
 const PaymentSettings = lazy(() => import("./pages/admin/PaymentSettings"));
+const Withdrawals = lazy(() => import("./pages/admin/Withdrawals"));
 
 // Public staff check-in page
 const StaffCheckin = lazy(() => import("./pages/StaffCheckin"));
@@ -149,6 +150,7 @@ const App = () => {
                         <Route path="cortesias" element={<Complimentary />} />
                         <Route path="webhooks" element={<WebhookLogs />} />
                         <Route path="pagamentos" element={<PaymentSettings />} />
+                        <Route path="saques" element={<Withdrawals />} />
                       </Route>
                       
                       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
