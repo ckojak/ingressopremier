@@ -25,6 +25,7 @@ import {
   Building2,
   Webhook,
   Settings,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -54,9 +55,7 @@ const AdminLayout = () => {
   const location = useLocation();
   const siteConfig = getSiteConfig();
 
-  // Menu items based on role
   const getMenuItems = () => {
-    // Producer/Organizer menu - only their events and related features
     const producerItems = [
       { icon: LayoutDashboard, label: "Meu Painel", path: "/admin/produtor" },
       { icon: Calendar, label: "Meus Eventos", path: "/admin/eventos" },
@@ -68,7 +67,6 @@ const AdminLayout = () => {
       { icon: UserCheck, label: "Equipe Check-in", path: "/admin/equipe" },
     ];
 
-    // Admin menu - full access including approvals
     if (userRole === "admin") {
       return [
         { icon: Crown, label: "Dashboard Admin", path: "/admin/super" },
@@ -85,19 +83,18 @@ const AdminLayout = () => {
         { icon: Users, label: "Usuários", path: "/admin/usuarios" },
         { icon: Webhook, label: "Webhooks", path: "/admin/webhooks" },
         { icon: Settings, label: "Pagamentos", path: "/admin/pagamentos" },
+        { icon: Wallet, label: "Saques", path: "/admin/saques" },
       ];
     }
 
     return producerItems;
   };
 
-  // Single effect to handle auth and role checking
   useEffect(() => {
     let isMounted = true;
 
     const initializeAuth = async () => {
       try {
-        // Get current session
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         
         if (!isMounted) return;
@@ -116,7 +113,6 @@ const AdminLayout = () => {
         setSession(currentSession);
         setUser(currentSession.user);
 
-        // Fetch user roles (user may have multiple) - with error handling
         const { data: rolesData, error: roleError } = await supabase
           .from("user_roles")
           .select("role")
@@ -126,14 +122,12 @@ const AdminLayout = () => {
 
         if (roleError) {
           console.warn("Error fetching role:", roleError.message);
-          // Don't show error to user, just redirect to home
           setHasAccess(false);
           setIsInitialized(true);
           navigate("/");
           return;
         }
 
-        // Get the highest priority role (admin > organizer > user)
         const roleList = rolesData?.map(r => r.role) || [];
         let primaryRole: AppRole | null = null;
         
@@ -151,7 +145,6 @@ const AdminLayout = () => {
         setUserRole(role ?? null);
 
         if (!role || !["admin", "organizer"].includes(role)) {
-          // Silently redirect without error message
           setHasAccess(false);
           setIsInitialized(true);
           navigate("/painel");
@@ -172,7 +165,6 @@ const AdminLayout = () => {
 
     initializeAuth();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         if (!isMounted) return;
@@ -198,7 +190,6 @@ const AdminLayout = () => {
     navigate("/");
   };
 
-  // View switcher for admin to see different dashboards
   const ViewSwitcher = () => {
     if (userRole !== "admin") return null;
 
@@ -249,7 +240,6 @@ const AdminLayout = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Desktop Sidebar */}
       <aside
         className={cn(
           "hidden lg:flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300",
@@ -285,7 +275,6 @@ const AdminLayout = () => {
           </Button>
         </div>
 
-        {/* Role Badge and View Switcher */}
         {sidebarOpen && (
           <div className="px-4 py-3 border-b border-sidebar-border bg-secondary/30 space-y-2">
             <span className={cn(
@@ -322,7 +311,6 @@ const AdminLayout = () => {
           })}
         </nav>
 
-        {/* Quick Links */}
         <div className="p-4 border-t border-sidebar-border space-y-2">
           <Link to="/">
             <Button
@@ -350,7 +338,6 @@ const AdminLayout = () => {
         </div>
       </aside>
 
-      {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-sidebar border-b border-sidebar-border">
         <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/10 to-accent/10">
           <Link to="/" className="flex items-center gap-3">
@@ -377,7 +364,6 @@ const AdminLayout = () => {
           </div>
         </div>
 
-        {/* Mobile Menu */}
         {mobileMenuOpen && (
           <nav className="p-4 space-y-1 border-t border-sidebar-border bg-sidebar/95 backdrop-blur-sm max-h-[70vh] overflow-y-auto">
             {menuItems.map((item) => {
@@ -419,7 +405,6 @@ const AdminLayout = () => {
         )}
       </div>
 
-      {/* Main Content */}
       <main className="flex-1 lg:p-8 p-4 pt-20 lg:pt-8 overflow-auto bg-gradient-to-br from-background via-background to-secondary/20">
         <Outlet />
       </main>
