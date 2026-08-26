@@ -21,6 +21,12 @@
 
   <body>
     <div id="root"></div>
+    <!-- Mercado Pago device fingerprint (reduz recusa falsa de cartão) -->
+    <script
+      src="https://www.mercadopago.com/v2/security.js"
+      view="checkout"
+      output="MP_DEVICE_SESSION_ID"
+    ></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

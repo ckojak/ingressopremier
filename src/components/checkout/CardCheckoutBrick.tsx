@@ -4,6 +4,7 @@ import { CreditCard, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getStoredUtmParams } from "@/lib/pixel-tracking";
+import { getDeviceFingerprint, getMpDeviceId } from "@/lib/device-fingerprint";
 
 declare global {
   interface Window {
@@ -96,6 +97,8 @@ const CardCheckoutBrick = ({
                 "create-mercadopago-card-payment",
                 {
                   body: {
+                    device_fingerprint: await getDeviceFingerprint(),
+                    mp_device_id: getMpDeviceId(),
                     event_id: eventId,
                     site_id: siteId,
                     items,
@@ -108,7 +111,10 @@ const CardCheckoutBrick = ({
                     payer: {
                       email: formData.payer.email || payerEmail,
                       identification: formData.payer.identification,
+                      first_name: formData.payer.first_name,
+                      last_name: formData.payer.last_name,
                     },
+                    cardholder_name: formData.cardholderName || formData.payer?.first_name,
                     ...getStoredUtmParams(),
                   },
                 }

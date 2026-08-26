@@ -26,9 +26,14 @@ interface CardPaymentRequest {
   utm_campaign?: string;
   utm_content?: string;
   utm_term?: string;
+  device_fingerprint?: string;
+  mp_device_id?: string;
+  cardholder_name?: string;
   payer: {
     email: string;
     identification?: { type: string; number: string };
+    first_name?: string;
+    last_name?: string;
   };
 }
 
@@ -111,6 +116,8 @@ serve(async (req) => {
     }
 
     const body: CardPaymentRequest = await req.json();
+    const clientIp = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null;
+    const clientUserAgent = req.headers.get('user-agent') || null;
     const { event_id, items, token, payment_method_id, issuer_id, installments, payer, coupon_code } = body;
 
     if (!event_id || !items?.length || !token || !payment_method_id || !payer?.email) {
@@ -237,6 +244,18 @@ serve(async (req) => {
       throw new Error('Erro ao criar pedido');
     }
 
+    // Evidência antifraude (aditiva: falha aqui nunca derruba o pagamento)
+    try {
+      await supabase.from('order_fraud_evidence').insert({
+        order_id: order.id,
+        ip_address: clientIp,
+        user_agent: clientUserAgent,
+        device_fingerprint: body.device_fingerprint || null,
+      });
+    } catch (e) {
+      console.error('Falha ao gravar evidência antifraude:', e);
+    }
+
     const orderItemsToInsert = validatedItems.map((i) => ({
       order_id: order.id,
       ticket_type_id: i.ticket_type_id,
@@ -250,6 +269,18 @@ serve(async (req) => {
       throw new Error('Erro ao registrar itens do pedido');
     }
 
+    // Nome do comprador: usado pelo antifraude do Mercado Pago. Antes nunca era enviado.
+    const rawName = (body.cardholder_name
+      || [payer.first_name, payer.last_name].filter(Boolean).join(' ')
+      || '').trim();
+    let firstName = payer.first_name?.trim() || '';
+    let lastName = payer.last_name?.trim() || '';
+    if (!firstName && rawName) {
+      const parts = rawName.split(/\s+/);
+      firstName = parts[0];
+      lastName = parts.slice(1).join(' ');
+    }
+
     const idempotencyKey = crypto.randomUUID();
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
@@ -257,6 +288,8 @@ serve(async (req) => {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         'X-Idempotency-Key': idempotencyKey,
+        // device_id gerado pelo security.js do Mercado Pago no navegador
+        ...(body.mp_device_id ? { 'X-meli-session-id': body.mp_device_id } : {}),
       },
       body: JSON.stringify({
         transaction_amount: totalWithFee,
@@ -268,6 +301,21 @@ serve(async (req) => {
         payer: {
           email: payer.email,
           identification: payer.identification || undefined,
+          ...(firstName ? { first_name: firstName } : {}),
+          ...(lastName ? { last_name: lastName } : {}),
+        },
+        additional_info: {
+          ...(clientIp ? { ip_address: clientIp } : {}),
+          payer: {
+            ...(firstName ? { first_name: firstName } : {}),
+            ...(lastName ? { last_name: lastName } : {}),
+          },
+          items: validatedItems.map((i) => ({
+            id: i.ticket_type_id,
+            title: i.name,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+          })),
         },
         external_reference: order.id,
         notification_url: `${supabaseUrl}/functions/v1/mercadopago-webhook`,

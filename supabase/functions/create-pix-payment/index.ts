@@ -64,6 +64,9 @@ serve(async (req) => {
     const { event_id, items, site_id, coupon_code, purchase_protection, billing_address } = body;
     let { customer_name, customer_cpf, customer_phone } = body;
     const { utm_source, utm_medium, utm_campaign, utm_content, utm_term } = body;
+    const deviceFingerprint: string | null = body?.device_fingerprint || null;
+    const clientIp = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null;
+    const clientUserAgent = req.headers.get('user-agent') || null;
 
     const mpAccessToken = Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
     if (!mpAccessToken) throw new Error('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN não configurado');
@@ -184,6 +187,18 @@ serve(async (req) => {
       throw new Error(`Erro criando pedido: ${orderErr?.message}`);
     }
 
+    // Evidência antifraude (aditiva: falha aqui nunca derruba o pagamento)
+    try {
+      await supabase.from('order_fraud_evidence').insert({
+        order_id: order.id,
+        ip_address: clientIp,
+        user_agent: clientUserAgent,
+        device_fingerprint: deviceFingerprint,
+      });
+    } catch (e) {
+      log('Falha ao gravar evidência antifraude', { orderId: order.id, error: String(e) });
+    }
+
     const { error: itemsErr } = await supabase
       .from('order_items')
       .insert(orderItemsPayload.map((oi) => ({ ...oi, order_id: order.id })));
@@ -222,6 +237,7 @@ serve(async (req) => {
       external_reference: order.id,
       notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago-webhook`,
       statement_descriptor: 'PREMIERPASS',
+      ...(clientIp ? { additional_info: { ip_address: clientIp } } : {}),
       // date_of_expiration REMOVIDO DE PROPÓSITO: descobrimos que com esse campo
       // setado (em qualquer formato testado), o PIX expira em ~60s em produção,
       // muito antes do prazo pedido. Causa exata ainda em investigação (config
