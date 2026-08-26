@@ -32,7 +32,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import premierpassLogo from "@/assets/premierpass-logo.png";
 import { getSiteConfig } from "@/lib/site-config";
-import NotificationBell from "@/components/admin/NotificationBell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -287,10 +286,7 @@ const AdminLayout = () => {
               {userRole === "admin" && <Crown className="w-3 h-3" />}
               {userRole === "admin" ? "Administrador" : "Organizador"}
             </span>
-            <div className="flex items-center gap-2">
-              <ViewSwitcher />
-              {userRole === "admin" && <NotificationBell />}
-            </div>
+            <ViewSwitcher />
           </div>
         )}
 
@@ -357,7 +353,6 @@ const AdminLayout = () => {
           </Link>
           <div className="flex items-center gap-2">
             {userRole === "admin" && <ViewSwitcher />}
-            {userRole === "admin" && <NotificationBell />}
             <Button
               variant="ghost"
               size="icon"
