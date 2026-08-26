@@ -8,6 +8,7 @@ import { AnimatePresence } from "framer-motion";
 import { HelmetProvider } from "react-helmet-async";
 import LoadingScreen from "@/components/LoadingScreen";
 import WhatsAppButton from "@/components/WhatsAppButton";
+import CookieConsent from "@/components/CookieConsent";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Eager load critical pages
@@ -159,6 +160,7 @@ const App = () => {
                   </Suspense>
                 </ErrorBoundary>
                 <WhatsAppButton />
+                <CookieConsent />
               </BrowserRouter>
             )}
           </TooltipProvider>
