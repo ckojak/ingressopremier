@@ -23,6 +23,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cpfError, formatCpf, onlyDigits } from "@/lib/cpf";
 import { Link } from "react-router-dom";
 import CardCheckoutBrick from "@/components/checkout/CardCheckoutBrick";
+import { getDeviceFingerprint, getMpDeviceId } from "@/lib/device-fingerprint";
 import {
   captureUtmParams,
   getStoredUtmParams,
@@ -228,8 +229,11 @@ const EventDetails = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return navigate("/auth");
 
+      const deviceFingerprint = await getDeviceFingerprint();
+
       const { data, error } = await supabase.functions.invoke("create-pix-payment", {
         body: {
+          device_fingerprint: deviceFingerprint,
           event_id: id,
           site_id: siteId,
           customer_name: customerName,

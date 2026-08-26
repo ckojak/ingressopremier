@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useSiteContext } from "@/hooks/useSiteContext";
 import CardCheckoutBrick from "@/components/checkout/CardCheckoutBrick";
+import { getDeviceFingerprint, getMpDeviceId } from "@/lib/device-fingerprint";
 
 type TicketType = Tables<"ticket_types">;
 type Event = Tables<"events">;
@@ -291,9 +292,11 @@ const Cart = () => {
 
     try {
       const { eventId: firstEventId, items } = getFirstEventGroup();
+      const deviceFingerprint = await getDeviceFingerprint();
 
       const { data, error } = await supabase.functions.invoke("create-pix-payment", {
         body: {
+          device_fingerprint: deviceFingerprint,
           event_id: firstEventId,
           site_id: siteId,
           coupon_code: appliedCoupon?.code, // o servidor revalida e aplica o desconto de verdade
