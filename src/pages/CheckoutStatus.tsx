@@ -44,7 +44,7 @@ const CheckoutStatusContent = () => {
         return;
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("orders")
         .select("id, status, total_amount, created_at, event_id, events(title, meta_pixel_id, ga4_measurement_id)")
         .eq("id", orderId)
@@ -58,7 +58,7 @@ const CheckoutStatusContent = () => {
 
       const orderData = {
         ...data,
-        events: data.events as OrderData["events"],
+        events: data.events as unknown as OrderData["events"],
       } as OrderData;
 
       setOrder(orderData);

@@ -37,13 +37,13 @@ const NotificationBell = () => {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const fetchNotifications = useCallback(async () => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("admin_notifications")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(20);
     if (!error && data) {
-      setNotifications(data as AdminNotification[]);
+      setNotifications(data as unknown as AdminNotification[]);
     }
     setLoading(false);
   }, []);
