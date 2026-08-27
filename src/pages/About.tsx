@@ -9,7 +9,7 @@ const values = [
   {
     icon: Shield,
     title: "Segurança",
-    description: "Transações protegidas com criptografia de ponta e processamento seguro via Stripe.",
+    description: "Transações protegidas com criptografia de ponta e processamento seguro via Mercado Pago.",
   },
   {
     icon: Zap,
@@ -26,13 +26,6 @@ const values = [
     title: "Alcance",
     description: "Conectamos você aos melhores eventos em todo o Brasil.",
   },
-];
-
-const stats = [
-  { value: "10K+", label: "Eventos realizados" },
-  { value: "500K+", label: "Ingressos vendidos" },
-  { value: "1000+", label: "Organizadores" },
-  { value: "98%", label: "Satisfação" },
 ];
 
 const About = () => {
@@ -60,25 +53,10 @@ const About = () => {
               Sobre a <span className="text-gradient">Premier Pass</span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Somos uma plataforma brasileira de venda de ingressos que nasceu com a missão de 
-              conectar pessoas a experiências inesquecíveis. Acreditamos que eventos têm o poder 
+              Somos uma plataforma brasileira de venda de ingressos que nasceu com a missão de
+              conectar pessoas a experiências inesquecíveis. Acreditamos que eventos têm o poder
               de transformar vidas e criar memórias.
             </p>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-20"
-          >
-            {stats.map((stat, index) => (
-              <div key={index} className="gradient-card rounded-2xl p-6 text-center">
-                <div className="text-3xl md:text-4xl font-bold text-gradient mb-2">{stat.value}</div>
-                <div className="text-muted-foreground">{stat.label}</div>
-              </div>
-            ))}
           </motion.div>
 
           {/* Mission */}
@@ -92,11 +70,11 @@ const About = () => {
               <div>
                 <h2 className="text-3xl font-bold text-foreground mb-4">Nossa Missão</h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Democratizar o acesso à cultura e entretenimento, oferecendo uma plataforma 
+                  Democratizar o acesso à cultura e entretenimento, oferecendo uma plataforma
                   segura, acessível e eficiente para compra de ingressos.
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
-                  Trabalhamos todos os dias para que cada pessoa possa viver experiências 
+                  Trabalhamos todos os dias para que cada pessoa possa viver experiências
                   incríveis sem complicações, do momento da descoberta até o check-in no evento.
                 </p>
               </div>
