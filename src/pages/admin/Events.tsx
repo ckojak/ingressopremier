@@ -183,7 +183,7 @@ const Events = () => {
       const validatedData = validation.data;
 
       if (editingEvent) {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from("events")
           .update({
             title: validatedData.title,
@@ -209,7 +209,7 @@ const Events = () => {
         if (error) throw error;
         toast({ title: "Evento atualizado com sucesso!" });
       } else {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from("events")
           .insert([{
             title: validatedData.title,

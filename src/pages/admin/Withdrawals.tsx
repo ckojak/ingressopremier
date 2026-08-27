@@ -33,7 +33,7 @@ const Withdrawals = () => {
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("list_pending_withdrawals");
+      const { data, error } = await (supabase as any).rpc("list_pending_withdrawals");
       if (error) throw error;
       setRequests((data as PendingWithdrawal[]) || []);
     } catch (error) {
@@ -51,7 +51,7 @@ const Withdrawals = () => {
   const handleMarkPaid = async (id: string) => {
     setProcessingId(id);
     try {
-      const { error } = await supabase.rpc("mark_withdrawal_paid", { p_request_id: id });
+      const { error } = await (supabase as any).rpc("mark_withdrawal_paid", { p_request_id: id });
       if (error) throw error;
       toast.success("Marcado como pago!");
       fetchRequests();

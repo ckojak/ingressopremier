@@ -109,7 +109,7 @@ const ProducerDashboard = () => {
   const fetchBalances = async () => {
     setBalancesLoading(true);
     try {
-      const { data, error } = await supabase.rpc("get_organizer_balance");
+      const { data, error } = await (supabase as any).rpc("get_organizer_balance");
       if (error) throw error;
       setBalances((data as EventBalance[]) || []);
     } catch (error) {
@@ -260,7 +260,7 @@ const ProducerDashboard = () => {
 
     setSubmittingWithdraw(true);
     try {
-      const { error } = await supabase.rpc("request_withdrawal", {
+      const { error } = await (supabase as any).rpc("request_withdrawal", {
         p_event_id: withdrawTarget.event_id,
         p_amount: amount,
         p_pix_key: pixKey.trim(),

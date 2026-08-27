@@ -131,7 +131,7 @@ const AcceptTransfer = () => {
 
       // Aceita através de uma função segura: ela confere no servidor que quem está
       // chamando é de fato o destinatário do convite antes de mudar qualquer coisa.
-      const { error: acceptError } = await supabase.rpc("accept_ticket_transfer", {
+      const { error: acceptError } = await (supabase as any).rpc("accept_ticket_transfer", {
         p_transfer_id: transfer.id,
       });
 
@@ -178,7 +178,7 @@ const AcceptTransfer = () => {
     setProcessing(true);
 
     try {
-      const { error } = await supabase.rpc("reject_ticket_transfer", {
+      const { error } = await (supabase as any).rpc("reject_ticket_transfer", {
         p_transfer_id: transfer.id,
       });
 

@@ -37,13 +37,13 @@ const NotificationBell = () => {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const fetchNotifications = useCallback(async () => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("admin_notifications")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(20);
     if (!error && data) {
-      setNotifications(data as AdminNotification[]);
+      setNotifications(data as unknown as AdminNotification[]);
     }
     setLoading(false);
   }, []);
@@ -69,14 +69,14 @@ const NotificationBell = () => {
 
   const markAsRead = async (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
-    await supabase.from("admin_notifications").update({ is_read: true }).eq("id", id);
+    await (supabase as any).from("admin_notifications").update({ is_read: true }).eq("id", id);
   };
 
   const markAllAsRead = async () => {
     const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id);
     if (!unreadIds.length) return;
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    await supabase.from("admin_notifications").update({ is_read: true }).in("id", unreadIds);
+    await (supabase as any).from("admin_notifications").update({ is_read: true }).in("id", unreadIds);
   };
 
   return (
