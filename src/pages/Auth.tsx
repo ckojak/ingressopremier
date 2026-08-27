@@ -344,7 +344,7 @@ const Auth = () => {
       }
 
       // Impede criar uma segunda conta com o mesmo CPF de outra já existente
-      const { data: cpfAvailable, error: cpfCheckError } = await supabase.rpc("is_cpf_available", {
+      const { data: cpfAvailable, error: cpfCheckError } = await (supabase as any).rpc("is_cpf_available", {
         p_cpf: cpf,
       });
       if (!cpfCheckError && cpfAvailable === false) {

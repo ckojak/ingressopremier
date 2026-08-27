@@ -118,7 +118,7 @@ const MyTicketsContent = () => {
 
       // Cancela através de uma função segura: ela confere no servidor que quem
       // está chamando foi de fato quem enviou a transferência antes de mudar algo.
-      const { error: cancelError } = await supabase.rpc("cancel_ticket_transfer", {
+      const { error: cancelError } = await (supabase as any).rpc("cancel_ticket_transfer", {
         p_transfer_id: pendingTransfer.id,
       });
       if (cancelError) throw cancelError;

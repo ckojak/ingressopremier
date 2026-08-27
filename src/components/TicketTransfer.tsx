@@ -67,7 +67,7 @@ const TicketTransfer = ({
       // Cria a transferência através de uma função segura no banco, que já valida
       // do lado do servidor: dono do ingresso, ingresso não usado, sem transferência
       // pendente duplicada, e o prazo mínimo de 2h antes do evento.
-      const { data: transferRpcData, error } = await supabase.rpc("initiate_ticket_transfer", {
+      const { data: transferRpcData, error } = await (supabase as any).rpc("initiate_ticket_transfer", {
         p_ticket_id: ticketId,
         p_to_email: email.toLowerCase(),
       });

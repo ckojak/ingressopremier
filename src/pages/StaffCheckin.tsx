@@ -93,7 +93,7 @@ const StaffCheckin = () => {
 
     setSessionEmail(session.user.email ?? null);
 
-    const { data, error } = await supabase.rpc("get_checkin_invite", {
+    const { data, error } = await (supabase as any).rpc("get_checkin_invite", {
       p_access_code: accessCode,
     });
 
@@ -150,7 +150,7 @@ const StaffCheckin = () => {
     if (!accessCode || !invite) return;
     setAccepting(true);
     try {
-      const { error } = await supabase.rpc("accept_checkin_invite", {
+      const { error } = await (supabase as any).rpc("accept_checkin_invite", {
         p_access_code: accessCode,
       });
 
@@ -263,7 +263,7 @@ const StaffCheckin = () => {
     setCheckResult(null);
 
     try {
-      const { data: ticketRows, error: findError } = await supabase.rpc(
+      const { data: ticketRows, error: findError } = await (supabase as any).rpc(
         "find_ticket_for_checkin",
         {
           p_ticket_code: code,
@@ -292,7 +292,7 @@ const StaffCheckin = () => {
 
       setLastCheckedTicket(ticketData);
 
-      const { data: rpcData, error: rpcError } = await supabase.rpc("checkin_ticket", {
+      const { data: rpcData, error: rpcError } = await (supabase as any).rpc("checkin_ticket", {
         p_ticket_id: ticket.id,
         p_access_code: accessCode,
       });

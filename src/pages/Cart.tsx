@@ -89,7 +89,7 @@ const Cart = () => {
       
       // Load saved coupon if exists (via RPC — busca exata por ID, sem listar a tabela)
       if (parsed.couponId) {
-        const { data: couponRows } = await supabase.rpc("get_coupon_by_id", {
+        const { data: couponRows } = await (supabase as any).rpc("get_coupon_by_id", {
           p_id: parsed.couponId,
         });
 
@@ -166,7 +166,7 @@ const Cart = () => {
     setCouponError("");
 
     try {
-      const { data: couponRows, error } = await supabase.rpc("get_coupon_by_code", {
+      const { data: couponRows, error } = await (supabase as any).rpc("get_coupon_by_code", {
         p_code: couponCode.trim().toUpperCase(),
       });
 

@@ -69,14 +69,14 @@ const NotificationBell = () => {
 
   const markAsRead = async (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
-    await supabase.from("admin_notifications").update({ is_read: true }).eq("id", id);
+    await (supabase as any).from("admin_notifications").update({ is_read: true }).eq("id", id);
   };
 
   const markAllAsRead = async () => {
     const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id);
     if (!unreadIds.length) return;
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    await supabase.from("admin_notifications").update({ is_read: true }).in("id", unreadIds);
+    await (supabase as any).from("admin_notifications").update({ is_read: true }).in("id", unreadIds);
   };
 
   return (
