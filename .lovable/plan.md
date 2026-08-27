@@ -3,6 +3,7 @@
 ## Situação atual (verificada)
 
 - A conexão de backend ativa deste app é gerenciada pelo Lovable Cloud e aponta para `duasvoeejubywzoyldoa`.
+- Consequência já visível: o `src/integrations/supabase/types.ts` foi gerado a partir do projeto errado, e por isso o projeto tem ~25 erros de tipo (RPCs como `accept_ticket_transfer`, `get_organizer_balance`, `request_withdrawal`, tabela `admin_notifications`, coluna `meta_pixel_id` — todas existem no seu banco, mas não nos tipos gerados). Esses erros só somem depois da reconexão, quando os tipos forem regerados do `qkslezounrjzuvafirxo`. Corrigi-los agora contra os tipos errados seria trabalho jogado fora.
 - Referências a esse projeto antigo existem em 4 lugares:
   - `.env` (auto-gerado pela conexão): `VITE_SUPABASE_PROJECT_ID`, `VITE_SUPABASE_URL`, chave publicável
   - `supabase/config.toml`
