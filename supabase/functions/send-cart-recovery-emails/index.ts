@@ -100,8 +100,14 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
   // Somente chamadas internas (cron/service role) ou admin podem disparar.
+  const cronToken = req.headers.get("x-cron-token") || "";
+  let autorizado = false;
+  if (cronToken) {
+    const { data: ok } = await supabase.rpc("verify_cron_token", { _token: cronToken });
+    autorizado = ok === true;
+  }
   const jwt = (req.headers.get("Authorization") || "").replace("Bearer ", "").trim();
-  if (jwt !== serviceKey) {
+  if (!autorizado && jwt !== serviceKey) {
     if (!jwt) {
       return new Response(JSON.stringify({ error: "Nao autenticado" }), {
         status: 401, headers: { "Content-Type": "application/json", ...corsHeaders },
