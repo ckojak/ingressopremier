@@ -261,6 +261,7 @@ export type Database = {
           payment_method: string | null
           pix_qr_code: string | null
           pix_qr_code_base64: string | null
+          recovery_email_sent: boolean
           service_fee: number
           site_id: string
           status: Database["public"]["Enums"]["order_status"]
@@ -282,6 +283,7 @@ export type Database = {
           payment_method?: string | null
           pix_qr_code?: string | null
           pix_qr_code_base64?: string | null
+          recovery_email_sent?: boolean
           service_fee?: number
           site_id?: string
           status?: Database["public"]["Enums"]["order_status"]
@@ -303,6 +305,7 @@ export type Database = {
           payment_method?: string | null
           pix_qr_code?: string | null
           pix_qr_code_base64?: string | null
+          recovery_email_sent?: boolean
           service_fee?: number
           site_id?: string
           status?: Database["public"]["Enums"]["order_status"]
