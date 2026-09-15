@@ -22,23 +22,11 @@ interface PasswordStrength {
   hasSpecial: boolean;
 }
 
-const COMMON_EMAIL_DOMAIN_TYPOS = new Set([
-  "gmial.com",
-  "gmal.com",
-  "gmail.con",
-  "hotmal.com",
-  "outlok.com",
-]);
-
 const emailSchema = z
   .string()
   .trim()
-  .email("Digite um e-mail válido, como nome@exemplo.com")
-  .max(254, "O e-mail deve ter no máximo 254 caracteres")
-  .refine(
-    (value) => !COMMON_EMAIL_DOMAIN_TYPOS.has(value.toLowerCase().split("@")[1] ?? ""),
-    "Confira o domínio do e-mail. Pode haver um erro de digitação.",
-  );
+  .regex(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, "Digite um e-mail válido")
+  .max(254, "Digite um e-mail válido");
 
 const formatCPF = (value: string): string => {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -175,6 +163,14 @@ const Auth = () => {
   // Handle user type selection during REGISTRATION
   const handleUserTypeSelect = async (userType: "client" | "producer") => {
     if (!pendingRegistrationData) return;
+
+    const pendingEmailValidation = emailSchema.safeParse(pendingRegistrationData.email);
+    if (!pendingEmailValidation.success) {
+      setShowUserTypeSelector(false);
+      setPendingRegistrationData(null);
+      setEmailTouched(true);
+      return;
+    }
     
     setUserTypeSelectorLoading(true);
     try {
@@ -433,10 +429,13 @@ const Auth = () => {
     }
     
     // LOGIN
+    setEmailTouched(true);
+    if (!isEmailValid) return;
+
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
       if (error) throw error;
@@ -740,7 +739,7 @@ const Auth = () => {
                   required
                 />
               </div>
-              {!isLogin && emailError && (
+              {emailError && (
                 <p id="email-error" role="alert" className="text-xs text-destructive">
                   {emailError}
                 </p>
@@ -847,7 +846,7 @@ const Auth = () => {
             <Button
               type="submit"
               className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={loading || (!isLogin && (!isEmailValid || !acceptedTerms))}
+              disabled={loading || !isEmailValid || (!isLogin && !acceptedTerms)}
             >
               {loading ? (
                 <motion.div
