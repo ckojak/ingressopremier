@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, Flame, CreditCard, ShieldCheck, Lock, Building2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,23 @@ interface CartItem {
   quantity: number;
 }
 
+interface SavedEventCheckout {
+  items: Array<{ ticketTypeId: string; quantity: number }>;
+  customerName: string;
+  customerCpf: string;
+  address: {
+    zip: string;
+    street: string;
+    number: string;
+    complement: string;
+    district: string;
+    city: string;
+    state: string;
+  };
+  purchaseProtection: boolean;
+  paymentMethod: "pix" | "card";
+}
+
 const isOnlineEvent = (event: Event) => {
   if (event.is_online) return true;
   const titleLower = event.title?.toLowerCase() || "";
@@ -75,6 +92,7 @@ const getEventLocation = (event: Event) => {
 const EventDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { siteId } = useSiteContext();
   const isMobile = useIsMobile();
   const [event, setEvent] = useState<Event | null>(null);
@@ -96,6 +114,7 @@ const EventDetails = () => {
 
   const [showCardForm, setShowCardForm] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [checkoutRestored, setCheckoutRestored] = useState(false);
 
   useEffect(() => {
     // Guarda o UTM do link do anúncio (se veio um agora) assim que a pessoa
@@ -108,15 +127,52 @@ const EventDetails = () => {
         const { data: eventData } = await supabase.from("events").select("*").eq("id", id).eq("status", "published").single();
         if (eventData) setEvent(eventData);
         const { data: ticketsData } = await supabase.from("ticket_types").select("*").eq("event_id", id).eq("is_active", true).order("price", { ascending: true });
-        setTicketTypes(ticketsData || []);
+        const availableTickets = ticketsData || [];
+        setTicketTypes(availableTickets);
+
+        const savedCheckout = localStorage.getItem(`event_checkout_${id}`);
+        if (savedCheckout) {
+          try {
+            const saved = JSON.parse(savedCheckout) as Partial<SavedEventCheckout>;
+            const restoredCart = (saved.items || []).flatMap((item) => {
+              const ticketType = availableTickets.find((ticket) => ticket.id === item.ticketTypeId);
+              return ticketType && Number.isInteger(item.quantity) && item.quantity > 0
+                ? [{ ticketType, quantity: item.quantity }]
+                : [];
+            });
+            setCart(restoredCart);
+            setCustomerName(typeof saved.customerName === "string" ? saved.customerName : "");
+            setCustomerCpf(typeof saved.customerCpf === "string" ? saved.customerCpf : "");
+            if (saved.address) setAddress((current) => ({ ...current, ...saved.address }));
+            if (typeof saved.purchaseProtection === "boolean") setPurchaseProtection(saved.purchaseProtection);
+            if (saved.paymentMethod === "pix" || saved.paymentMethod === "card") setPaymentMethod(saved.paymentMethod);
+          } catch {
+            localStorage.removeItem(`event_checkout_${id}`);
+          }
+        }
       } catch (error) {
         toast.error("Erro ao carregar evento");
       } finally {
+        setCheckoutRestored(true);
         setLoading(false);
       }
     };
     fetchEventDetails();
   }, [id]);
+
+  useEffect(() => {
+    if (!id || !checkoutRestored) return;
+
+    const checkout: SavedEventCheckout = {
+      items: cart.map((item) => ({ ticketTypeId: item.ticketType.id, quantity: item.quantity })),
+      customerName,
+      customerCpf,
+      address,
+      purchaseProtection,
+      paymentMethod,
+    };
+    localStorage.setItem(`event_checkout_${id}`, JSON.stringify(checkout));
+  }, [id, checkoutRestored, cart, customerName, customerCpf, address, purchaseProtection, paymentMethod]);
 
   // Carrega o Pixel do Meta / Google Analytics QUE O PRODUTOR DESTE EVENTO
   // cadastrou (nunca um pixel genérico da PremierPass) e dispara a
@@ -227,7 +283,7 @@ const EventDetails = () => {
     setProcessingPix(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return navigate("/auth");
+      if (!session) return navigate("/auth", { state: { from: location.pathname } });
 
       const deviceFingerprint = await getDeviceFingerprint();
 
@@ -247,6 +303,7 @@ const EventDetails = () => {
 
       if (data?.success) {
         sessionStorage.setItem('pix_checkout_data', JSON.stringify(data));
+        if (id) localStorage.removeItem(`event_checkout_${id}`);
         navigate(`/checkout/pix?order_id=${data.order_id}`);
       } else {
         throw new Error(data?.error || "Falha no PIX");
@@ -265,7 +322,7 @@ const EventDetails = () => {
     setProcessing(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return navigate("/auth");
+      if (!session) return navigate("/auth", { state: { from: location.pathname } });
 
       setUserEmail(session.user?.email || "");
       setShowCardForm(true);
@@ -275,6 +332,7 @@ const EventDetails = () => {
   };
 
   const handleCardSuccess = (orderId: string) => {
+    if (id) localStorage.removeItem(`event_checkout_${id}`);
     navigate(`/checkout/status?order_id=${orderId}&status=success`);
   };
 

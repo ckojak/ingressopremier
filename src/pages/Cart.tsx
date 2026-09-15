@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft, Lock, CreditCard, Ticket, Tag, X, Check, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ const SERVICE_FEE_PERCENTAGE = 0.08; // 8% taxa de serviço
 
 const Cart = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { siteId } = useSiteContext();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -284,7 +285,7 @@ const Cart = () => {
 
     if (!user) {
       toast.info("Faça login para finalizar a compra");
-      navigate("/auth");
+      navigate("/auth", { state: { from: location.pathname } });
       return;
     }
 
@@ -334,7 +335,7 @@ const Cart = () => {
     }
     if (!user) {
       toast.info("Faça login para finalizar a compra");
-      navigate("/auth");
+      navigate("/auth", { state: { from: location.pathname } });
       return;
     }
     setShowCardForm(true);

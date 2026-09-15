@@ -113,7 +113,8 @@ const Auth = () => {
   const { toast } = useToast();
   const siteConfig = useSiteContext();
 
-  const from = (location.state as any)?.from || siteConfig.homeRedirect;
+  const stateFrom = (location.state as { from?: string } | null)?.from;
+  const safeStateFrom = stateFrom?.startsWith("/") && !stateFrom.startsWith("//") ? stateFrom : null;
 
   const passwordStrength: PasswordStrength = useMemo(() => ({
     hasMinLength: password.length >= 8,
@@ -151,6 +152,7 @@ const Auth = () => {
   const getRedirectDestination = (role: string | null | undefined): string => {
     const next = getNextPath();
     if (next) return next;
+    if (safeStateFrom) return safeStateFrom;
     if (role === "admin") {
       return "/admin/super"; // Admin goes to SuperAdmin Dashboard
     }
@@ -298,14 +300,14 @@ const Auth = () => {
               user_id: session.user.id, 
               role: "admin" as any 
             }]);
-            navigate(getNextPath() ?? "/admin/super");
+            navigate(getRedirectDestination("admin"));
           } else {
             // For OAuth users, default to client role
             await supabase.from("user_roles").insert([{ 
               user_id: session.user.id, 
               role: "user" as any 
             }]);
-            navigate(getNextPath() ?? "/painel");
+            navigate(getRedirectDestination("user"));
           }
           return;
         }
@@ -466,7 +468,7 @@ const Auth = () => {
             user_id: data.user.id, 
             role: "admin" as any 
           }]);
-          navigate(getNextPath() ?? "/admin/super");
+          navigate(getRedirectDestination("admin"));
           toast({
             title: "Bem-vindo, Administrador!",
             description: "Você tem acesso total ao sistema.",
@@ -478,7 +480,7 @@ const Auth = () => {
           user_id: data.user.id, 
           role: "user" as any 
         }]);
-        navigate(getNextPath() ?? "/painel");
+        navigate(getRedirectDestination("user"));
         toast({
           title: "Login realizado com sucesso!",
           description: "Bem-vindo de volta.",
