@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import premierpassLogo from "@/assets/premierpass-logo.png";
 import { useSiteContext } from "@/hooks/useSiteContext";
 import UserTypeSelector from "@/components/UserTypeSelector";
+import { z } from "zod";
 
 interface PasswordStrength {
   hasMinLength: boolean;
@@ -20,6 +21,24 @@ interface PasswordStrength {
   hasNumber: boolean;
   hasSpecial: boolean;
 }
+
+const COMMON_EMAIL_DOMAIN_TYPOS = new Set([
+  "gmial.com",
+  "gmal.com",
+  "gmail.con",
+  "hotmal.com",
+  "outlok.com",
+]);
+
+const emailSchema = z
+  .string()
+  .trim()
+  .email("Digite um e-mail válido, como nome@exemplo.com")
+  .max(254, "O e-mail deve ter no máximo 254 caracteres")
+  .refine(
+    (value) => !COMMON_EMAIL_DOMAIN_TYPOS.has(value.toLowerCase().split("@")[1] ?? ""),
+    "Confira o domínio do e-mail. Pode haver um erro de digitação.",
+  );
 
 const formatCPF = (value: string): string => {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -78,6 +97,7 @@ const getNextPath = (): string | null => {
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
+  const [emailTouched, setEmailTouched] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -120,6 +140,12 @@ const Auth = () => {
   }, [passwordStrength]);
 
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
+
+  const emailValidation = useMemo(() => emailSchema.safeParse(email), [email]);
+  const isEmailValid = emailValidation.success;
+  const emailError = emailTouched && !emailValidation.success
+    ? emailValidation.error.issues[0]?.message
+    : undefined;
 
   const isClientFieldsValid = useMemo(() => {
     if (isLogin) return true;
@@ -325,6 +351,9 @@ const Auth = () => {
     
     if (!isLogin) {
       // REGISTRATION - Validate fields first
+      setEmailTouched(true);
+      if (!isEmailValid) return;
+
       if (!fullName.trim()) {
         toast({
           title: "Nome obrigatório",
@@ -627,7 +656,7 @@ const Auth = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <AnimatePresence mode="wait">
-              {!isLogin && (
+              {!isLogin && isEmailValid && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -700,14 +729,25 @@ const Auth = () => {
                   type="email"
                   placeholder="seu@email.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 h-12"
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (emailTouched) setEmailTouched(true);
+                  }}
+                  onBlur={() => setEmailTouched(true)}
+                  aria-invalid={Boolean(emailError)}
+                  aria-describedby={emailError ? "email-error" : undefined}
+                  className={`pl-10 h-12 ${emailError ? "border-destructive focus-visible:ring-destructive" : ""}`}
                   required
                 />
               </div>
+              {!isLogin && emailError && (
+                <p id="email-error" role="alert" className="text-xs text-destructive">
+                  {emailError}
+                </p>
+              )}
             </div>
 
-            <div className="space-y-2">
+            {(isLogin || isEmailValid) && <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -742,10 +782,10 @@ const Auth = () => {
                   <PasswordRequirement met={passwordStrength.hasSpecial} text="Um caractere especial" />
                 </motion.div>
               )}
-            </div>
+            </div>}
 
             <AnimatePresence mode="wait">
-              {!isLogin && (
+              {!isLogin && isEmailValid && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -782,7 +822,7 @@ const Auth = () => {
               )}
             </AnimatePresence>
 
-            {!isLogin && (
+            {!isLogin && isEmailValid && (
               <div className="flex items-start gap-2 pt-1">
                 <input
                   type="checkbox"
@@ -807,7 +847,7 @@ const Auth = () => {
             <Button
               type="submit"
               className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={loading || (!isLogin && !acceptedTerms)}
+              disabled={loading || (!isLogin && (!isEmailValid || !acceptedTerms))}
             >
               {loading ? (
                 <motion.div
@@ -831,6 +871,7 @@ const Auth = () => {
               type="button"
               onClick={() => {
                 setIsLogin(!isLogin);
+                setEmailTouched(false);
                 setPassword("");
                 setConfirmPassword("");
               }}
