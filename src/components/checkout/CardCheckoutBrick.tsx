@@ -93,6 +93,15 @@ const CardCheckoutBrick = ({
                 throw new Error("Você precisa estar logado para pagar");
               }
 
+              // Telefone cadastrado no perfil, usado pelo antifraude do
+              // Mercado Pago. Se a pessoa não tiver telefone salvo, fica
+              // undefined e o backend simplesmente não envia esse campo.
+              const { data: profile } = await supabase
+                .from("profiles")
+                .select("phone")
+                .eq("id", session.user.id)
+                .maybeSingle();
+
               const { data, error } = await supabase.functions.invoke(
                 "create-mercadopago-card-payment",
                 {
@@ -113,6 +122,7 @@ const CardCheckoutBrick = ({
                       identification: formData.payer.identification,
                       first_name: formData.payer.first_name,
                       last_name: formData.payer.last_name,
+                      phone: profile?.phone || undefined,
                     },
                     cardholder_name: formData.cardholderName || formData.payer?.first_name,
                     ...getStoredUtmParams(),
