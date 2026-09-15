@@ -176,14 +176,17 @@ const CardCheckoutBrick = ({
   }
 
   return (
-    <Card className="bg-card border-border">
+    <Card className="bg-card border-border overflow-hidden">
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
           <CreditCard className="w-5 h-5 text-primary" />
           Pagar com cartão
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      {/* Padding lateral reduzido no celular (px-3) para dar o máximo de
+          espaço possível ao formulário da Mercado Pago, que precisa de
+          largura mínima para não cortar campos como CPF/documento. */}
+      <CardContent className="px-3 sm:px-6">
         {loading && (
           <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -196,7 +199,13 @@ const CardCheckoutBrick = ({
             Processando pagamento...
           </div>
         )}
-        <div id="card-payment-brick-container" ref={containerRef} />
+        {/* Rolagem horizontal de segurança: se o formulário embutido da
+            Mercado Pago ainda assim precisar de mais largura do que a tela
+            oferece, ele desliza dentro desta caixa em vez de vazar por
+            cima do resto da página. */}
+        <div className="w-full overflow-x-auto">
+          <div id="card-payment-brick-container" ref={containerRef} />
+        </div>
       </CardContent>
     </Card>
   );
