@@ -94,6 +94,9 @@ const CardCheckoutBrick = ({
                 throw new Error("Você precisa estar logado para pagar");
               }
 
+              // Telefone cadastrado no perfil, usado pelo antifraude do
+              // Mercado Pago. Se a pessoa não tiver telefone salvo, fica
+              // undefined e o backend simplesmente não envia esse campo.
               const { data: profile } = await supabase
                 .from("profiles")
                 .select("phone")
@@ -129,6 +132,10 @@ const CardCheckoutBrick = ({
               );
 
               if (error) {
+                // supabase-js descarta o corpo da resposta em erros non-2xx
+                // e joga uma mensagem genérica ("non-2xx status code") por
+                // padrão. Precisa ler error.context pra pegar a mensagem
+                // real que o edge function mandou (ex: cooldown, esgotado).
                 let message = "Erro ao processar pagamento";
                 if (error instanceof FunctionsHttpError) {
                   try {
@@ -192,6 +199,9 @@ const CardCheckoutBrick = ({
           Pagar com cartão
         </CardTitle>
       </CardHeader>
+      {/* Padding lateral reduzido no celular (px-3) para dar o máximo de
+          espaço possível ao formulário da Mercado Pago, que precisa de
+          largura mínima para não cortar campos como CPF/documento. */}
       <CardContent className="px-3 sm:px-6">
         {loading && (
           <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">
@@ -205,6 +215,10 @@ const CardCheckoutBrick = ({
             Processando pagamento...
           </div>
         )}
+        {/* Rolagem horizontal de segurança: se o formulário embutido da
+            Mercado Pago ainda assim precisar de mais largura do que a tela
+            oferece, ele desliza dentro desta caixa em vez de vazar por
+            cima do resto da página. */}
         <div className="w-full overflow-x-auto">
           <div id="card-payment-brick-container" ref={containerRef} />
         </div>
