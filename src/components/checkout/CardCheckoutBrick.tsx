@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreditCard, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { getStoredUtmParams } from "@/lib/pixel-tracking";
 import { getDeviceFingerprint, getMpDeviceId } from "@/lib/device-fingerprint";
@@ -93,9 +94,6 @@ const CardCheckoutBrick = ({
                 throw new Error("Você precisa estar logado para pagar");
               }
 
-              // Telefone cadastrado no perfil, usado pelo antifraude do
-              // Mercado Pago. Se a pessoa não tiver telefone salvo, fica
-              // undefined e o backend simplesmente não envia esse campo.
               const { data: profile } = await supabase
                 .from("profiles")
                 .select("phone")
@@ -130,7 +128,18 @@ const CardCheckoutBrick = ({
                 }
               );
 
-              if (error) throw error;
+              if (error) {
+                let message = "Erro ao processar pagamento";
+                if (error instanceof FunctionsHttpError) {
+                  try {
+                    const body = await error.context.json();
+                    message = body?.error || message;
+                  } catch {
+                    // resposta não era JSON, mantém mensagem genérica
+                  }
+                }
+                throw new Error(message);
+              }
 
               if (data?.status === "approved") {
                 toast.success("Pagamento aprovado!");
@@ -183,9 +192,6 @@ const CardCheckoutBrick = ({
           Pagar com cartão
         </CardTitle>
       </CardHeader>
-      {/* Padding lateral reduzido no celular (px-3) para dar o máximo de
-          espaço possível ao formulário da Mercado Pago, que precisa de
-          largura mínima para não cortar campos como CPF/documento. */}
       <CardContent className="px-3 sm:px-6">
         {loading && (
           <div className="flex items-center justify-center py-12 text-muted-foreground gap-2">
@@ -199,10 +205,6 @@ const CardCheckoutBrick = ({
             Processando pagamento...
           </div>
         )}
-        {/* Rolagem horizontal de segurança: se o formulário embutido da
-            Mercado Pago ainda assim precisar de mais largura do que a tela
-            oferece, ele desliza dentro desta caixa em vez de vazar por
-            cima do resto da página. */}
         <div className="w-full overflow-x-auto">
           <div id="card-payment-brick-container" ref={containerRef} />
         </div>
