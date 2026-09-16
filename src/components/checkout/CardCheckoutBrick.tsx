@@ -218,8 +218,10 @@ const CardCheckoutBrick = ({
         {/* Rolagem horizontal de segurança: se o formulário embutido da
             Mercado Pago ainda assim precisar de mais largura do que a tela
             oferece, ele desliza dentro desta caixa em vez de vazar por
-            cima do resto da página. */}
-        <div className="w-full overflow-x-auto">
+            cima do resto da página. -mx-3 no celular cancela o padding do
+            CardContent só aqui, devolvendo esse espaço para o widget do
+            Mercado Pago; sm:mx-0 mantém o desktop como estava. */}
+        <div className="w-full overflow-x-auto -mx-3 sm:mx-0">
           <div id="card-payment-brick-container" ref={containerRef} />
         </div>
       </CardContent>
