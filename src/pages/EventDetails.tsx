@@ -578,6 +578,7 @@ const EventDetails = () => {
                           items={cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity }))}
                           payerEmail={userEmail}
                           purchaseProtection={purchaseProtection}
+                          address={address}
                           onSuccess={handleCardSuccess}
                         />
                       </>
