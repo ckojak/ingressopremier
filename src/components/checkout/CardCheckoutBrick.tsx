@@ -13,6 +13,16 @@ declare global {
   }
 }
 
+interface BillingAddress {
+  zip: string;
+  street: string;
+  number: string;
+  complement: string;
+  district: string;
+  city: string;
+  state: string;
+}
+
 interface CardCheckoutBrickProps {
   eventId: string;
   siteId: string;
@@ -21,6 +31,7 @@ interface CardCheckoutBrickProps {
   payerEmail: string;
   purchaseProtection?: boolean;
   couponCode?: string;
+  address: BillingAddress;
   onSuccess: (orderId: string) => void;
   onError?: (message: string) => void;
 }
@@ -35,6 +46,7 @@ const CardCheckoutBrick = ({
   payerEmail,
   purchaseProtection = false,
   couponCode,
+  address,
   onSuccess,
   onError,
 }: CardCheckoutBrickProps) => {
@@ -114,6 +126,7 @@ const CardCheckoutBrick = ({
                     items,
                     purchase_protection: purchaseProtection,
                     coupon_code: couponCode || undefined,
+                    billing_address: address,
                     token: formData.token,
                     payment_method_id: formData.payment_method_id,
                     issuer_id: formData.issuer_id,
