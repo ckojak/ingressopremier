@@ -46,6 +46,33 @@ import { EVENT_CATEGORIES, ADMIN_EMAILS } from "@/lib/constants";
 import { useSiteContext, getCurrentSiteConfig } from "@/hooks/useSiteContext";
 import { useInvalidateEvents } from "@/hooks/useEvents";
 
+// Brasil não tem mais horário de verão desde 2019, então -03:00 fixo é
+// seguro pra qualquer estado o ano inteiro.
+const BR_UTC_OFFSET = "-03:00";
+
+// "2026-10-03T21:00" (valor cru do input datetime-local, já no horário de
+// Brasília que o organizador digitou) -> "2026-10-03T21:00:00-03:00",
+// pronto pra o Postgres (coluna timestamptz) guardar o instante certo.
+function fromBrazilInputValue(localValue: string): string {
+  if (!localValue) return "";
+  return `${localValue}:00${BR_UTC_OFFSET}`;
+}
+
+// Timestamp UTC que vem do banco -> "2026-10-03T18:00" no horário de
+// Brasília, pro input datetime-local mostrar certo ao editar. Não depende
+// do fuso do navegador de quem está logado — sempre calcula em -03:00.
+function toBrazilInputValue(isoString: string): string {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+  const brDate = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  const yyyy = brDate.getUTCFullYear();
+  const mm = String(brDate.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(brDate.getUTCDate()).padStart(2, "0");
+  const hh = String(brDate.getUTCHours()).padStart(2, "0");
+  const min = String(brDate.getUTCMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
 const eventSchema = z.object({
   title: z.string().min(1, "Título é obrigatório").max(200, "Título deve ter no máximo 200 caracteres"),
   description: z.string().max(5000, "Descrição deve ter no máximo 5000 caracteres").optional().or(z.literal("")),
@@ -182,6 +209,9 @@ const Events = () => {
 
       const validatedData = validation.data;
 
+      const startDateISO = fromBrazilInputValue(validatedData.start_date);
+      const endDateISO = validatedData.end_date ? fromBrazilInputValue(validatedData.end_date) : null;
+
       if (editingEvent) {
         const { error } = await (supabase as any)
           .from("events")
@@ -189,8 +219,8 @@ const Events = () => {
             title: validatedData.title,
             description: validatedData.description || null,
             short_description: validatedData.short_description || null,
-            start_date: validatedData.start_date,
-            end_date: validatedData.end_date || null,
+            start_date: startDateISO,
+            end_date: endDateISO,
             venue_name: validatedData.venue_name || null,
             venue_address: validatedData.venue_address || null,
             city: validatedData.city || null,
@@ -215,8 +245,8 @@ const Events = () => {
             title: validatedData.title,
             description: validatedData.description || null,
             short_description: validatedData.short_description || null,
-            start_date: validatedData.start_date,
-            end_date: validatedData.end_date || null,
+            start_date: startDateISO,
+            end_date: endDateISO,
             venue_name: validatedData.venue_name || null,
             venue_address: validatedData.venue_address || null,
             city: validatedData.city || null,
@@ -376,8 +406,8 @@ const Events = () => {
       title: event.title,
       description: event.description || "",
       short_description: event.short_description || "",
-      start_date: event.start_date ? new Date(event.start_date).toISOString().slice(0, 16) : "",
-      end_date: event.end_date ? new Date(event.end_date).toISOString().slice(0, 16) : "",
+      start_date: event.start_date ? toBrazilInputValue(event.start_date) : "",
+      end_date: event.end_date ? toBrazilInputValue(event.end_date) : "",
       venue_name: event.venue_name || "",
       venue_address: event.venue_address || "",
       city: event.city || "",
