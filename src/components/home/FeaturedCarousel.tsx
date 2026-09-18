@@ -95,9 +95,9 @@ const FeaturedCarousel = () => {
               <CarouselItem key={event.id}>
                 <Link to={`/evento/${event.id}`} className="group block">
                   <div className="relative rounded-3xl overflow-hidden aspect-[21/9] md:aspect-[3/1] border border-border/30 shadow-premium">
-                    {event.image_url ? (
+                    {(event.banner_url || event.image_url) ? (
                       <img
-                        src={event.image_url}
+                        src={event.banner_url || event.image_url}
                         alt={event.title}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                       />

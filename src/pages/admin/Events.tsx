@@ -85,6 +85,7 @@ const eventSchema = z.object({
   state: z.string().max(50, "Estado deve ter no máximo 50 caracteres").optional().or(z.literal("")),
   category: z.string().max(100, "Categoria deve ter no máximo 100 caracteres").optional().or(z.literal("")),
   image_url: z.string().url("URL da imagem inválida").optional().or(z.literal("")),
+  banner_url: z.string().url("URL do banner inválida").optional().or(z.literal("")),
   website: z.string().url("URL do site inválida").optional().or(z.literal("")),
   contact: z.string().max(200, "Contato deve ter no máximo 200 caracteres").optional().or(z.literal("")),
   status: z.enum(["draft", "pending", "published", "cancelled", "completed"]),
@@ -137,6 +138,7 @@ const Events = () => {
     state: "",
     category: "",
     image_url: "",
+    banner_url: "",
     website: "",
     contact: "",
     status: "draft" as "draft" | "pending" | "published" | "cancelled" | "completed",
@@ -227,6 +229,7 @@ const Events = () => {
             state: validatedData.state || null,
             category: validatedData.category || null,
             image_url: validatedData.image_url || null,
+            banner_url: validatedData.banner_url || null,
             website: validatedData.website || null,
             contact: validatedData.contact || null,
             status: validatedData.status as any,
@@ -253,6 +256,7 @@ const Events = () => {
             state: validatedData.state || null,
             category: validatedData.category || null,
             image_url: validatedData.image_url || null,
+            banner_url: validatedData.banner_url || null,
             website: validatedData.website || null,
             contact: validatedData.contact || null,
             status: validatedData.status as any,
@@ -414,6 +418,7 @@ const Events = () => {
       state: event.state || "",
       category: event.category || "",
       image_url: event.image_url || "",
+      banner_url: event.banner_url || "",
       website: (event as any).website || "",
       contact: (event as any).contact || "",
       status: (event.status === "rejected" ? "draft" : event.status) || "draft",
@@ -437,6 +442,7 @@ const Events = () => {
       state: "",
       category: "",
       image_url: "",
+      banner_url: "",
       website: "",
       contact: "",
       status: "draft",
@@ -695,11 +701,25 @@ const Events = () => {
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Imagem do Evento</Label>
+                  <Label>Imagem do Card (listagem)</Label>
                   <ImageUpload
                     value={formData.image_url}
                     onChange={(url) => setFormData({ ...formData, image_url: url })}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Formato paisagem 16:10 — recomendado 1200x750px
+                  </p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Imagem de Destaque (Banner)</Label>
+                  <ImageUpload
+                    value={formData.banner_url}
+                    onChange={(url) => setFormData({ ...formData, banner_url: url })}
+                    folder="events-banner"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Formato bem largo (panorâmico) — usado no carrossel de destaque da home e no topo da página do evento. Recomendado 1920x640px. Se não enviar, o sistema usa a imagem do card acima (cortada, pode ficar ruim).
+                  </p>
                 </div>
 
                 {/* Destaque na home */}
