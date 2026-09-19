@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft, Lock, CreditCard, Ticket, Tag, X, Check, QrCode } from "lucide-react";
+import { ShoppingCart, Trash2, Plus, Minus, ArrowLeft, Lock, CreditCard, Ticket, Tag, X, Check, QrCode, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -36,6 +36,7 @@ const Cart = () => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [processingPix, setProcessingPix] = useState(false);
+  const [processingFree, setProcessingFree] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [showCardForm, setShowCardForm] = useState(false);
   
@@ -264,6 +265,7 @@ const Cart = () => {
   const subtotalAfterDiscount = subtotal - discount;
   const serviceFee = subtotalAfterDiscount * SERVICE_FEE_PERCENTAGE;
   const total = subtotalAfterDiscount + serviceFee;
+  const allComplimentary = cartItems.length > 0 && cartItems.every(item => item.ticketType.is_complimentary === true);
 
   const getFirstEventGroup = () => {
     const eventGroups = cartItems.reduce((acc, item) => {
@@ -325,6 +327,51 @@ const Cart = () => {
       toast.error(error.message || "Erro ao processar pagamento PIX");
     } finally {
       setProcessingPix(false);
+    }
+  };
+
+  const handleClaimFree = async () => {
+    if (cartItems.length === 0) {
+      toast.error("Seu carrinho está vazio");
+      return;
+    }
+    if (!user) {
+      toast.info("Faça login para pegar seu ingresso");
+      navigate("/auth", { state: { from: location.pathname } });
+      return;
+    }
+
+    setProcessingFree(true);
+    try {
+      const { eventId: firstEventId, items } = getFirstEventGroup();
+
+      const { data, error } = await supabase.functions.invoke("create-free-ticket", {
+        body: {
+          event_id: firstEventId,
+          site_id: siteId,
+          items: items.map(item => ({
+            ticket_type_id: item.ticketType.id,
+            quantity: item.quantity,
+          })),
+        },
+      });
+
+      if (error) {
+        console.error("Free ticket error:", error);
+        throw new Error("Não foi possível gerar seu ingresso. Tente novamente.");
+      }
+
+      if (data?.success) {
+        localStorage.removeItem("cart");
+        navigate(`/checkout/status?order_id=${data.order_id}&status=success`);
+      } else {
+        throw new Error(data?.error || "Erro ao gerar ingresso");
+      }
+    } catch (error: any) {
+      console.error("Free ticket error:", error);
+      toast.error(error.message || "Erro ao gerar seu ingresso");
+    } finally {
+      setProcessingFree(false);
     }
   };
 
@@ -613,32 +660,46 @@ const Cart = () => {
                       <div className="flex justify-between items-center pt-2">
                         <span className="font-semibold text-foreground text-lg">Total</span>
                         <span className="text-2xl font-bold text-gradient">
-                          R$ {total.toFixed(2)}
+                           {allComplimentary ? "Grátis" : `R$ ${total.toFixed(2)}`}
                         </span>
                       </div>
 
                       {!showCardForm && (
                         <div className="space-y-3 pt-2">
-                          <Button
-                            className="w-full gap-2 bg-secondary hover:bg-secondary/80 min-h-[48px] text-base"
-                            size="lg"
-                            onClick={handlePixCheckout}
-                            disabled={processingPix}
-                            variant="secondary"
-                          >
-                            <QrCode className="w-5 h-5" />
-                            {processingPix ? "Gerando PIX..." : "Pagar com PIX"}
-                          </Button>
+                           {allComplimentary ? (
+                             <Button
+                               className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow min-h-[52px] text-base font-semibold"
+                               size="lg"
+                               onClick={handleClaimFree}
+                               disabled={processingFree}
+                             >
+                               <Gift className="w-5 h-5" />
+                               {processingFree ? "Gerando ingresso..." : "Pegar meu Ingresso"}
+                             </Button>
+                           ) : (
+                             <>
+                               <Button
+                                 className="w-full gap-2 bg-secondary hover:bg-secondary/80 min-h-[48px] text-base"
+                                 size="lg"
+                                 onClick={handlePixCheckout}
+                                 disabled={processingPix}
+                                 variant="secondary"
+                               >
+                                 <QrCode className="w-5 h-5" />
+                                 {processingPix ? "Gerando PIX..." : "Pagar com PIX"}
+                               </Button>
 
-                          <Button
-                            className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow min-h-[52px] text-base font-semibold"
-                            size="lg"
-                            onClick={handleShowCardForm}
-                            disabled={processingPix}
-                          >
-                            <CreditCard className="w-5 h-5" />
-                            Pagar com Cartão
-                          </Button>
+                               <Button
+                                 className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow min-h-[52px] text-base font-semibold"
+                                 size="lg"
+                                 onClick={handleShowCardForm}
+                                 disabled={processingPix}
+                               >
+                                 <CreditCard className="w-5 h-5" />
+                                 Pagar com Cartão
+                               </Button>
+                             </>
+                           )}
                         </div>
                       )}
 
