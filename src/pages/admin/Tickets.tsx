@@ -47,6 +47,7 @@ const ticketSchema = z.object({
   quantity_available: z.string().refine((val) => !isNaN(parseInt(val)) && parseInt(val) > 0, "Quantidade deve ser um número inteiro maior que 0"),
   max_per_order: z.string().refine((val) => !isNaN(parseInt(val)) && parseInt(val) > 0 && parseInt(val) <= 100, "Máximo por pedido deve estar entre 1 e 100"),
   is_active: z.boolean(),
+  is_complimentary: z.boolean(),
 });
 
 const ticketUpdateSchema = ticketSchema.omit({ event_id: true });
@@ -73,6 +74,7 @@ const Tickets = () => {
     quantity_available: "",
     max_per_order: "10",
     is_active: true,
+    is_complimentary: false,
   });
 
   const fetchData = async () => {
@@ -115,6 +117,15 @@ const Tickets = () => {
     setFormData({ ...formData, price: formatted });
   };
 
+  const handleTypeChange = (value: string) => {
+    const isComp = value === "cortesia";
+    setFormData({
+      ...formData,
+      is_complimentary: isComp,
+      price: isComp ? "0,00" : formData.price,
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -140,7 +151,7 @@ const Tickets = () => {
     }
 
     try {
-      const priceValue = parseCurrencyBRL(formData.price);
+      const priceValue = formData.is_complimentary ? 0 : parseCurrencyBRL(formData.price);
 
       if (editingTicket) {
         const { error } = await supabase
@@ -149,6 +160,7 @@ const Tickets = () => {
             name: formData.name,
             description: formData.description || null,
             price: priceValue,
+            is_complimentary: formData.is_complimentary,
             quantity_available: parseInt(formData.quantity_available),
             max_per_order: parseInt(formData.max_per_order),
             is_active: formData.is_active,
@@ -165,6 +177,7 @@ const Tickets = () => {
             name: formData.name,
             description: formData.description || null,
             price: priceValue,
+            is_complimentary: formData.is_complimentary,
             quantity_available: parseInt(formData.quantity_available),
             max_per_order: parseInt(formData.max_per_order),
             is_active: formData.is_active,
@@ -223,6 +236,7 @@ const Tickets = () => {
       quantity_available: ticket.quantity_available.toString(),
       max_per_order: (ticket.max_per_order || 10).toString(),
       is_active: ticket.is_active ?? true,
+      is_complimentary: ticket.is_complimentary ?? false,
     });
     setDialogOpen(true);
   };
@@ -236,6 +250,7 @@ const Tickets = () => {
       quantity_available: "",
       max_per_order: "10",
       is_active: true,
+      is_complimentary: false,
     });
   };
 
@@ -306,6 +321,21 @@ const Tickets = () => {
                   required
                 />
               </div>
+               <div className="space-y-2">
+                 <Label>Tipo de Ingresso *</Label>
+                 <Select
+                   value={formData.is_complimentary ? "cortesia" : "venda"}
+                   onValueChange={handleTypeChange}
+                 >
+                   <SelectTrigger>
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="venda">Venda</SelectItem>
+                     <SelectItem value="cortesia">Cortesia (gratuito)</SelectItem>
+                   </SelectContent>
+                 </Select>
+               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Descrição</Label>
                 <Textarea
@@ -329,6 +359,7 @@ const Tickets = () => {
                       placeholder="0,00"
                       className="pl-10"
                       required
+                       disabled={formData.is_complimentary}
                     />
                   </div>
                 </div>
@@ -428,9 +459,14 @@ const Tickets = () => {
                             <p className="text-xs text-muted-foreground">{ticket.event?.title}</p>
                           </div>
                         </div>
-                        <Badge variant={ticket.is_active ? "default" : "secondary"}>
-                          {ticket.is_active ? "Ativo" : "Inativo"}
-                        </Badge>
+                        <div className="flex flex-wrap justify-end gap-1">
+                          {ticket.is_complimentary && (
+                            <Badge variant="outline" className="border-primary/50 text-primary">Cortesia</Badge>
+                          )}
+                          <Badge variant={ticket.is_active ? "default" : "secondary"}>
+                            {ticket.is_active ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
