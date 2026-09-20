@@ -36,6 +36,8 @@ import {
 type Event = Tables<"events">;
 type TicketType = Tables<"ticket_types">;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface CartItem {
   ticketType: TicketType;
   quantity: number;
@@ -90,7 +92,10 @@ const getEventLocation = (event: Event) => {
 };
 
 const EventDetails = () => {
-  const { id } = useParams();
+  const { id: routeParam } = useParams();
+  const [id, setId] = useState<string | undefined>(
+    routeParam && UUID_RE.test(routeParam) ? routeParam : undefined
+  );
   const navigate = useNavigate();
   const location = useLocation();
   const { siteId } = useSiteContext();
@@ -115,6 +120,35 @@ const EventDetails = () => {
   const [showCardForm, setShowCardForm] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [checkoutRestored, setCheckoutRestored] = useState(false);
+
+  // Descobre o id do evento: o link pode ter o número antigo ou o nome novo.
+  useEffect(() => {
+    if (!routeParam) return;
+    if (UUID_RE.test(routeParam)) {
+      setId(routeParam);
+      return;
+    }
+    let cancelado = false;
+    supabase
+      .from("events")
+      .select("id")
+      .eq("slug", routeParam)
+      .eq("status", "published")
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelado) return;
+        if (data?.id) setId(data.id);
+        else setLoading(false);
+      });
+    return () => { cancelado = true; };
+  }, [routeParam]);
+
+  // Link antigo (número) troca sozinho para o link com o nome do evento.
+  useEffect(() => {
+    if (!event?.slug || !routeParam) return;
+    if (!UUID_RE.test(routeParam) || routeParam !== event.id) return;
+    navigate(`/evento/${event.slug}${location.search}${location.hash}`, { replace: true });
+  }, [event, routeParam]);
 
   useEffect(() => {
     // Guarda o UTM do link do anúncio (se veio um agora) assim que a pessoa
@@ -339,7 +373,7 @@ const EventDetails = () => {
   if (loading) return <EventDetailsSkeleton />;
   if (!event) return null;
 
-  const eventUrl = `https://premierpass.com.br/evento/${event.id}`;
+  const eventUrl = `https://premierpass.com.br/evento/${event.slug || event.id}`;
   const metaDescription = (event.description || `Compre ingressos para ${event.title} no PremierPass com segurança e entrega digital imediata.`).slice(0, 155);
   const lowestPrice = ticketTypes.length
     ? Math.min(...ticketTypes.map((t) => Number(t.price)))
