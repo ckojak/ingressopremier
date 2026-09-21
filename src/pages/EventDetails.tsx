@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, Flame, CreditCard, ShieldCheck, Lock, Building2, Info } from "lucide-react";
+import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, Flame, CreditCard, ShieldCheck, Lock, Building2, Info, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -106,6 +106,7 @@ const EventDetails = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [processingPix, setProcessingPix] = useState(false);
+  const [processingFree, setProcessingFree] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix");
 
   const [customerName, setCustomerName] = useState("");
@@ -263,6 +264,13 @@ const EventDetails = () => {
   const protectionFee = purchaseProtection ? 3 : 0;
   const totalAmount = Math.round((subtotal + serviceFee + protectionFee) * 100) / 100;
 
+  // Detecta se o carrinho é 100% cortesia: pula PIX/Cartão/CPF/endereço e
+  // manda direto pra create-free-ticket (mesma trava de segurança já existe
+  // no backend: só libera se is_complimentary=true e price=0).
+  const isFreeCart = cart.length > 0 && cart.every(
+    (item) => item.ticketType.is_complimentary === true && Number(item.ticketType.price) === 0
+  );
+
   const cpfValidationError = cpfTouched ? cpfError(customerCpf) : null;
 
   // Dispara "início de checkout" pro pixel/analytics do produtor deste evento
@@ -362,6 +370,45 @@ const EventDetails = () => {
       setShowCardForm(true);
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const handleClaimFree = async () => {
+    if (cart.length === 0) {
+      toast.error("Selecione um ingresso");
+      return;
+    }
+
+    trackInitiateCheckout();
+    setProcessingFree(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return navigate("/auth", { state: { from: location.pathname } });
+
+      const { data, error } = await supabase.functions.invoke("create-free-ticket", {
+        body: {
+          event_id: id,
+          site_id: siteId,
+          customer_name: customerName.trim() || undefined,
+          items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
+        },
+      });
+
+      if (error) {
+        console.error("Free ticket error:", error);
+        throw new Error("Não foi possível gerar seu ingresso. Tente novamente.");
+      }
+
+      if (data?.success) {
+        if (id) localStorage.removeItem(`event_checkout_${id}`);
+        navigate(`/checkout/status?order_id=${data.order_id}&status=success`);
+      } else {
+        throw new Error(data?.error || "Erro ao gerar ingresso");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao gerar seu ingresso");
+    } finally {
+      setProcessingFree(false);
     }
   };
 
@@ -541,7 +588,7 @@ const EventDetails = () => {
           <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
             <Card className="bg-card/80 backdrop-blur-sm border-border">
               <CardHeader><CardTitle className="flex items-center gap-2"><Ticket className="w-5 h-5 text-primary" /> Ingressos</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3 sm:space-y-4">
                 {ticketTypes.length === 0 && (
                   <Alert>
                     <AlertTriangle className="w-4 h-4" />
@@ -560,7 +607,7 @@ const EventDetails = () => {
                   return (
                     <div
                       key={ticket.id}
-                      className={`p-4 rounded-lg flex justify-between items-center gap-3 border transition-colors ${
+                      className={`p-3 sm:p-4 rounded-lg flex justify-between items-center gap-2 sm:gap-3 border transition-colors ${
                         soldOut
                           ? "border-transparent bg-muted/40 opacity-70"
                           : cart[0]?.ticketType.id === ticket.id
@@ -569,12 +616,14 @@ const EventDetails = () => {
                       }`}
                     >
                       <div className="min-w-0">
-                        <h3 className="font-semibold">{ticket.name}</h3>
-                        <p className="text-primary font-bold">R$ {Number(ticket.price).toFixed(2)}</p>
+                        <h3 className="font-semibold text-sm sm:text-base">{ticket.name}</h3>
+                        <p className="text-primary font-bold text-sm sm:text-base">
+                          {ticket.is_complimentary && Number(ticket.price) === 0 ? "Grátis" : `R$ ${Number(ticket.price).toFixed(2)}`}
+                        </p>
                         {soldOut ? (
-                          <Badge variant="secondary" className="mt-2 text-[11px]">Esgotado</Badge>
+                          <Badge variant="secondary" className="mt-1.5 sm:mt-2 text-[11px]">Esgotado</Badge>
                         ) : isLow ? (
-                          <Badge className="mt-2 text-[11px] bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30 gap-1">
+                          <Badge className="mt-1.5 sm:mt-2 text-[11px] bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30 gap-1">
                             <Flame className="w-3 h-3" />
                             {remaining <= 5 ? "Últimas unidades!" : `Restam ${remaining} ingressos`}
                           </Badge>
@@ -583,6 +632,7 @@ const EventDetails = () => {
                       <Button
                         variant="outline"
                         size="sm"
+                        className="shrink-0"
                         disabled={soldOut}
                         onClick={() => setCart([{ ticketType: ticket, quantity: 1 }])}
                       >
@@ -615,6 +665,31 @@ const EventDetails = () => {
                           address={address}
                           onSuccess={handleCardSuccess}
                         />
+                      </>
+                    ) : isFreeCart ? (
+                      <>
+                        <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-3">
+                          <p className="text-xs font-bold text-primary uppercase">Dados do Comprador (opcional)</p>
+                          <Input
+                            placeholder="Nome Completo"
+                            value={customerName}
+                            onChange={(e) => setCustomerName(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="flex justify-between font-bold text-lg">
+                          <span>Total</span>
+                          <span className="text-primary">Grátis</span>
+                        </div>
+
+                        <Button
+                          className="w-full gap-2 min-h-[48px]"
+                          onClick={handleClaimFree}
+                          disabled={processingFree}
+                        >
+                          <Gift className="w-5 h-5" />
+                          {processingFree ? "Gerando ingresso..." : "Pegar Cortesia"}
+                        </Button>
                       </>
                     ) : (
                       <>
