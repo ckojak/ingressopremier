@@ -1,13 +1,20 @@
-# Ingresso cortesia sem pagamento
+# Seleção por quantidade e avanço de lotes
 
 ## Implementação
-- Criar a função `create-free-ticket` com autenticação, validação de que todos os itens são cortesias de preço zero, reserva de estoque, pedido pago de valor zero, geração dos ingressos e envio do e-mail existente.
-- Adicionar ao painel de ingressos a escolha entre venda e cortesia, zerando e bloqueando o preço para cortesias e exibindo a identificação correspondente na listagem.
-- No carrinho, reconhecer compras compostas somente por cortesias, mostrar total grátis e substituir PIX/cartão pelo botão “Pegar meu Ingresso”, mantendo o retorno após login.
+- Alterar somente a área de ingressos em `EventDetails.tsx`, mantendo o restante da página e os fluxos PIX/cartão intactos.
+- Trocar “Selecionar” por controles `− quantidade +`, com mínimo 0 e máximo igual ao menor entre estoque restante, limite do lote e 10 por compra.
+- Agrupar lotes pelo nome-base do ingresso, reconhecendo sufixos usuais como “1º lote”, “Lote 2” e variações; exibir apenas o menor lote com estoque. Ingressos sem indicação de lote, como Camarote, permanecem cards únicos.
+- Quando todos os lotes de um tipo acabarem, manter um único card desabilitado como “Esgotado”.
+- Exibir “🔥 Últimas unidades” abaixo do preço em todos os cards visíveis.
+- Atualizar os estoques periodicamente e reconciliar o carrinho: reduzir quantidades acima do novo saldo, remover itens zerados e avisar o comprador.
+
+## Segurança e atualização antes da compra
+- Antes de iniciar PIX, cartão ou cortesia, buscar novamente os lotes selecionados e validar quantidade, atividade e estoque.
+- Se houver mudança, interromper a ação, atualizar os cards/carrinho e mostrar um aviso; a reserva atômica já existente no servidor continua sendo a proteção final contra venda acima do estoque.
 
 ## Validação
-- Conferir tipos e compilação do frontend sem alterar checkout pago, PIX, cartão, webhook, banco ou ambiente.
-- Validar que a função recusa tipos pagos e só conclui pedidos integralmente gratuitos.
+- Conferir seleção de múltiplos tipos, limite de 10, cálculo quantidade × preço, troca automática de lote, estado esgotado e restauração da compra salva.
+- Verificar a tela em computador e celular, sem editar funções de pagamento, webhook, banco ou outros layouts.
 
-## Limite de publicação
-- O código será preparado no projeto, mas a função não será publicada enquanto a conexão disponível apontar para o projeto interno incorreto. O `.env` também está divergente e permanecerá intocado conforme solicitado.
+## Premissa
+- O tipo será obtido removendo apenas a indicação numérica de lote do nome; nomes sem essa indicação serão tratados como tipos independentes.
