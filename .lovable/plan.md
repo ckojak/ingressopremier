@@ -1,20 +1,23 @@
-# Seleção por quantidade e avanço de lotes
+# Ingressos por lote e KYC administrativo
 
-## Implementação
-- Alterar somente a área de ingressos em `EventDetails.tsx`, mantendo o restante da página e os fluxos PIX/cartão intactos.
-- Trocar “Selecionar” por controles `− quantidade +`, com mínimo 0 e máximo igual ao menor entre estoque restante, limite do lote e 10 por compra.
-- Agrupar lotes pelo nome-base do ingresso, reconhecendo sufixos usuais como “1º lote”, “Lote 2” e variações; exibir apenas o menor lote com estoque. Ingressos sem indicação de lote, como Camarote, permanecem cards únicos.
-- Quando todos os lotes de um tipo acabarem, manter um único card desabilitado como “Esgotado”.
-- Exibir “🔥 Últimas unidades” abaixo do preço em todos os cards visíveis.
-- Atualizar os estoques periodicamente e reconciliar o carrinho: reduzir quantidades acima do novo saldo, remover itens zerados e avisar o comprador.
+## Tela de ingressos
+- Trocar “Selecionar” por controles `− quantidade +`, entre zero e o menor valor entre estoque restante, limite do lote e 10.
+- Agrupar nomes com indicação numérica de lote e mostrar apenas o primeiro lote com estoque; itens sem lote, como Camarote, permanecem independentes.
+- Quando um lote acabar, atualizar silenciosamente a lista e exibir o próximo; quando o tipo inteiro acabar, manter um card “Esgotado”.
+- Mostrar “🔥 Últimas unidades” em todos os cards visíveis e manter o total baseado em quantidade × preço.
+- Antes de PIX, cartão ou cortesia, consultar novamente os itens e interromper com aviso se o estoque mudou. A reserva atômica existente no servidor continuará como proteção final, sem alterações no pagamento.
 
-## Segurança e atualização antes da compra
-- Antes de iniciar PIX, cartão ou cortesia, buscar novamente os lotes selecionados e validar quantidade, atividade e estoque.
-- Se houver mudança, interromper a ação, atualizar os cards/carrinho e mostrar um aviso; a reserva atômica já existente no servidor continua sendo a proteção final contra venda acima do estoque.
+## KYC administrativo
+- Buscar todas as verificações pendentes, independentemente do status dos eventos, junto dos dados do produtor.
+- Criar a seção “Verificações de Identidade” com abertura do documento, aprovação e recusa com motivo, reutilizando as ações existentes.
+- Preservar a lista e o comportamento atuais dos eventos pendentes.
 
-## Validação
-- Conferir seleção de múltiplos tipos, limite de 10, cálculo quantidade × preço, troca automática de lote, estado esgotado e restauração da compra salva.
-- Verificar a tela em computador e celular, sem editar funções de pagamento, webhook, banco ou outros layouts.
+## Notificações
+- Adicionar funções e gatilhos para criar alertas administrativos quando um documento entra em análise e quando um evento é enviado para aprovação.
+- Não alterar regras de acesso existentes.
 
-## Premissa
-- O tipo será obtido removendo apenas a indicação numérica de lote do nome; nomes sem essa indicação serão tratados como tipos independentes.
+## Validação e limites
+- Testar os controles, avanço de lote e estados esgotados em computador e celular.
+- Conferir a nova seção administrativa e validar os gatilhos.
+- Não editar `.env`, telas de criação de evento, painel do produtor, PIX, cartão ou webhook.
+- Só aplicar a mudança do banco se a conexão confirmada for a de produção correta; caso contrário, interromper essa etapa e avisar.
