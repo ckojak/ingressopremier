@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, Flame, CreditCard, ShieldCheck, Lock, Building2, Info, Gift } from "lucide-react";
+import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, CreditCard, ShieldCheck, Lock, Building2, Info, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,52 @@ type Event = Tables<"events">;
 type TicketType = Tables<"ticket_types">;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PURCHASE_LIMIT = 10;
+
+const getRemaining = (ticket: TicketType) => Math.max(
+  Number(ticket.quantity_available ?? 0) - Number(ticket.quantity_sold ?? 0),
+  0
+);
+
+const getLotInfo = (ticket: TicketType) => {
+  const numberedLot = ticket.name.match(/\b(\d+)\s*(?:º|°|ª|o)?\s*lote\b/i);
+  const reversedLot = ticket.name.match(/\blote\s*(\d+)\b/i);
+  const match = numberedLot || reversedLot;
+
+  if (!match) return { groupKey: `single:${ticket.id}`, lotNumber: null as number | null };
+
+  const baseName = ticket.name
+    .replace(/\b\d+\s*(?:º|°|ª|o)?\s*lote\b/i, "")
+    .replace(/\blote\s*\d+\b/i, "")
+    .replace(/\s*[-–—|]\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+
+  return {
+    groupKey: `lot:${baseName || "ingresso"}`,
+    lotNumber: Number(match[1]),
+  };
+};
+
+const getVisibleTickets = (tickets: TicketType[]) => {
+  const groups = new Map<string, Array<{ ticket: TicketType; lotNumber: number | null }>>();
+
+  tickets.forEach((ticket) => {
+    const info = getLotInfo(ticket);
+    const current = groups.get(info.groupKey) || [];
+    current.push({ ticket, lotNumber: info.lotNumber });
+    groups.set(info.groupKey, current);
+  });
+
+  return Array.from(groups.values()).map((group) => {
+    const sorted = [...group].sort((a, b) =>
+      (a.lotNumber ?? Number.MAX_SAFE_INTEGER) - (b.lotNumber ?? Number.MAX_SAFE_INTEGER)
+      || a.ticket.position - b.ticket.position
+    );
+    return sorted.find(({ ticket }) => getRemaining(ticket) > 0)?.ticket || sorted[sorted.length - 1].ticket;
+  });
+};
 
 interface CartItem {
   ticketType: TicketType;
@@ -103,6 +149,7 @@ const EventDetails = () => {
   const [event, setEvent] = useState<Event | null>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const cartRef = useRef<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [processingPix, setProcessingPix] = useState(false);
@@ -121,6 +168,79 @@ const EventDetails = () => {
   const [showCardForm, setShowCardForm] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [checkoutRestored, setCheckoutRestored] = useState(false);
+
+  const reconcileCartWithStock = (freshTickets: TicketType[], notifyChanges = false) => {
+    let changed = false;
+    const reconciledCart = cartRef.current.flatMap((item) => {
+      const freshTicket = freshTickets.find((ticket) => ticket.id === item.ticketType.id);
+      if (!freshTicket || !freshTicket.is_active) {
+        changed = true;
+        return [];
+      }
+
+      const maxAllowed = Math.min(
+        getRemaining(freshTicket),
+        freshTicket.max_per_order || PURCHASE_LIMIT,
+        PURCHASE_LIMIT
+      );
+      const nextQuantity = Math.min(item.quantity, maxAllowed);
+      if (nextQuantity !== item.quantity) changed = true;
+      return nextQuantity > 0 ? [{ ticketType: freshTicket, quantity: nextQuantity }] : [];
+    });
+
+    cartRef.current = reconciledCart;
+    setCart(reconciledCart);
+
+    if (changed && notifyChanges) {
+      toast.error("O estoque mudou. Atualizamos sua seleção antes de continuar.");
+    }
+    return changed;
+  };
+
+  const fetchLatestTickets = async (notifyChanges = false) => {
+    if (!id) return null;
+    const { data, error } = await supabase
+      .from("ticket_types")
+      .select("*")
+      .eq("event_id", id)
+      .eq("is_active", true)
+      .order("position", { ascending: true });
+    if (error) return null;
+    const freshTickets = data || [];
+    setTicketTypes(freshTickets);
+    const changed = reconcileCartWithStock(freshTickets, notifyChanges);
+    return { freshTickets, changed };
+  };
+
+  const updateQuantity = (ticket: TicketType, delta: number) => {
+    setCart((current) => {
+      const existing = current.find((item) => item.ticketType.id === ticket.id);
+      const currentQuantity = existing?.quantity || 0;
+      const otherQuantity = current.reduce(
+        (sum, item) => item.ticketType.id === ticket.id ? sum : sum + item.quantity,
+        0
+      );
+      const maxAllowed = Math.min(
+        getRemaining(ticket),
+        ticket.max_per_order || PURCHASE_LIMIT,
+        Math.max(PURCHASE_LIMIT - otherQuantity, 0)
+      );
+      const nextQuantity = Math.max(0, Math.min(currentQuantity + delta, maxAllowed));
+      const withoutTicket = current.filter((item) => item.ticketType.id !== ticket.id);
+      const nextCart = nextQuantity > 0 ? [...withoutTicket, { ticketType: ticket, quantity: nextQuantity }] : withoutTicket;
+      cartRef.current = nextCart;
+      return nextCart;
+    });
+  };
+
+  const validateLatestStock = async () => {
+    const result = await fetchLatestTickets(true);
+    if (!result) {
+      toast.error("Não foi possível confirmar o estoque. Tente novamente.");
+      return false;
+    }
+    return !result.changed;
+  };
 
   // Descobre o id do evento: o link pode ter o número antigo ou o nome novo.
   useEffect(() => {
@@ -161,7 +281,7 @@ const EventDetails = () => {
       try {
         const { data: eventData } = await supabase.from("events").select("*").eq("id", id).eq("status", "published").single();
         if (eventData) setEvent(eventData);
-        const { data: ticketsData } = await supabase.from("ticket_types").select("*").eq("event_id", id).eq("is_active", true).order("price", { ascending: true });
+        const { data: ticketsData } = await supabase.from("ticket_types").select("*").eq("event_id", id).eq("is_active", true).order("position", { ascending: true });
         const availableTickets = ticketsData || [];
         setTicketTypes(availableTickets);
 
@@ -175,6 +295,7 @@ const EventDetails = () => {
                 ? [{ ticketType, quantity: item.quantity }]
                 : [];
             });
+            cartRef.current = restoredCart;
             setCart(restoredCart);
             setCustomerName(typeof saved.customerName === "string" ? saved.customerName : "");
             setCustomerCpf(typeof saved.customerCpf === "string" ? saved.customerCpf : "");
@@ -193,6 +314,14 @@ const EventDetails = () => {
       }
     };
     fetchEventDetails();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const intervalId = window.setInterval(() => {
+      void fetchLatestTickets(true);
+    }, 5000);
+    return () => window.clearInterval(intervalId);
   }, [id]);
 
   useEffect(() => {
@@ -320,6 +449,7 @@ const EventDetails = () => {
 
   const handlePixCheckout = async () => {
     if (!validateCustomerData()) return;
+    if (!(await validateLatestStock())) return;
 
     trackInitiateCheckout();
     setProcessingPix(true);
@@ -359,6 +489,7 @@ const EventDetails = () => {
 
   const handleCardCheckout = async () => {
     if (!validateCustomerData()) return;
+    if (!(await validateLatestStock())) return;
 
     trackInitiateCheckout();
     setProcessing(true);
@@ -378,6 +509,7 @@ const EventDetails = () => {
       toast.error("Selecione um ingresso");
       return;
     }
+    if (!(await validateLatestStock())) return;
 
     trackInitiateCheckout();
     setProcessingFree(true);
@@ -430,6 +562,7 @@ const EventDetails = () => {
   const eventTime = formatEventTime(event);
   const eventLocation = getEventLocation(event);
   const online = isOnlineEvent(event);
+  const visibleTickets = getVisibleTickets(ticketTypes);
 
   const eventSchema = {
     "@context": "https://schema.org",
@@ -596,13 +729,20 @@ const EventDetails = () => {
                     <AlertDescription>Não há lotes ativos para este evento no momento.</AlertDescription>
                   </Alert>
                 )}
-                {ticketTypes.map(ticket => {
+                {visibleTickets.map(ticket => {
                   const total = Number(ticket.quantity_available ?? 0);
-                  const sold = Number(ticket.quantity_sold ?? 0);
-                  const remaining = Math.max(total - sold, 0);
+                  const remaining = getRemaining(ticket);
                   const soldOut = remaining <= 0;
-                  const threshold = Math.min(total * 0.15, 20);
-                  const isLow = !soldOut && total > 0 && remaining <= threshold;
+                  const selectedQuantity = cart.find((item) => item.ticketType.id === ticket.id)?.quantity || 0;
+                  const otherQuantity = cart.reduce(
+                    (sum, item) => item.ticketType.id === ticket.id ? sum : sum + item.quantity,
+                    0
+                  );
+                  const maxAllowed = Math.min(
+                    remaining,
+                    ticket.max_per_order || PURCHASE_LIMIT,
+                    Math.max(PURCHASE_LIMIT - otherQuantity, 0)
+                  );
 
                   return (
                     <div
@@ -610,7 +750,7 @@ const EventDetails = () => {
                       className={`p-3 sm:p-4 rounded-lg flex justify-between items-center gap-2 sm:gap-3 border transition-colors ${
                         soldOut
                           ? "border-transparent bg-muted/40 opacity-70"
-                          : cart[0]?.ticketType.id === ticket.id
+                          : selectedQuantity > 0
                             ? "border-primary bg-primary/10"
                             : "border-transparent bg-secondary/30"
                       }`}
@@ -620,24 +760,40 @@ const EventDetails = () => {
                         <p className="text-primary font-bold text-sm sm:text-base">
                           {ticket.is_complimentary && Number(ticket.price) === 0 ? "Grátis" : `R$ ${Number(ticket.price).toFixed(2)}`}
                         </p>
+                        <p className="mt-1 text-xs text-orange-600 dark:text-orange-400">🔥 Últimas unidades</p>
                         {soldOut ? (
                           <Badge variant="secondary" className="mt-1.5 sm:mt-2 text-[11px]">Esgotado</Badge>
-                        ) : isLow ? (
-                          <Badge className="mt-1.5 sm:mt-2 text-[11px] bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30 gap-1">
-                            <Flame className="w-3 h-3" />
-                            {remaining <= 5 ? "Últimas unidades!" : `Restam ${remaining} ingressos`}
-                          </Badge>
                         ) : null}
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0"
-                        disabled={soldOut}
-                        onClick={() => setCart([{ ticketType: ticket, quantity: 1 }])}
-                      >
-                        {soldOut ? "Esgotado" : cart[0]?.ticketType.id === ticket.id ? "Selecionado" : "Selecionar"}
-                      </Button>
+                      {soldOut ? (
+                        <Button variant="outline" size="sm" className="shrink-0" disabled>Esgotado</Button>
+                      ) : (
+                        <div className="flex h-9 shrink-0 items-center overflow-hidden rounded-md border border-border bg-background" aria-label={`Quantidade de ${ticket.name}`}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 rounded-none"
+                            onClick={() => updateQuantity(ticket, -1)}
+                            disabled={selectedQuantity === 0}
+                            aria-label={`Diminuir quantidade de ${ticket.name}`}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                          <span className="w-8 text-center text-sm font-semibold tabular-nums" aria-live="polite">{selectedQuantity}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 rounded-none"
+                            onClick={() => updateQuantity(ticket, 1)}
+                            disabled={selectedQuantity >= maxAllowed}
+                            aria-label={`Aumentar quantidade de ${ticket.name}`}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

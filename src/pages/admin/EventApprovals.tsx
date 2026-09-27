@@ -75,6 +75,11 @@ interface OrganizerVerificationRow {
   document_path: string;
   status: string;
   rejection_reason: string | null;
+  profile?: {
+    full_name: string | null;
+    email: string | null;
+    phone: string | null;
+  };
 }
 
 const EventApprovals = () => {
@@ -87,7 +92,10 @@ const EventApprovals = () => {
   const [rejectReason, setRejectReason] = useState("");
   const [processing, setProcessing] = useState(false);
   const [verifications, setVerifications] = useState<Record<string, OrganizerVerificationRow>>({});
-  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  const [pendingVerifications, setPendingVerifications] = useState<OrganizerVerificationRow[]>([]);
+  const [verificationRejectOpen, setVerificationRejectOpen] = useState(false);
+  const [selectedVerification, setSelectedVerification] = useState<OrganizerVerificationRow | null>(null);
+  const [verificationRejectReason, setVerificationRejectReason] = useState("");
   const [loadingDocument, setLoadingDocument] = useState(false);
 
   const fetchPendingEvents = async () => {
@@ -119,20 +127,36 @@ const EventApprovals = () => {
       setEvents(eventsWithOrganizers as PendingEvent[]);
 
       const organizerIds = Array.from(new Set(pendingEvents.map((e: any) => e.organizer_id)));
-      if (organizerIds.length > 0) {
-        const { data: verificationRows } = await supabase
+      const [{ data: eventVerificationRows }, { data: pendingRows, error: pendingError }] = await Promise.all([
+        organizerIds.length > 0
+          ? supabase.from("organizer_verifications").select("*").in("user_id", organizerIds)
+          : Promise.resolve({ data: [], error: null }),
+        supabase
           .from("organizer_verifications")
           .select("*")
-          .in("user_id", organizerIds);
+          .eq("status", "pending")
+          .order("created_at", { ascending: true }),
+      ]);
+      if (pendingError) throw pendingError;
 
-        const map: Record<string, OrganizerVerificationRow> = {};
-        (verificationRows || []).forEach((row: any) => {
-          map[row.user_id] = row as OrganizerVerificationRow;
-        });
-        setVerifications(map);
-      } else {
-        setVerifications({});
-      }
+      const verificationUserIds = Array.from(new Set((pendingRows || []).map((row: any) => row.user_id)));
+      const { data: verificationProfiles } = verificationUserIds.length > 0
+        ? await supabase
+            .from("profiles")
+            .select("id, full_name, email, phone")
+            .in("id", verificationUserIds)
+        : { data: [] };
+      const profilesById = new Map((verificationProfiles || []).map((profile) => [profile.id, profile]));
+
+      const map: Record<string, OrganizerVerificationRow> = {};
+      (eventVerificationRows || []).forEach((row: any) => {
+        map[row.user_id] = row as OrganizerVerificationRow;
+      });
+      setVerifications(map);
+      setPendingVerifications((pendingRows || []).map((row: any) => ({
+        ...row,
+        profile: profilesById.get(row.user_id),
+      })) as OrganizerVerificationRow[]);
     } catch (error) {
       console.error("Error fetching pending events:", error);
       toast.error("Erro ao carregar solicitações");
@@ -259,7 +283,6 @@ const EventApprovals = () => {
         .from("organizer-documents")
         .createSignedUrl(verification.document_path, 300);
       if (error) throw error;
-      setDocumentUrl(data?.signedUrl || null);
       if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     } catch (error: any) {
       console.error("Error opening document:", error);
@@ -271,7 +294,8 @@ const EventApprovals = () => {
 
   const setVerificationStatus = async (
     verification: OrganizerVerificationRow,
-    status: "verified" | "rejected"
+    status: "verified" | "rejected",
+    rejectionReason?: string
   ) => {
     setProcessing(true);
     try {
@@ -279,7 +303,7 @@ const EventApprovals = () => {
         .from("organizer_verifications")
         .update({
           status,
-          rejection_reason: status === "rejected" ? "Documento não confere com o responsável do evento" : null,
+          rejection_reason: status === "rejected" ? rejectionReason?.trim() || "Documento recusado pela equipe de verificação" : null,
         })
         .eq("id", verification.id);
       if (error) throw error;
@@ -288,6 +312,10 @@ const EventApprovals = () => {
         ...prev,
         [verification.user_id]: { ...verification, status },
       }));
+      setPendingVerifications((prev) => prev.filter((row) => row.id !== verification.id));
+      setVerificationRejectOpen(false);
+      setSelectedVerification(null);
+      setVerificationRejectReason("");
       toast.success(status === "verified" ? "Documento verificado!" : "Documento recusado.");
     } catch (error: any) {
       console.error("Error updating verification:", error);
@@ -295,6 +323,12 @@ const EventApprovals = () => {
     } finally {
       setProcessing(false);
     }
+  };
+
+  const requestVerificationRejection = (verification: OrganizerVerificationRow) => {
+    setSelectedVerification(verification);
+    setVerificationRejectReason("");
+    setVerificationRejectOpen(true);
   };
 
   return (
@@ -330,6 +364,62 @@ const EventApprovals = () => {
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
         />
+      </div>
+
+      <section className="space-y-3" aria-labelledby="pending-verifications-title">
+        <div>
+          <h2 id="pending-verifications-title" className="text-xl font-bold text-foreground">Verificações de Identidade</h2>
+          <p className="text-sm text-muted-foreground">Documentos aguardando análise, mesmo antes do envio do evento.</p>
+        </div>
+        {loading ? (
+          <div className="py-6 text-center text-muted-foreground">Carregando...</div>
+        ) : pendingVerifications.length === 0 ? (
+          <Card className="bg-card border-border">
+            <CardContent className="p-6 text-center text-sm text-muted-foreground">
+              Nenhuma verificação de identidade pendente.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-3">
+            {pendingVerifications.map((verification) => (
+              <Card key={verification.id} className="bg-card border-border">
+                <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <ShieldQuestion className="h-4 w-4 shrink-0 text-yellow-500" />
+                      <p className="font-semibold text-foreground">
+                        {verification.profile?.full_name || "Produtor não identificado"}
+                      </p>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{verification.profile?.email || "E-mail não informado"}</p>
+                    {verification.profile?.phone && <p className="text-sm text-muted-foreground">{verification.profile.phone}</p>}
+                    <p className="text-xs text-muted-foreground">
+                      {verification.document_type.toUpperCase()}{verification.document_number ? ` • ${verification.document_number}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => openDocument(verification)} disabled={loadingDocument}>
+                      <FileText className="mr-1 h-4 w-4" />
+                      Ver documento
+                    </Button>
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => setVerificationStatus(verification, "verified")} disabled={processing}>
+                      <ShieldCheck className="mr-1 h-4 w-4" />
+                      Marcar como verificado
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => requestVerificationRejection(verification)} disabled={processing}>
+                      <ShieldAlert className="mr-1 h-4 w-4" />
+                      Recusar documento
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div>
+        <h2 className="text-xl font-bold text-foreground">Eventos Pendentes</h2>
       </div>
 
       {/* Events List */}
@@ -627,7 +717,7 @@ const EventApprovals = () => {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => setVerificationStatus(v, "rejected")}
+                               onClick={() => requestVerificationRejection(v)}
                               disabled={processing}
                             >
                               <ShieldAlert className="w-4 h-4 mr-1" />
@@ -694,6 +784,40 @@ const EventApprovals = () => {
               disabled={processing}
             >
               Confirmar Rejeição
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={verificationRejectOpen} onOpenChange={setVerificationRejectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-destructive" />
+              Recusar documento
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Informe o motivo para que a análise fique registrada para o produtor.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Label htmlFor="verificationRejectReason">Motivo da recusa</Label>
+            <Textarea
+              id="verificationRejectReason"
+              value={verificationRejectReason}
+              onChange={(event) => setVerificationRejectReason(event.target.value)}
+              placeholder="Explique o que precisa ser corrigido..."
+              className="mt-2"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => selectedVerification && setVerificationStatus(selectedVerification, "rejected", verificationRejectReason)}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={processing || !verificationRejectReason.trim()}
+            >
+              Confirmar recusa
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
