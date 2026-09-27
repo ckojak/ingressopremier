@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, Flame, CreditCard, ShieldCheck, Lock, Building2, Info, Gift } from "lucide-react";
+import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, CreditCard, ShieldCheck, Lock, Building2, Info, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -149,6 +149,7 @@ const EventDetails = () => {
   const [event, setEvent] = useState<Event | null>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const cartRef = useRef<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [processingPix, setProcessingPix] = useState(false);
@@ -170,7 +171,7 @@ const EventDetails = () => {
 
   const reconcileCartWithStock = (freshTickets: TicketType[], notifyChanges = false) => {
     let changed = false;
-    setCart((current) => current.flatMap((item) => {
+    const reconciledCart = cartRef.current.flatMap((item) => {
       const freshTicket = freshTickets.find((ticket) => ticket.id === item.ticketType.id);
       if (!freshTicket || !freshTicket.is_active) {
         changed = true;
@@ -185,7 +186,10 @@ const EventDetails = () => {
       const nextQuantity = Math.min(item.quantity, maxAllowed);
       if (nextQuantity !== item.quantity) changed = true;
       return nextQuantity > 0 ? [{ ticketType: freshTicket, quantity: nextQuantity }] : [];
-    }));
+    });
+
+    cartRef.current = reconciledCart;
+    setCart(reconciledCart);
 
     if (changed && notifyChanges) {
       toast.error("O estoque mudou. Atualizamos sua seleção antes de continuar.");
@@ -223,7 +227,9 @@ const EventDetails = () => {
       );
       const nextQuantity = Math.max(0, Math.min(currentQuantity + delta, maxAllowed));
       const withoutTicket = current.filter((item) => item.ticketType.id !== ticket.id);
-      return nextQuantity > 0 ? [...withoutTicket, { ticketType: ticket, quantity: nextQuantity }] : withoutTicket;
+      const nextCart = nextQuantity > 0 ? [...withoutTicket, { ticketType: ticket, quantity: nextQuantity }] : withoutTicket;
+      cartRef.current = nextCart;
+      return nextCart;
     });
   };
 
@@ -289,6 +295,7 @@ const EventDetails = () => {
                 ? [{ ticketType, quantity: item.quantity }]
                 : [];
             });
+            cartRef.current = restoredCart;
             setCart(restoredCart);
             setCustomerName(typeof saved.customerName === "string" ? saved.customerName : "");
             setCustomerCpf(typeof saved.customerCpf === "string" ? saved.customerCpf : "");
