@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, CreditCard, ShieldCheck, Lock, Building2, Info, Gift } from "lucide-react";
+import { Calendar, MapPin, Clock, Minus, Plus, ShoppingCart, ArrowLeft, Ticket, AlertTriangle, QrCode, Globe, CreditCard, ShieldCheck, Lock, Building2, Info, Gift, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -760,7 +760,7 @@ const EventDetails = () => {
                         <p className="text-primary font-bold text-sm sm:text-base">
                           {ticket.is_complimentary && Number(ticket.price) === 0 ? "Grátis" : `R$ ${Number(ticket.price).toFixed(2)}`}
                         </p>
-                        <p className="mt-1 text-xs text-orange-600 dark:text-orange-400">🔥 Últimas unidades</p>
+                        <p className="mt-1 text-xs text-orange-600 dark:text-orange-400">Lote acabando</p>
                         {soldOut ? (
                           <Badge variant="secondary" className="mt-1.5 sm:mt-2 text-[11px]">Esgotado</Badge>
                         ) : null}
