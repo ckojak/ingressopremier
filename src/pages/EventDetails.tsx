@@ -400,7 +400,8 @@ const EventDetails = () => {
     (item) => item.ticketType.is_complimentary === true && Number(item.ticketType.price) === 0
   );
 
-  const cpfValidationError = cpfTouched ? cpfError(customerCpf) : null;
+  const cpfValidationError =
+    cpfTouched || onlyDigits(customerCpf).length === 11 ? cpfError(customerCpf) : null;
 
   // Dispara "início de checkout" pro pixel/analytics do produtor deste evento
   const trackInitiateCheckout = () => {
@@ -509,6 +510,16 @@ const EventDetails = () => {
       toast.error("Selecione um ingresso");
       return;
     }
+    if (customerName.trim().split(/\s+/).length < 2) {
+      toast.error("Informe nome e sobrenome");
+      return;
+    }
+    setCpfTouched(true);
+    const cpfErr = cpfError(customerCpf);
+    if (cpfErr) {
+      toast.error(cpfErr);
+      return;
+    }
     if (!(await validateLatestStock())) return;
 
     trackInitiateCheckout();
@@ -521,7 +532,8 @@ const EventDetails = () => {
         body: {
           event_id: id,
           site_id: siteId,
-          customer_name: customerName.trim() || undefined,
+          customer_name: customerName.trim(),
+          customer_cpf: onlyDigits(customerCpf),
           items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
         },
       });
@@ -825,12 +837,27 @@ const EventDetails = () => {
                     ) : isFreeCart ? (
                       <>
                         <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-3">
-                          <p className="text-xs font-bold text-primary uppercase">Dados do Comprador (opcional)</p>
+                          <p className="text-xs font-bold text-primary uppercase">Dados do Comprador</p>
                           <Input
                             placeholder="Nome Completo"
                             value={customerName}
                             onChange={(e) => setCustomerName(e.target.value)}
                           />
+                          <div className="space-y-1">
+                            <Input
+                              placeholder="CPF"
+                              inputMode="numeric"
+                              value={formatCpf(customerCpf)}
+                              maxLength={14}
+                              aria-invalid={!!cpfValidationError}
+                              className={cpfValidationError ? "border-destructive focus-visible:ring-destructive" : ""}
+                              onChange={(e) => setCustomerCpf(onlyDigits(e.target.value).slice(0, 11))}
+                              onBlur={() => setCpfTouched(true)}
+                            />
+                            {cpfValidationError && (
+                              <p className="text-xs text-destructive">{cpfValidationError}</p>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex justify-between font-bold text-lg">
@@ -841,7 +868,11 @@ const EventDetails = () => {
                         <Button
                           className="w-full gap-2 min-h-[48px]"
                           onClick={handleClaimFree}
-                          disabled={processingFree}
+                          disabled={
+                            processingFree ||
+                            customerName.trim().split(/\s+/).length < 2 ||
+                            !!cpfError(customerCpf)
+                          }
                         >
                           <Gift className="w-5 h-5" />
                           {processingFree ? "Gerando ingresso..." : "Pegar Cortesia"}
