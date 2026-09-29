@@ -106,12 +106,14 @@ const CardCheckoutBrick = ({
                 throw new Error("Você precisa estar logado para pagar");
               }
 
-              // Telefone cadastrado no perfil, usado pelo antifraude do
-              // Mercado Pago. Se a pessoa não tiver telefone salvo, fica
-              // undefined e o backend simplesmente não envia esse campo.
+              // Telefone e nome completo cadastrados no perfil, usados pelo
+              // antifraude do Mercado Pago. O Brick não devolve o nome do
+              // titular, então o nome vem do perfil. Se a pessoa não tiver
+              // telefone salvo, fica undefined e o backend simplesmente não
+              // envia esse campo.
               const { data: profile } = await supabase
                 .from("profiles")
-                .select("phone")
+                .select("phone, full_name")
                 .eq("id", session.user.id)
                 .maybeSingle();
 
@@ -138,7 +140,8 @@ const CardCheckoutBrick = ({
                       last_name: formData.payer.last_name,
                       phone: profile?.phone || undefined,
                     },
-                    cardholder_name: formData.cardholderName || formData.payer?.first_name,
+                    cardholder_name:
+                      profile?.full_name || formData.cardholderName || formData.payer?.first_name,
                     ...getStoredUtmParams(),
                   },
                 }
