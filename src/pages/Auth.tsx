@@ -28,6 +28,46 @@ const emailSchema = z
   .regex(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, "Digite um e-mail válido")
   .max(254, "Digite um e-mail válido");
 
+const EMAIL_TYPOS: Record<string, string> = {
+  "iclou.com": "icloud.com", "icoud.com": "icloud.com", "iclod.com": "icloud.com", "icloud.co": "icloud.com", "icloud.con": "icloud.com",
+  "gmial.com": "gmail.com", "gmai.com": "gmail.com", "gmil.com": "gmail.com", "gamil.com": "gmail.com", "gnail.com": "gmail.com", "gmail.co": "gmail.com", "gmail.con": "gmail.com", "gmail.com.br": "gmail.com",
+  "hotmial.com": "hotmail.com", "hotmal.com": "hotmail.com", "hotmil.com": "hotmail.com", "homtail.com": "hotmail.com", "hotmail.co": "hotmail.com", "hotmail.con": "hotmail.com",
+  "outlok.com": "outlook.com", "outlook.co": "outlook.com", "outlook.con": "outlook.com",
+  "yaho.com": "yahoo.com", "yahho.com": "yahoo.com", "yahoo.co": "yahoo.com", "yahoo.con": "yahoo.com",
+};
+
+// Retorna mensagem de erro, ou null se o e-mail parece OK
+const checkEmailDomain = async (rawEmail: string): Promise<string | null> => {
+  const clean = rawEmail.trim().toLowerCase();
+  const [user, domain] = clean.split("@");
+  if (!user || !domain) return "Digite um e-mail válido";
+
+  const suggestion = EMAIL_TYPOS[domain];
+  if (suggestion) {
+    return `O domínio "${domain}" parece errado. Você quis dizer ${user}@${suggestion}?`;
+  }
+
+  // Confere se o domínio existe e recebe e-mail (MX). Se a checagem falhar, deixa passar.
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=MX`,
+      { headers: { accept: "application/dns-json" }, signal: ctrl.signal }
+    );
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const hasMx = (json.Answer || []).some((a: any) => a.type === 15);
+    if (json.Status === 3 || (json.Status === 0 && !hasMx)) {
+      return "Esse domínio de e-mail não existe ou não recebe mensagens. Confira se digitou certo.";
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
 const formatCPF = (value: string): string => {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 3) return digits;
@@ -351,6 +391,18 @@ const Auth = () => {
       // REGISTRATION - Validate fields first
       setEmailTouched(true);
       if (!isEmailValid) return;
+
+      setLoading(true);
+      const domainError = await checkEmailDomain(email);
+      setLoading(false);
+      if (domainError) {
+        toast({
+          title: "E-mail inválido",
+          description: domainError,
+          variant: "destructive",
+        });
+        return;
+      }
 
       if (!fullName.trim()) {
         toast({
