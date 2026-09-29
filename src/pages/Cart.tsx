@@ -37,6 +37,7 @@ const Cart = () => {
   const [loading, setLoading] = useState(true);
   const [processingPix, setProcessingPix] = useState(false);
   const [processingFree, setProcessingFree] = useState(false);
+  const [processingCard, setProcessingCard] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [showCardForm, setShowCardForm] = useState(false);
   
@@ -375,7 +376,7 @@ const Cart = () => {
     }
   };
 
-  const handleShowCardForm = () => {
+  const handleShowCardForm = async () => {
     if (cartItems.length === 0) {
       toast.error("Seu carrinho está vazio");
       return;
@@ -385,7 +386,41 @@ const Cart = () => {
       navigate("/auth", { state: { from: location.pathname } });
       return;
     }
-    setShowCardForm(true);
+    if (appliedCoupon) {
+      toast.info("O cupom ainda não vale para cartão. Remova o cupom ou pague com PIX.");
+      return;
+    }
+
+    setProcessingCard(true);
+    try {
+      const { eventId, items } = getFirstEventGroup();
+      const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
+        body: {
+          event_id: eventId,
+          site_id: siteId,
+          items: items.map(item => ({
+            ticket_type_id: item.ticketType.id,
+            quantity: item.quantity,
+          })),
+        },
+      });
+
+      if (error) {
+        let msg = "Não foi possível abrir o pagamento. Tente novamente.";
+        try {
+          const body = await (error as any).context.json();
+          msg = body?.error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      if (!data?.checkout_url) throw new Error("Não foi possível abrir o pagamento.");
+
+      localStorage.removeItem("cart");
+      window.location.href = data.checkout_url;
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao abrir o pagamento");
+      setProcessingCard(false);
+    }
   };
 
   const handleCardSuccess = (orderId: string) => {
@@ -693,10 +728,10 @@ const Cart = () => {
                                  className="w-full gap-2 gradient-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-shadow min-h-[52px] text-base font-semibold"
                                  size="lg"
                                  onClick={handleShowCardForm}
-                                 disabled={processingPix}
+                                 disabled={processingPix || processingCard}
                                >
                                  <CreditCard className="w-5 h-5" />
-                                 Pagar com Cartão
+                                 {processingCard ? "Abrindo Mercado Pago..." : "Pagar com Cartão"}
                                </Button>
                              </>
                            )}
