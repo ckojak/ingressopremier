@@ -264,7 +264,7 @@ const Cart = () => {
   const discount = calculateDiscount();
   const subtotalAfterDiscount = subtotal - discount;
   const serviceFee = subtotalAfterDiscount * SERVICE_FEE_PERCENTAGE;
-  const total = subtotalAfterDiscount + serviceFee;
+  const total = Math.round((subtotalAfterDiscount + serviceFee) * 100) / 100;
   const allComplimentary = cartItems.length > 0 && cartItems.every(item => item.ticketType.is_complimentary === true);
 
   const getFirstEventGroup = () => {
