@@ -31,7 +31,7 @@ interface CardCheckoutBrickProps {
   payerEmail: string;
   purchaseProtection?: boolean;
   couponCode?: string;
-  address: BillingAddress;
+  address?: BillingAddress;
   onSuccess: (orderId: string) => void;
   onError?: (message: string) => void;
 }

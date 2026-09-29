@@ -769,6 +769,13 @@ const Auth = () => {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+              {isLogin && (
+                <div className="text-right">
+                  <Link to="/esqueci-senha" className="text-sm font-medium text-primary hover:underline">
+                    Esqueci minha senha
+                  </Link>
+                </div>
+              )}
               
               {!isLogin && password && (
                 <motion.div
