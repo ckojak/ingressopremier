@@ -338,6 +338,17 @@ const EventDetails = () => {
     localStorage.setItem(`event_checkout_${id}`, JSON.stringify(checkout));
   }, [id, checkoutRestored, cart, customerName, customerCpf, address, purchaseProtection, paymentMethod]);
 
+  // Se a pessoa voltar da página do Mercado Pago pelo botão "voltar" do
+  // navegador, a página pode reaparecer do cache com o botão travado em
+  // "Abrindo Mercado Pago...". Isso destrava.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setProcessing(false);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   // Carrega o Pixel do Meta / Google Analytics QUE O PRODUTOR DESTE EVENTO
   // cadastrou (nunca um pixel genérico da PremierPass) e dispara a
   // visualização assim que os dados do evento chegam.
@@ -425,7 +436,9 @@ const EventDetails = () => {
     }
   };
 
-  const validateCustomerData = () => {
+  // requireAddress: o PIX exige endereço de cobrança; o cartão (Checkout Pro)
+  // não, porque o Mercado Pago pede os dados dele na própria página.
+  const validateCustomerData = (requireAddress = true) => {
     if (cart.length === 0) {
       toast.error("Adicione ingressos");
       return false;
@@ -440,10 +453,12 @@ const EventDetails = () => {
       toast.error(err);
       return false;
     }
-    const missing = !address.zip || !address.street || !address.number || !address.district || !address.city || !address.state;
-    if (missing) {
-      toast.error("Preencha o endereço de cobrança completo");
-      return false;
+    if (requireAddress) {
+      const missing = !address.zip || !address.street || !address.number || !address.district || !address.city || !address.state;
+      if (missing) {
+        toast.error("Preencha o endereço de cobrança completo");
+        return false;
+      }
     }
     return true;
   };
@@ -488,19 +503,48 @@ const EventDetails = () => {
     }
   };
 
+  // Cartão via Checkout Pro: cria o pedido no Supabase, recebe o link do
+  // Mercado Pago e leva a pessoa pra lá. Depois de pagar, o Mercado Pago
+  // devolve pra /checkout/status e o webhook libera o ingresso.
   const handleCardCheckout = async () => {
-    if (!validateCustomerData()) return;
+    if (!validateCustomerData(false)) return;
     if (!(await validateLatestStock())) return;
 
     trackInitiateCheckout();
     setProcessing(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return navigate("/auth", { state: { from: location.pathname } });
+      if (!session) {
+        setProcessing(false);
+        return navigate("/auth", { state: { from: location.pathname } });
+      }
 
-      setUserEmail(session.user?.email || "");
-      setShowCardForm(true);
-    } finally {
+      const { data, error } = await supabase.functions.invoke("create-mercadopago-checkout", {
+        body: {
+          event_id: id,
+          site_id: siteId,
+          customer_name: customerName.trim(),
+          customer_cpf: onlyDigits(customerCpf),
+          purchase_protection: purchaseProtection,
+          items: cart.map(item => ({ ticket_type_id: item.ticketType.id, quantity: item.quantity })),
+          ...getStoredUtmParams(),
+        },
+      });
+
+      if (error) {
+        let msg = "Não foi possível abrir o pagamento. Tente novamente.";
+        try {
+          const body = await (error as any).context.json();
+          msg = body?.error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      if (!data?.checkout_url) throw new Error("Não foi possível abrir o pagamento.");
+
+      if (id) localStorage.removeItem(`event_checkout_${id}`);
+      window.location.href = data.checkout_url;
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao abrir o pagamento");
       setProcessing(false);
     }
   };
@@ -923,20 +967,22 @@ const EventDetails = () => {
                       </div>
                     </div>
 
-                    <div className="bg-secondary/30 p-4 rounded-xl border border-border space-y-3">
-                      <p className="text-xs font-bold text-primary uppercase">Endereço de Cobrança</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input placeholder="CEP" inputMode="numeric" value={address.zip} onChange={(e) => setAddress({ ...address, zip: e.target.value })} />
-                        <Input placeholder="Número" value={address.number} onChange={(e) => setAddress({ ...address, number: e.target.value })} />
+                    {paymentMethod === "pix" && (
+                      <div className="bg-secondary/30 p-4 rounded-xl border border-border space-y-3">
+                        <p className="text-xs font-bold text-primary uppercase">Endereço de Cobrança</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input placeholder="CEP" inputMode="numeric" value={address.zip} onChange={(e) => setAddress({ ...address, zip: e.target.value })} />
+                          <Input placeholder="Número" value={address.number} onChange={(e) => setAddress({ ...address, number: e.target.value })} />
+                        </div>
+                        <Input placeholder="Rua / Logradouro" value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} />
+                        <Input placeholder="Complemento (opcional)" value={address.complement} onChange={(e) => setAddress({ ...address, complement: e.target.value })} />
+                        <Input placeholder="Bairro" value={address.district} onChange={(e) => setAddress({ ...address, district: e.target.value })} />
+                        <div className="grid grid-cols-3 gap-2">
+                          <Input className="col-span-2" placeholder="Cidade" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
+                          <Input placeholder="UF" maxLength={2} value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value.toUpperCase() })} />
+                        </div>
                       </div>
-                      <Input placeholder="Rua / Logradouro" value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} />
-                      <Input placeholder="Complemento (opcional)" value={address.complement} onChange={(e) => setAddress({ ...address, complement: e.target.value })} />
-                      <Input placeholder="Bairro" value={address.district} onChange={(e) => setAddress({ ...address, district: e.target.value })} />
-                      <div className="grid grid-cols-3 gap-2">
-                        <Input className="col-span-2" placeholder="Cidade" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
-                        <Input placeholder="UF" maxLength={2} value={address.state} onChange={(e) => setAddress({ ...address, state: e.target.value.toUpperCase() })} />
-                      </div>
-                    </div>
+                    )}
 
                     <div className="space-y-2">
                       <p className="text-xs font-bold text-primary uppercase">Proteção da compra</p>
@@ -1021,7 +1067,7 @@ const EventDetails = () => {
                       </Button>
                     ) : (
                       <Button className="w-full min-h-[48px]" onClick={handleCardCheckout} disabled={processing}>
-                        {processing ? "Carregando..." : "Pagar com Cartão"}
+                        {processing ? "Abrindo Mercado Pago..." : "Pagar com Cartão"}
                       </Button>
                     )}
 
@@ -1029,6 +1075,13 @@ const EventDetails = () => {
                       <p className="text-xs text-muted-foreground">
                         O QR Code do PIX expira em <strong>2 minutos</strong>. A confirmação costuma ser imediata,
                         mas em casos raros pode levar até 2 horas.
+                      </p>
+                    )}
+
+                    {paymentMethod === "card" && (
+                      <p className="text-xs text-muted-foreground">
+                        Você será levado à página segura do <strong>Mercado Pago</strong> para pagar com cartão.
+                        Depois de aprovado, volta aqui e o ingresso é liberado.
                       </p>
                     )}
 
