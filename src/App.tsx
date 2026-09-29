@@ -35,6 +35,8 @@ const HalfPrice = lazy(() => import("./pages/HalfPrice"));
 const AcceptTransfer = lazy(() => import("./pages/AcceptTransfer"));
 const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
 // Admin pages - lazy loaded
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
@@ -110,6 +112,8 @@ const App = () => {
                       <Route path="/eventos" element={<Events />} />
                       <Route path="/evento/:id" element={<EventDetails />} />
                       <Route path="/auth" element={<Auth />} />
+                      <Route path="/esqueci-senha" element={<ForgotPassword />} />
+                      <Route path="/redefinir-senha" element={<ResetPassword />} />
                       <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                       <Route path="/checkout/status" element={<CheckoutStatus />} />
                       <Route path="/checkout/pix" element={<CheckoutPix />} />
