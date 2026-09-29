@@ -125,7 +125,17 @@ const formatEventDate = (event: Event) => {
 
 const formatEventTime = (event: Event) => {
   try {
-    return format(new Date(event.start_date), "HH:mm", { locale: ptBR });
+    const start = new Date(event.start_date);
+    const startTime = format(start, "HH:mm", { locale: ptBR });
+    if (!event.end_date) return startTime;
+
+    const end = new Date(event.end_date);
+    if (Number.isNaN(end.getTime())) return startTime;
+
+    const sameDay = format(start, "yyyy-MM-dd") === format(end, "yyyy-MM-dd");
+    return sameDay
+      ? `${startTime} às ${format(end, "HH:mm", { locale: ptBR })}`
+      : `${startTime} até ${format(end, "dd/MM 'às' HH:mm", { locale: ptBR })}`;
   } catch {
     return null;
   }
