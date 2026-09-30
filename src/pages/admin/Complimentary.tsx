@@ -25,9 +25,10 @@ import { toast } from "sonner";
 import { Tables } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-​type Event = Tables<"events">;
+type Event = Tables<"events">;
 type TicketType = Tables<"ticket_types">;
-​interface ComplimentaryTicket {
+
+interface ComplimentaryTicket {
 id: string;
 ticket_code: string;
 attendee_name: string | null;
