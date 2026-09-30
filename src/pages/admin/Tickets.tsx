@@ -82,12 +82,17 @@ const Tickets = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch events
-      const { data: eventsData } = await supabase
-        .from("events")
-        .select("*")
-        .eq("organizer_id", user.id);
-      
+      // Admin enxerga os eventos de todos os produtores; produtor só os dele.
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+      const isAdmin = !!roles?.some((r) => r.role === "admin");
+
+      let eventsQuery = supabase.from("events").select("*");
+      if (!isAdmin) eventsQuery = eventsQuery.eq("organizer_id", user.id);
+      const { data: eventsData } = await eventsQuery;
+
       setEvents(eventsData || []);
 
       // Fetch ticket types with events
@@ -138,6 +143,8 @@ const Tickets = () => {
       quantity_available: formData.quantity_available,
       max_per_order: formData.max_per_order,
       is_active: formData.is_active,
+      // Antes faltava esse campo na edição e dava "Required".
+      is_complimentary: formData.is_complimentary,
     } : formData);
 
     if (!validation.success) {
@@ -145,6 +152,16 @@ const Tickets = () => {
       toast({
         title: "Erro de validação",
         description: firstError.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Não deixa diminuir a quantidade abaixo do que já foi vendido.
+    if (editingTicket && parseInt(formData.quantity_available) < Number(editingTicket.quantity_sold || 0)) {
+      toast({
+        title: "Quantidade inválida",
+        description: `Já foram vendidos ${editingTicket.quantity_sold} ingressos deste lote. A quantidade não pode ser menor que isso.`,
         variant: "destructive",
       });
       return;
