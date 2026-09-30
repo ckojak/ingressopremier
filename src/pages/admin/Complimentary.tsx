@@ -39,7 +39,7 @@ ticket_type: {
 name: string;
 } | null;
 }
-​const Complimentary = () => {
+const Complimentary = () => {
 const [events, setEvents] = useState<Event[]>([]);
 const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
 const [complimentaryTickets, setComplimentaryTickets] = useState<ComplimentaryTicket[]>([]);
@@ -64,7 +64,7 @@ fetchTicketTypes(selectedEvent);
 fetchComplimentaryTickets(selectedEvent);
 }
 }, [selectedEvent]);
-​const fetchEvents = async () => {
+const fetchEvents = async () => {
 try {
 const { data: { user } } = await supabase.auth.getUser();
 if (!user) return;
@@ -80,19 +80,19 @@ const isAdmin = !!roles?.some((r) => r.role === "admin");
 .eq("status", "published")
 .order("start_date", { ascending: true });
 if (!isAdmin) query = query.eq("organizer_id", user.id);
-​const { data, error } = await query;
+const { data, error } = await query;
 ​if (error) throw error;
 setEvents(data || []);
 ​if (data && data.length > 0) {
 setSelectedEvent(data[0].id);
 }
 } catch (error) {
-console.error("Error fetching events:", error);
+  console.error("Error fetching events:", error);
 } finally {
 setLoading(false);
 }
 };
-​const fetchTicketTypes = async (eventId: string) => {
+  ​const fetchTicketTypes = async (eventId: string) => {
 try {
 const { data, error } = await supabase
 .from("ticket_types")
@@ -105,7 +105,7 @@ setTicketTypes(data || []);
 console.error("Error fetching ticket types:", error);
 }
 };
-​const fetchComplimentaryTickets = async (eventId: string) => {
+const fetchComplimentaryTickets = async (eventId: string) => {
 try {
 // Fetch tickets that were created without an order (complimentary)
 const { data, error } = await supabase
@@ -123,7 +123,7 @@ ticket_type: t.ticket_types as { name: string } | null,
 console.error("Error fetching complimentary tickets:", error);
 }
 };
-​const generateTicketCode = () => {
+  ​const generateTicketCode = () => {
 const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 let code = "";
 for (let i = 0; i < 12; i++) {
@@ -131,7 +131,7 @@ code += chars.charAt(Math.floor(Math.random() * chars.length));
 }
 return code;
 };
-​const handleSendComplimentary = async () => {
+  ​const handleSendComplimentary = async () => {
 if (!newTicket.eventId || !newTicket.ticketTypeId || !newTicket.recipientEmail) {
 toast.error("Preencha todos os campos obrigatórios");
 return;
@@ -150,8 +150,8 @@ const { data: recipientProfile, error: profileError } = await supabase
 ​if (profileError) {
 console.error("Error finding recipient:", profileError);
 }
-​const recipientUserId = recipientProfile?.id || null;
-​const tickets = [];
+const recipientUserId = recipientProfile?.id || null;
+const tickets = [];
 for (let i = 0; i < newTicket.quantity; i++) {
 tickets.push({
 event_id: newTicket.eventId,
@@ -164,7 +164,7 @@ order_item_id: null, // No order for complimentary
 is_complimentary: true, // Marca como cortesia pra entrar na contagem do painel
 });
 }
-​const { data: insertedTickets, error } = await supabase
+  ​const { data: insertedTickets, error } = await supabase
 .from("tickets")
 .insert(tickets)
 .select();
@@ -189,7 +189,7 @@ quantity: newTicket.quantity,
 siteUrl: window.location.origin,
 },
 });
-​const message = recipientUserId
+const message = recipientUserId
 ? ${newTicket.quantity} cortesia(s) enviada(s) com sucesso! O usuário já pode ver em "Meus Ingressos".
 : ${newTicket.quantity} cortesia(s) enviada(s)! O usuário receberá o ingresso quando cadastrar-se com este e-mail.;
 ​toast.success(message);
@@ -209,7 +209,7 @@ toast.error(error.message || "Erro ao enviar cortesia");
 setSending(false);
 }
 };
-​const filteredTickets = complimentaryTickets.filter(ticket =>
+  ​const filteredTickets = complimentaryTickets.filter(ticket =>
 ticket.attendee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
 ticket.attendee_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
 ticket.ticket_code.toLowerCase().includes(searchQuery.toLowerCase())
