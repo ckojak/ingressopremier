@@ -44,12 +44,20 @@ const getRemaining = (ticket: TicketType) => Math.max(
   0
 );
 
+type TicketCategory = "cortesia" | "pista" | "vip";
+
+// Colunas novas `category` e `lot_number` ainda não estão no types.ts gerado,
+// por isso o acesso via `any`. Sem a coluna, cai no comportamento antigo.
+const getCategory = (ticket: TicketType): TicketCategory => {
+  const raw = String((ticket as any).category ?? "").toLowerCase();
+  if (raw === "cortesia" || raw === "pista" || raw === "vip") return raw;
+  return ticket.is_complimentary ? "cortesia" : "pista";
+};
+
 const getLotInfo = (ticket: TicketType) => {
   const numberedLot = ticket.name.match(/\b(\d+)\s*(?:º|°|ª|o)?\s*lote\b/i);
   const reversedLot = ticket.name.match(/\blote\s*(\d+)\b/i);
   const match = numberedLot || reversedLot;
-
-  if (!match) return { groupKey: `single:${ticket.id}`, lotNumber: null as number | null };
 
   const baseName = ticket.name
     .replace(/\b\d+\s*(?:º|°|ª|o)?\s*lote\b/i, "")
@@ -59,14 +67,22 @@ const getLotInfo = (ticket: TicketType) => {
     .trim()
     .toLocaleLowerCase("pt-BR");
 
+  const columnLot = Number((ticket as any).lot_number ?? 1) || 1;
+
   return {
-    groupKey: `lot:${baseName || "ingresso"}`,
-    lotNumber: Number(match[1]),
+    groupKey: `${getCategory(ticket)}:${baseName || "ingresso"}`,
+    // Número no nome do ingresso (legado) tem prioridade; senão usa a coluna lot_number.
+    lotNumber: match ? Number(match[1]) : columnLot,
   };
 };
 
+// Regra de exibição por grupo (categoria + nome):
+// - lotes esgotados continuam aparecendo, marcados como "Lote esgotado"
+// - logo abaixo aparece o próximo lote com estoque
+// - lotes seguintes ao atual ficam escondidos
+// - se tudo esgotou, mostra todos como esgotados
 const getVisibleTickets = (tickets: TicketType[]) => {
-  const groups = new Map<string, Array<{ ticket: TicketType; lotNumber: number | null }>>();
+  const groups = new Map<string, Array<{ ticket: TicketType; lotNumber: number }>>();
 
   tickets.forEach((ticket) => {
     const info = getLotInfo(ticket);
@@ -75,13 +91,21 @@ const getVisibleTickets = (tickets: TicketType[]) => {
     groups.set(info.groupKey, current);
   });
 
-  return Array.from(groups.values()).map((group) => {
-    const sorted = [...group].sort((a, b) =>
-      (a.lotNumber ?? Number.MAX_SAFE_INTEGER) - (b.lotNumber ?? Number.MAX_SAFE_INTEGER)
-      || a.ticket.position - b.ticket.position
+  const visible: Array<{ ticket: TicketType; isNextLot: boolean }> = [];
+
+  groups.forEach((group) => {
+    const sorted = [...group].sort(
+      (a, b) => a.lotNumber - b.lotNumber || a.ticket.position - b.ticket.position
     );
-    return sorted.find(({ ticket }) => getRemaining(ticket) > 0)?.ticket || sorted[sorted.length - 1].ticket;
+    const currentIndex = sorted.findIndex(({ ticket }) => getRemaining(ticket) > 0);
+    const end = currentIndex === -1 ? sorted.length : currentIndex + 1;
+
+    sorted.slice(0, end).forEach(({ ticket }, index) => {
+      visible.push({ ticket, isNextLot: currentIndex > 0 && index === currentIndex });
+    });
   });
+
+  return visible;
 };
 
 interface CartItem {
@@ -662,7 +686,7 @@ const EventDetails = () => {
       name: t.name,
       price: Number(t.price),
       priceCurrency: "BRL",
-      availability: t.is_active ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
+      availability: t.is_active && getRemaining(t) > 0 ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
       url: eventUrl,
     })),
     ...(lowestPrice !== undefined ? { lowPrice: lowestPrice } : {}),
@@ -795,10 +819,11 @@ const EventDetails = () => {
                     <AlertDescription>Não há lotes ativos para este evento no momento.</AlertDescription>
                   </Alert>
                 )}
-                {visibleTickets.map(ticket => {
+                {visibleTickets.map(({ ticket, isNextLot }) => {
                   const total = Number(ticket.quantity_available ?? 0);
                   const remaining = getRemaining(ticket);
                   const soldOut = remaining <= 0;
+                  const almostSoldOut = !soldOut && total > 0 && remaining / total <= 0.2;
                   const selectedQuantity = cart.find((item) => item.ticketType.id === ticket.id)?.quantity || 0;
                   const otherQuantity = cart.reduce(
                     (sum, item) => item.ticketType.id === ticket.id ? sum : sum + item.quantity,
@@ -822,13 +847,20 @@ const EventDetails = () => {
                       }`}
                     >
                       <div className="min-w-0">
+                        {isNextLot && (
+                          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                            Próximo lote disponível
+                          </p>
+                        )}
                         <h3 className="font-semibold text-sm sm:text-base">{ticket.name}</h3>
-                        <p className="text-primary font-bold text-sm sm:text-base">
+                        <p className={`font-bold text-sm sm:text-base ${soldOut ? "text-muted-foreground line-through" : "text-primary"}`}>
                           {ticket.is_complimentary && Number(ticket.price) === 0 ? "Grátis" : `R$ ${Number(ticket.price).toFixed(2)}`}
                         </p>
-                        <p className="mt-1 text-xs text-orange-600 dark:text-orange-400">Lote acabando</p>
+                        {almostSoldOut && (
+                          <p className="mt-1 text-xs text-orange-600 dark:text-orange-400">Lote acabando</p>
+                        )}
                         {soldOut ? (
-                          <Badge variant="secondary" className="mt-1.5 sm:mt-2 text-[11px]">Esgotado</Badge>
+                          <Badge variant="secondary" className="mt-1.5 sm:mt-2 text-[11px]">Lote esgotado</Badge>
                         ) : null}
                       </div>
                       {soldOut ? (
