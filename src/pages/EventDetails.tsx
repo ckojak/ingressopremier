@@ -647,7 +647,7 @@ const EventDetails = () => {
   const lowestPrice = ticketTypes.length
     ? Math.min(...ticketTypes.map((t) => Number(t.price)))
     : undefined;
-  const heroImage = event.banner_url || event.image_url;
+  const heroImage = event.image_url || event.banner_url;
   const eventDate = formatEventDate(event);
   const eventTime = formatEventTime(event);
   const eventLocation = getEventLocation(event);
