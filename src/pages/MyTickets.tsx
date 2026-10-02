@@ -23,6 +23,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { QRCodeSVG } from "qrcode.react";
 import { buildTicketQrValue } from "@/lib/ticket-code";
+import { getTicketArea } from "@/lib/ticket-area";
 import { toast } from "sonner";
 import { downloadTicketPdf } from "@/lib/ticket-pdf";
 
@@ -604,9 +605,23 @@ const MyTicketsContent = () => {
                   {selectedTicket.event?.title || "Ingresso PremierPass"}
                 </h3>
                 {selectedTicket.ticket_type?.name && (
-                  <p className="text-sm text-muted-foreground">
-                    {selectedTicket.ticket_type.name}
-                  </p>
+                  <div className="mt-2 flex flex-col items-center gap-2">
+                    {(() => {
+                      const typeName = selectedTicket.ticket_type!.name;
+                      const area = getTicketArea(typeName);
+                      // Mostra a etiqueta para VIP e Camarote, e para Pista quando o lote é de pista.
+                      // Lotes de outro tipo (ex.: cortesia) mostram só o nome do lote.
+                      const showBadge = area.kind !== "pista" || /pista/i.test(typeName);
+                      return showBadge ? (
+                        <span className={`rounded-full px-4 py-1 text-base font-bold ${area.badgeClass}`}>
+                          {area.label}
+                        </span>
+                      ) : null;
+                    })()}
+                    <p className="text-sm text-muted-foreground">
+                      {selectedTicket.ticket_type.name}
+                    </p>
+                  </div>
                 )}
               </div>
 
