@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { normalizeTicketCode } from "@/lib/ticket-code";
+import { getTicketArea } from "@/lib/ticket-area";
 
 type TicketWithDetails = {
   id: string;
@@ -20,6 +21,7 @@ type TicketWithDetails = {
   attendee_email: string | null;
   is_used: boolean;
   used_at: string | null;
+  ticket_category?: string | null;
   ticket_type: {
     name: string;
   } | null;
@@ -44,6 +46,18 @@ type InviteInfo = {
 };
 
 type Step = "loading" | "invite_error" | "email_mismatch" | "confirm_accept" | "checkin";
+type CheckResult = "success" | "error" | "already_used" | "cancelled";
+
+type CheckinRpcRow = {
+  success: boolean;
+  already_used: boolean;
+  cancelled?: boolean;
+  attendee_name: string | null;
+  used_at: string | null;
+};
+
+// Ignora a mesma leitura de QR por esse tempo (a câmera continua vendo o mesmo QR depois do check-in)
+const SAME_CODE_COOLDOWN_MS = 8000;
 
 declare global {
   interface Window {
@@ -52,6 +66,14 @@ declare global {
     };
   }
 }
+
+const buzz = (pattern: number | number[]) => {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    // aparelho sem vibração
+  }
+};
 
 const StaffCheckin = () => {
   const { accessCode } = useParams<{ accessCode: string }>();
@@ -67,7 +89,7 @@ const StaffCheckin = () => {
   const [ticketCode, setTicketCode] = useState("");
   const [checking, setChecking] = useState(false);
   const [lastCheckedTicket, setLastCheckedTicket] = useState<TicketWithDetails | null>(null);
-  const [checkResult, setCheckResult] = useState<"success" | "error" | "already_used" | null>(null);
+  const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
   const [recentCheckIns, setRecentCheckIns] = useState<TicketWithDetails[]>([]);
   const [autoScanSupported, setAutoScanSupported] = useState(true);
   const [cameraPermission, setCameraPermission] = useState<boolean | null>(null);
@@ -77,6 +99,7 @@ const StaffCheckin = () => {
   const scanIntervalRef = useRef<number | null>(null);
   const detectorRef = useRef<InstanceType<NonNullable<Window["BarcodeDetector"]>> | null>(null);
   const checkingRef = useRef(false);
+  const lastScanRef = useRef<{ code: string; at: number } | null>(null);
 
   const loadInvite = useCallback(async () => {
     if (!accessCode) {
@@ -245,9 +268,15 @@ const StaffCheckin = () => {
 
       try {
         const results = await detectorRef.current.detect(videoRef.current);
-        if (results.length > 0 && results[0].rawValue) {
-          runCheckIn(results[0].rawValue);
-        }
+        const raw = results[0]?.rawValue;
+        if (!raw) return;
+
+        // Mesmo QR ainda na frente da câmera: não lê de novo (evita virar "já utilizado" na tela)
+        const code = normalizeTicketCode(raw);
+        const last = lastScanRef.current;
+        if (last && last.code === code && Date.now() - last.at < SAME_CODE_COOLDOWN_MS) return;
+
+        runCheckIn(raw);
       } catch {
         // frame não pôde ser lido, tenta de novo no próximo intervalo
       }
@@ -259,6 +288,7 @@ const StaffCheckin = () => {
     if (!code || checkingRef.current || !event || !accessCode) return;
 
     checkingRef.current = true;
+    lastScanRef.current = { code, at: Date.now() };
     setChecking(true);
     setCheckResult(null);
 
@@ -276,6 +306,7 @@ const StaffCheckin = () => {
       if (findError || !ticket) {
         setCheckResult("error");
         setLastCheckedTicket(null);
+        buzz([150, 80, 150]);
         toast.error("Ingresso não encontrado para este evento");
         return;
       }
@@ -287,6 +318,7 @@ const StaffCheckin = () => {
         attendee_email: ticket.attendee_email,
         is_used: ticket.is_used,
         used_at: ticket.used_at,
+        ticket_category: ticket.ticket_category ?? null,
         ticket_type: ticket.ticket_type_name ? { name: ticket.ticket_type_name } : null,
       };
 
@@ -299,26 +331,30 @@ const StaffCheckin = () => {
 
       if (rpcError) throw rpcError;
 
-      const result = rpcData as unknown as {
-        success: boolean;
-        already_used: boolean;
-        attendee_name: string | null;
-        used_at: string | null;
-      };
+      // checkin_ticket é RETURNS TABLE: o Supabase devolve uma lista com 1 linha.
+      // Aceita lista ou objeto pra não quebrar se a função mudar.
+      const result = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as CheckinRpcRow | undefined;
 
       if (!result?.success) {
-        if (result?.already_used) {
+        if (result?.cancelled) {
+          setCheckResult("cancelled");
+          buzz([150, 80, 150]);
+          toast.error("Ingresso cancelado");
+        } else if (result?.already_used) {
           setCheckResult("already_used");
           setLastCheckedTicket({ ...ticketData, is_used: true, used_at: result.used_at });
+          buzz([150, 80, 150]);
           toast.error("Este ingresso já foi utilizado!");
         } else {
           setCheckResult("error");
+          buzz([150, 80, 150]);
           toast.error("Ingresso não encontrado para este evento");
         }
         return;
       }
 
       setCheckResult("success");
+      buzz(80);
       toast.success("Check-in realizado com sucesso!");
 
       setLastCheckedTicket({ ...ticketData, is_used: true, used_at: result.used_at ?? new Date().toISOString() });
@@ -326,6 +362,7 @@ const StaffCheckin = () => {
     } catch (error: any) {
       console.error("Check-in error:", error);
       setCheckResult("error");
+      buzz([150, 80, 150]);
       toast.error("Erro ao realizar check-in");
     } finally {
       setChecking(false);
@@ -424,6 +461,17 @@ const StaffCheckin = () => {
   if (step !== "checkin" || !event) {
     return null;
   }
+
+  const area = lastCheckedTicket
+    ? getTicketArea(lastCheckedTicket.ticket_type?.name, lastCheckedTicket.ticket_category)
+    : null;
+
+  const statusUi: Record<CheckResult, { bar: string; title: string }> = {
+    success: { bar: "bg-green-600 text-white", title: "✓ Entrada liberada" },
+    already_used: { bar: "bg-yellow-500 text-black", title: "⚠ Já utilizado" },
+    cancelled: { bar: "bg-destructive text-destructive-foreground", title: "✗ Ingresso cancelado" },
+    error: { bar: "bg-destructive text-destructive-foreground", title: "✗ Ingresso inválido" },
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -555,51 +603,40 @@ const StaffCheckin = () => {
               </TabsContent>
             </Tabs>
 
-            {checkResult && lastCheckedTicket && (
+            {checkResult && (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                key={`${checkResult}-${lastCheckedTicket?.id ?? "none"}-${lastCheckedTicket?.used_at ?? ""}`}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`mt-6 p-6 rounded-xl ${
-                  checkResult === "success"
-                    ? "bg-green-500/10 border border-green-500/30"
-                    : checkResult === "already_used"
-                    ? "bg-yellow-500/10 border border-yellow-500/30"
-                    : "bg-destructive/10 border border-destructive/30"
-                }`}
+                className="mt-6 overflow-hidden rounded-xl border border-border"
               >
-                <div className="flex items-start gap-4">
+                <div className={`px-5 py-4 text-xl font-bold ${statusUi[checkResult].bar}`}>
+                  {statusUi[checkResult].title}
+                </div>
+
+                {area && (checkResult === "success" || checkResult === "already_used") && (
                   <div
-                    className={`w-14 h-14 rounded-full flex items-center justify-center ${
-                      checkResult === "success"
-                        ? "bg-green-500"
-                        : checkResult === "already_used"
-                        ? "bg-yellow-500"
-                        : "bg-destructive"
+                    className={`px-5 py-7 text-center ${
+                      checkResult === "success" ? area.blockClass : "bg-muted text-foreground"
                     }`}
                   >
-                    {checkResult === "success" ? (
-                      <Check className="w-7 h-7 text-white" />
-                    ) : (
-                      <X className="w-7 h-7 text-white" />
+                    <p className="text-4xl font-extrabold tracking-tight">{area.label}</p>
+                    <p className="mt-2 text-xl font-semibold">
+                      {checkResult === "success"
+                        ? area.wristband
+                          ? "Entregar pulseira"
+                          : "Sem pulseira"
+                        : "Já entrou — não entregar pulseira"}
+                    </p>
+                    {lastCheckedTicket?.ticket_type?.name && (
+                      <p className="mt-2 text-sm opacity-90">{lastCheckedTicket.ticket_type.name}</p>
                     )}
                   </div>
-                  <div className="flex-1">
-                    <h3
-                      className={`text-xl font-semibold ${
-                        checkResult === "success"
-                          ? "text-green-400"
-                          : checkResult === "already_used"
-                          ? "text-yellow-400"
-                          : "text-destructive"
-                      }`}
-                    >
-                      {checkResult === "success"
-                        ? "✓ Check-in Realizado!"
-                        : checkResult === "already_used"
-                        ? "⚠ Já Utilizado"
-                        : "✗ Inválido"}
-                    </h3>
-                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                )}
+
+                <div className="space-y-1 p-5 text-sm text-muted-foreground">
+                  {lastCheckedTicket ? (
+                    <>
                       <p className="flex items-center gap-2">
                         <Ticket className="w-4 h-4" />
                         {lastCheckedTicket.ticket_code}
@@ -610,16 +647,18 @@ const StaffCheckin = () => {
                           {lastCheckedTicket.attendee_name}
                         </p>
                       )}
-                      {lastCheckedTicket.ticket_type && (
-                        <p>Tipo: {lastCheckedTicket.ticket_type.name}</p>
+                      {checkResult !== "success" && lastCheckedTicket.ticket_type?.name && (
+                        <p>Lote: {lastCheckedTicket.ticket_type.name}</p>
                       )}
                       {checkResult === "already_used" && lastCheckedTicket.used_at && (
-                        <p className="text-yellow-400 font-medium">
+                        <p className="font-medium text-yellow-500">
                           Usado em: {format(new Date(lastCheckedTicket.used_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                         </p>
                       )}
-                    </div>
-                  </div>
+                    </>
+                  ) : (
+                    <p>Código não encontrado para este evento. Confira o ingresso ou use o código manual.</p>
+                  )}
                 </div>
               </motion.div>
             )}
