@@ -120,11 +120,17 @@ const Reports = () => {
       // Get site_ids for stats (isolated per site)
       const statsSiteIds = getStatsSiteIds();
 
-      // Fetch user events and filter by site in memory
-      const { data: allEventsData } = await supabase
-        .from("events")
-        .select("*")
-        .eq("organizer_id", user.id);
+      // Admin enxerga os eventos de todos os produtores; produtor só os dele.
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+      const isAdmin = !!roles?.some((r) => r.role === "admin");
+
+      // Fetch events and filter by site in memory
+      let eventsQuery = supabase.from("events").select("*");
+      if (!isAdmin) eventsQuery = eventsQuery.eq("organizer_id", user.id);
+      const { data: allEventsData } = await eventsQuery;
 
       // Filter by site_id in memory
       const eventsData = (allEventsData || []).filter((event: any) => {
