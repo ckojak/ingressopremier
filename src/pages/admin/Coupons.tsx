@@ -65,6 +65,8 @@ const Coupons = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
+  // Cupons: só o administrador geral gerencia.
+  const [forbidden, setForbidden] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -83,17 +85,26 @@ const Coupons = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+      if (!roles?.some((r) => r.role === "admin")) {
+        setForbidden(true);
+        return;
+      }
+
+      // Admin vê os eventos e os cupons de todo o site.
       const { data: eventsData } = await supabase
         .from("events")
         .select("*")
-        .eq("organizer_id", user.id);
+        .order("title");
       
       setEvents(eventsData || []);
 
       const { data: couponsData } = await supabase
         .from("coupons")
         .select("*, events(*)")
-        .eq("organizer_id", user.id)
         .order("created_at", { ascending: false });
 
       setCoupons(couponsData?.map(c => ({
@@ -239,6 +250,14 @@ const Coupons = () => {
     coupon.code.toLowerCase().includes(search.toLowerCase()) ||
     coupon.event?.title.toLowerCase().includes(search.toLowerCase())
   );
+
+  if (forbidden) {
+    return (
+      <div className="py-12 text-center text-muted-foreground">
+        Apenas o administrador pode gerenciar cupons.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
