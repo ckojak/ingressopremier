@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, CheckCircle2, XCircle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,17 @@ interface TicketData {
 
 type ScanStatus = "scanning" | "success" | "error" | "processing";
 
+// checkin_ticket é RETURNS TABLE: o Supabase devolve uma LISTA com 1 linha.
+type CheckinRow = {
+  success: boolean;
+  already_used: boolean;
+  cancelled?: boolean;
+  event_ended?: boolean;
+  wrong_event?: boolean;
+  attendee_name: string | null;
+  used_at: string | null;
+};
+
 // BarcodeDetector é nativo do navegador (Chrome/Edge/Android). Não existe em todo TS lib ainda,
 // então declaramos o tipo mínimo aqui pra não depender de instalar nenhum pacote novo.
 declare global {
@@ -47,7 +58,7 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [manualCode, setManualCode] = useState("");
   const [autoScanSupported, setAutoScanSupported] = useState<boolean>(true);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const detectorRef = useRef<InstanceType<NonNullable<Window["BarcodeDetector"]>> | null>(null);
@@ -57,6 +68,33 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
+
+  // Sempre que o <video> for (re)montado (ex.: depois de "Próximo ingresso"), reconecta a câmera nele.
+  const setVideoEl = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    if (el && streamRef.current && el.srcObject !== streamRef.current) {
+      el.srcObject = streamRef.current;
+      el.play().catch(() => {});
+    }
+  }, []);
+
+  // Celular bloqueou / trocou de app: solta a câmera. Voltou pra tela: liga de novo.
+  useEffect(() => {
+    const isActive = inline ? true : open;
+    if (!isActive) return;
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        startCamera();
+      } else {
+        stopCamera();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, inline]);
 
   useEffect(() => {
     const isActive = inline ? true : open;
@@ -76,13 +114,25 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
   }, [open, inline]);
 
   const startCamera = async () => {
+    stopCamera();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
       });
       streamRef.current = stream;
+
+      // Se o sistema derrubar a câmera sozinho, religa (só se a tela estiver visível)
+      stream.getVideoTracks().forEach((track) => {
+        track.onended = () => {
+          if (document.visibilityState === "visible" && streamRef.current === stream) {
+            startCamera();
+          }
+        };
+      });
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
       }
       setHasPermission(true);
       startAutoScan();
@@ -97,7 +147,10 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
       scanIntervalRef.current = null;
     }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current.getTracks().forEach((track) => {
+        track.onended = null;
+        track.stop();
+      });
       streamRef.current = null;
     }
   };
@@ -177,18 +230,24 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
         .single();
 
       // Atomic check-in (no race condition)
-      const { data: rpcData, error: rpcError } = await supabase.rpc("checkin_ticket", {
+      const { data: rpcData, error: rpcError } = await (supabase as any).rpc("checkin_ticket", {
         p_ticket_id: ticketData.id,
+        p_event_id: eventId ?? null,
       });
 
-      const checkin = rpcData as unknown as {
-        success: boolean;
-        already_used: boolean;
-        attendee_name: string | null;
-        used_at: string | null;
-      } | null;
+      if (rpcError) {
+        setStatus("error");
+        setMessage(
+          rpcError.code === "42501"
+            ? "Sem permissão para validar ingressos deste evento."
+            : "Erro ao validar ingresso. Tente novamente."
+        );
+        return;
+      }
 
-      if (rpcError || !checkin) {
+      const checkin = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as CheckinRow | null | undefined;
+
+      if (!checkin) {
         setStatus("error");
         setMessage("Erro ao validar ingresso. Tente novamente.");
         return;
@@ -197,7 +256,13 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
       if (!checkin.success) {
         setStatus("error");
         setMessage(
-          checkin.already_used
+          checkin.event_ended
+            ? "Evento encerrado. Este ingresso não vale mais."
+            : checkin.wrong_event
+            ? "Este ingresso não pertence a este evento."
+            : checkin.cancelled
+            ? "Ingresso cancelado."
+            : checkin.already_used
             ? "Este ingresso já foi utilizado."
             : "Ingresso não encontrado. Código inválido."
         );
@@ -288,7 +353,7 @@ const QRCodeScanner = ({ open = true, onOpenChange, eventId, onSuccess, inline =
           >
             <div className="relative aspect-video rounded-lg overflow-hidden bg-black">
               <video
-                ref={videoRef}
+                ref={setVideoEl}
                 autoPlay
                 playsInline
                 muted
