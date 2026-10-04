@@ -3,6 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
 import { useSiteContext } from "./useSiteContext";
 
+
+// Evento só sai do ar no HORÁRIO DE FIM (end_date). Sem end_date: início + 12h.
+const FALLBACK_DURATION_MS = 12 * 60 * 60 * 1000;
+const eventNotEndedFilter = () => {
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const fallbackCutoffIso = new Date(now - FALLBACK_DURATION_MS).toISOString();
+  return `end_date.gte.${nowIso},and(end_date.is.null,start_date.gte.${fallbackCutoffIso})`;
+};
+
 type Event = Tables<"events">;
 
 export interface EventWithPrice extends Event {
@@ -30,7 +40,7 @@ export function usePublicEvents() {
         .from("events")
         .select("*")
         .eq("status", "published")
-        .gte("start_date", new Date().toISOString())
+        .or(eventNotEndedFilter())
         .order("start_date", { ascending: true });
 
       if (error) throw error;
