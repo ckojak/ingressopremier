@@ -46,12 +46,14 @@ type InviteInfo = {
 };
 
 type Step = "loading" | "invite_error" | "email_mismatch" | "confirm_accept" | "checkin";
-type CheckResult = "success" | "error" | "already_used" | "cancelled";
+type CheckResult = "success" | "error" | "already_used" | "cancelled" | "event_ended";
 
 type CheckinRpcRow = {
   success: boolean;
   already_used: boolean;
   cancelled?: boolean;
+  event_ended?: boolean;
+  wrong_event?: boolean;
   attendee_name: string | null;
   used_at: string | null;
 };
@@ -94,7 +96,16 @@ const StaffCheckin = () => {
   const [autoScanSupported, setAutoScanSupported] = useState(true);
   const [cameraPermission, setCameraPermission] = useState<boolean | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Sempre que o <video> for (re)montado (ex.: trocar de aba), reconecta a câmera nele.
+  const setVideoEl = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    if (el && streamRef.current && el.srcObject !== streamRef.current) {
+      el.srcObject = streamRef.current;
+      el.play().catch(() => {});
+    }
+  }, []);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const detectorRef = useRef<InstanceType<NonNullable<Window["BarcodeDetector"]>> | null>(null);
@@ -154,6 +165,23 @@ const StaffCheckin = () => {
       startCamera();
     }
     return () => stopCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // Celular bloqueou / trocou de app: solta a câmera. Voltou pra tela: liga de novo.
+  useEffect(() => {
+    if (step !== "checkin") return;
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        startCamera();
+      } else {
+        stopCamera();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
@@ -219,13 +247,25 @@ const StaffCheckin = () => {
   };
 
   const startCamera = async () => {
+    stopCamera();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
       });
       streamRef.current = stream;
+
+      // Se o sistema derrubar a câmera sozinho, religa (só se a tela estiver visível)
+      stream.getVideoTracks().forEach((track) => {
+        track.onended = () => {
+          if (document.visibilityState === "visible" && streamRef.current === stream) {
+            startCamera();
+          }
+        };
+      });
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
       }
       setCameraPermission(true);
       startAutoScan();
@@ -240,7 +280,10 @@ const StaffCheckin = () => {
       scanIntervalRef.current = null;
     }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current.getTracks().forEach((track) => {
+        track.onended = null;
+        track.stop();
+      });
       streamRef.current = null;
     }
   };
@@ -327,6 +370,7 @@ const StaffCheckin = () => {
       const { data: rpcData, error: rpcError } = await (supabase as any).rpc("checkin_ticket", {
         p_ticket_id: ticket.id,
         p_access_code: accessCode,
+        p_event_id: event.id,
       });
 
       if (rpcError) throw rpcError;
@@ -336,7 +380,15 @@ const StaffCheckin = () => {
       const result = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as CheckinRpcRow | undefined;
 
       if (!result?.success) {
-        if (result?.cancelled) {
+        if (result?.event_ended) {
+          setCheckResult("event_ended");
+          buzz([150, 80, 150]);
+          toast.error("Evento encerrado. Check-in não é mais permitido.");
+        } else if (result?.wrong_event) {
+          setCheckResult("error");
+          buzz([150, 80, 150]);
+          toast.error("Ingresso não encontrado para este evento");
+        } else if (result?.cancelled) {
           setCheckResult("cancelled");
           buzz([150, 80, 150]);
           toast.error("Ingresso cancelado");
@@ -470,6 +522,7 @@ const StaffCheckin = () => {
     success: { bar: "bg-green-600 text-white", title: "✓ Entrada liberada" },
     already_used: { bar: "bg-yellow-500 text-black", title: "⚠ Já utilizado" },
     cancelled: { bar: "bg-destructive text-destructive-foreground", title: "✗ Ingresso cancelado" },
+    event_ended: { bar: "bg-destructive text-destructive-foreground", title: "✗ Evento encerrado" },
     error: { bar: "bg-destructive text-destructive-foreground", title: "✗ Ingresso inválido" },
   };
 
@@ -557,7 +610,7 @@ const StaffCheckin = () => {
                   <div className="space-y-3">
                     <div className="relative aspect-video rounded-lg overflow-hidden bg-black">
                       <video
-                        ref={videoRef}
+                        ref={setVideoEl}
                         autoPlay
                         playsInline
                         muted
