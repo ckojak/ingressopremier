@@ -164,21 +164,35 @@ const CheckIn = () => {
       setLastCheckedTicket(ticketData);
 
       // Atomic check-in (no race condition)
-      const { data: rpcData, error: rpcError } = await supabase.rpc("checkin_ticket", {
+      // checkin_ticket é RETURNS TABLE: o Supabase devolve uma LISTA com 1 linha.
+      const { data: rpcData, error: rpcError } = await (supabase as any).rpc("checkin_ticket", {
         p_ticket_id: ticket.id,
+        p_event_id: selectedEvent,
       });
 
       if (rpcError) throw rpcError;
 
-      const result = rpcData as unknown as {
+      const result = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as {
         success: boolean;
         already_used: boolean;
+        cancelled?: boolean;
+        event_ended?: boolean;
+        wrong_event?: boolean;
         attendee_name: string | null;
         used_at: string | null;
-      };
+      } | undefined;
 
       if (!result?.success) {
-        if (result?.already_used) {
+        if (result?.event_ended) {
+          setCheckResult("error");
+          toast.error("Evento encerrado. Check-in não é mais permitido.");
+        } else if (result?.wrong_event) {
+          setCheckResult("error");
+          toast.error("Este ingresso não pertence ao evento selecionado");
+        } else if (result?.cancelled) {
+          setCheckResult("error");
+          toast.error("Ingresso cancelado");
+        } else if (result?.already_used) {
           setCheckResult("already_used");
           setLastCheckedTicket({ ...ticketData, is_used: true, used_at: result.used_at });
           toast.error("Este ingresso já foi utilizado!");
