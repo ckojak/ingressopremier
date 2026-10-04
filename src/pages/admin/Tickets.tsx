@@ -63,6 +63,9 @@ const Tickets = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingTicket, setEditingTicket] = useState<TicketType | null>(null);
+  // Só o admin usa o seletor de evento; produtor continua vendo tudo dele direto.
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState("");
   const { toast } = useToast();
   const { invalidateAll } = useInvalidateEvents();
 
@@ -87,19 +90,30 @@ const Tickets = () => {
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id);
-      const isAdmin = !!roles?.some((r) => r.role === "admin");
+      const admin = !!roles?.some((r) => r.role === "admin");
+      setIsAdmin(admin);
 
       let eventsQuery = supabase.from("events").select("*");
-      if (!isAdmin) eventsQuery = eventsQuery.eq("organizer_id", user.id);
+      if (!admin) eventsQuery = eventsQuery.eq("organizer_id", user.id);
       const { data: eventsData } = await eventsQuery;
 
       setEvents(eventsData || []);
+
+      // Admin: só carrega os ingressos depois de escolher um evento.
+      if (admin && !selectedEventId) {
+        setTicketTypes([]);
+        return;
+      }
+
+      const eventIds = admin
+        ? [selectedEventId]
+        : (eventsData?.map(e => e.id) || []);
 
       // Fetch ticket types with events
       const { data: ticketsData } = await supabase
         .from("ticket_types")
         .select("*, events(*)")
-        .in("event_id", eventsData?.map(e => e.id) || [])
+        .in("event_id", eventIds)
         .order("created_at", { ascending: false });
 
       setTicketTypes(ticketsData?.map(t => ({
@@ -115,7 +129,8 @@ const Tickets = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEventId]);
 
   const handlePriceChange = (value: string) => {
     const formatted = formatCurrencyInput(value);
@@ -435,6 +450,22 @@ const Tickets = () => {
 
       {events.length > 0 && (
         <>
+          {isAdmin && (
+            <Select value={selectedEventId} onValueChange={setSelectedEventId}>
+              <SelectTrigger className="max-w-md">
+                <Search className="w-4 h-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Escolha um evento para ver os ingressos" />
+              </SelectTrigger>
+              <SelectContent>
+                {events.map((event) => (
+                  <SelectItem key={event.id} value={event.id}>
+                    {event.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -451,7 +482,11 @@ const Tickets = () => {
             <Card className="bg-card border-border">
               <CardContent className="py-12 text-center">
                 <p className="text-muted-foreground">
-                  {search ? "Nenhum ingresso encontrado" : "Nenhum tipo de ingresso criado ainda."}
+                  {isAdmin && !selectedEventId
+                    ? "Escolha um evento acima para ver os ingressos."
+                    : search
+                      ? "Nenhum ingresso encontrado"
+                      : "Nenhum tipo de ingresso criado ainda."}
                 </p>
               </CardContent>
             </Card>
