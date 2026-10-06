@@ -9,13 +9,16 @@ interface ImageUploadProps {
   onChange: (url: string) => void;
   bucket?: string;
   folder?: string;
+  /** "cover" corta a prévia (padrão); "contain" mostra a imagem inteira, sem cortar */
+  fit?: "cover" | "contain";
 }
 
 const ImageUpload = ({ 
   value, 
   onChange, 
   bucket = "event-images",
-  folder = "events" 
+  folder = "events",
+  fit = "cover",
 }: ImageUploadProps) => {
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -88,7 +91,11 @@ const ImageUpload = ({
           <img
             src={value}
             alt="Preview"
-            className="w-full h-48 object-cover rounded-lg border border-border"
+            className={
+              fit === "contain"
+                ? "w-full h-64 object-contain bg-secondary/30 rounded-lg border border-border"
+                : "w-full h-48 object-cover rounded-lg border border-border"
+            }
           />
           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
             <Button
