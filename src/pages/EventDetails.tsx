@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SEO from "@/components/SEO";
+import EventMapDialog from "@/components/EventMapDialog";
 import PaymentErrorBoundary from "@/components/PaymentErrorBoundary";
 import EventDetailsSkeleton from "@/components/skeletons/EventDetailsSkeleton";
 import { supabase } from "@/integrations/supabase/client";
@@ -810,7 +811,12 @@ const EventDetails = () => {
 
           <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
             <Card className="bg-card/80 backdrop-blur-sm border-border">
-              <CardHeader><CardTitle className="flex items-center gap-2"><Ticket className="w-5 h-5 text-primary" /> Ingressos</CardTitle></CardHeader>
+              <CardHeader className="space-y-2">
+                <CardTitle className="flex items-center gap-2"><Ticket className="w-5 h-5 text-primary" /> Ingressos</CardTitle>
+                {event.map_image_url && (
+                  <EventMapDialog imageUrl={event.map_image_url} eventTitle={event.title} />
+                )}
+              </CardHeader>
               <CardContent className="space-y-3 sm:space-y-4">
                 {ticketTypes.length === 0 && (
                   <Alert>
