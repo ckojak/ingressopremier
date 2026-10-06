@@ -39,6 +39,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { z } from "zod";
 import ImageUpload from "@/components/ImageUpload";
+import { MapFormatHint } from "@/components/EventMapDialog";
 import OrganizerVerificationCard from "@/components/OrganizerVerificationCard";
 import { useOrganizerVerification } from "@/hooks/useOrganizerVerification";
 import { useIBGEStates, useIBGECities } from "@/hooks/useIBGE";
@@ -86,6 +87,7 @@ const eventSchema = z.object({
   category: z.string().max(100, "Categoria deve ter no máximo 100 caracteres").optional().or(z.literal("")),
   image_url: z.string().url("URL da imagem inválida").optional().or(z.literal("")),
   banner_url: z.string().url("URL do banner inválida").optional().or(z.literal("")),
+  map_image_url: z.string().url("URL do mapa inválida").optional().or(z.literal("")),
   website: z.string().url("URL do site inválida").optional().or(z.literal("")),
   contact: z.string().max(200, "Contato deve ter no máximo 200 caracteres").optional().or(z.literal("")),
   status: z.enum(["draft", "pending", "published", "cancelled", "completed"]),
@@ -139,6 +141,7 @@ const Events = () => {
     category: "",
     image_url: "",
     banner_url: "",
+    map_image_url: "",
     website: "",
     contact: "",
     status: "draft" as "draft" | "pending" | "published" | "cancelled" | "completed",
@@ -230,6 +233,7 @@ const Events = () => {
             category: validatedData.category || null,
             image_url: validatedData.image_url || null,
             banner_url: validatedData.banner_url || null,
+            map_image_url: validatedData.map_image_url || null,
             website: validatedData.website || null,
             contact: validatedData.contact || null,
             status: validatedData.status as any,
@@ -257,6 +261,7 @@ const Events = () => {
             category: validatedData.category || null,
             image_url: validatedData.image_url || null,
             banner_url: validatedData.banner_url || null,
+            map_image_url: validatedData.map_image_url || null,
             website: validatedData.website || null,
             contact: validatedData.contact || null,
             status: validatedData.status as any,
@@ -419,6 +424,7 @@ const Events = () => {
       category: event.category || "",
       image_url: event.image_url || "",
       banner_url: event.banner_url || "",
+      map_image_url: event.map_image_url || "",
       website: (event as any).website || "",
       contact: (event as any).contact || "",
       status: (event.status === "rejected" ? "draft" : event.status) || "draft",
@@ -443,6 +449,7 @@ const Events = () => {
       category: "",
       image_url: "",
       banner_url: "",
+      map_image_url: "",
       website: "",
       contact: "",
       status: "draft",
@@ -719,6 +726,19 @@ const Events = () => {
                   />
                   <p className="text-xs text-muted-foreground">
                     Formato bem largo (panorâmico) — usado no carrossel de destaque da home e no topo da página do evento. Recomendado 1920x640px. Se não enviar, o sistema usa a imagem do card acima (cortada, pode ficar ruim).
+                  </p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Mapa do Evento (opcional)</Label>
+                  <ImageUpload
+                    value={formData.map_image_url}
+                    onChange={(url) => setFormData({ ...formData, map_image_url: url })}
+                    folder="events-map"
+                    fit="contain"
+                  />
+                  <MapFormatHint url={formData.map_image_url} />
+                  <p className="text-xs text-muted-foreground">
+                    Envie 1 imagem do mapa ou da planta do local, em formato feed (1:1 ou 4:5) ou story (9:16). O site se ajusta sozinho ao formato enviado. Aparece como "Ver mapa do evento" na área de ingressos.
                   </p>
                 </div>
 
