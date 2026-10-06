@@ -55,6 +55,16 @@ const ticketUpdateSchema = ticketSchema.omit({ event_id: true });
 type TicketType = Tables<"ticket_types">;
 type Event = Tables<"events">;
 
+// Mesma regra do site: o evento acaba no end_date; sem end_date, início + 12h.
+const FALLBACK_DURATION_MS = 12 * 60 * 60 * 1000;
+const isEventEnded = (event?: Event) => {
+  if (!event) return false;
+  const end = event.end_date
+    ? new Date(event.end_date).getTime()
+    : new Date(event.start_date).getTime() + FALLBACK_DURATION_MS;
+  return Number.isFinite(end) && Date.now() > end;
+};
+
 const Tickets = () => {
   const [ticketTypes, setTicketTypes] = useState<(TicketType & { event?: Event })[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -66,6 +76,8 @@ const Tickets = () => {
   // Só o admin usa o seletor de evento; produtor continua vendo tudo dele direto.
   const [isAdmin, setIsAdmin] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState("");
+  // Lotes de eventos que já acabaram ficam escondidos (o histórico de vendas continua no banco).
+  const [showEnded, setShowEnded] = useState(false);
   const { toast } = useToast();
   const { invalidateAll } = useInvalidateEvents();
 
@@ -286,9 +298,16 @@ const Tickets = () => {
     });
   };
 
-  const filteredTickets = ticketTypes.filter((ticket) =>
+  const matchesSearch = (ticket: TicketType & { event?: Event }) =>
     ticket.name.toLowerCase().includes(search.toLowerCase()) ||
-    ticket.event?.title.toLowerCase().includes(search.toLowerCase())
+    ticket.event?.title.toLowerCase().includes(search.toLowerCase());
+
+  const hiddenEndedCount = showEnded
+    ? 0
+    : ticketTypes.filter((ticket) => isEventEnded(ticket.event)).length;
+
+  const filteredTickets = ticketTypes.filter(
+    (ticket) => matchesSearch(ticket) && (showEnded || !isEventEnded(ticket.event))
   );
 
   return (
@@ -476,6 +495,14 @@ const Tickets = () => {
             />
           </div>
 
+          <div className="flex items-center gap-2">
+            <Switch id="show-ended" checked={showEnded} onCheckedChange={setShowEnded} />
+            <Label htmlFor="show-ended" className="text-sm text-muted-foreground cursor-pointer">
+              Mostrar lotes de eventos encerrados
+              {hiddenEndedCount > 0 && ` (${hiddenEndedCount} ocultos)`}
+            </Label>
+          </div>
+
           {loading ? (
             <div className="text-center py-12 text-muted-foreground">Carregando...</div>
           ) : filteredTickets.length === 0 ? (
@@ -486,7 +513,9 @@ const Tickets = () => {
                     ? "Escolha um evento acima para ver os ingressos."
                     : search
                       ? "Nenhum ingresso encontrado"
-                      : "Nenhum tipo de ingresso criado ainda."}
+                      : hiddenEndedCount > 0
+                        ? "Os lotes dos seus eventos já encerrados estão ocultos. O histórico de vendas continua em Vendas e Relatórios."
+                        : "Nenhum tipo de ingresso criado ainda."}
                 </p>
               </CardContent>
             </Card>
@@ -566,7 +595,9 @@ const Tickets = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir tipo de ingresso?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita.
+              Esta ação não pode ser desfeita. Lotes que já têm vendas não podem ser excluídos:
+              para tirar da venda, desative em "Ativo para vendas". Lotes de eventos encerrados
+              já ficam ocultos sozinhos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
