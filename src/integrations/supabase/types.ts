@@ -126,6 +126,7 @@ export type Database = {
       events: {
         Row: {
           banner_url: string | null
+          map_image_url: string | null
           category: string | null
           city: string | null
           contact: string | null
@@ -152,6 +153,7 @@ export type Database = {
         }
         Insert: {
           banner_url?: string | null
+          map_image_url?: string | null
           category?: string | null
           city?: string | null
           contact?: string | null
@@ -178,6 +180,7 @@ export type Database = {
         }
         Update: {
           banner_url?: string | null
+          map_image_url?: string | null
           category?: string | null
           city?: string | null
           contact?: string | null
