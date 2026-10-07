@@ -13,6 +13,31 @@ const logStep = (step: string, details?: any) => {
   console.log(`[MERCADOPAGO-WEBHOOK][${timestamp}] ${step}${detailsStr}`);
 };
 
+async function notificarAdminPainel(
+  supabaseClient: ReturnType<typeof createClient>,
+  params: {
+    type: string;
+    severity: 'info' | 'warning' | 'critical';
+    title: string;
+    message: string;
+    orderId?: string | null;
+    metadata?: Record<string, unknown>;
+  }
+) {
+  try {
+    await supabaseClient.from('admin_notifications').insert({
+      type: params.type,
+      severity: params.severity,
+      title: params.title,
+      message: params.message,
+      order_id: params.orderId ?? null,
+      metadata: params.metadata ?? {},
+    });
+  } catch (e) {
+    logStep('Falha ao gravar admin_notifications', { error: String(e) });
+  }
+}
+
 async function verifyWebhookSignature(
   xSignature: string | null,
   xRequestId: string | null,
@@ -62,10 +87,37 @@ serve(async (req) => {
   try {
     const xSignature = req.headers.get('x-signature');
     const xRequestId = req.headers.get('x-request-id');
-    const body = await req.json();
-    logStep('Webhook recebido', { type: body.type, action: body.action, data_id: body.data?.id });
 
-    const { type, data } = body;
+    const url = new URL(req.url);
+
+    // Notificacoes no formato antigo (IPN: ?id=...&topic=payment) chegam em
+    // paralelo ao webhook novo (?data.id=...&type=payment), sem a assinatura
+    // x-signature valida. Antes eram barradas com 401 e o Mercado Pago ficava
+    // reenviando por horas. O webhook assinado ja cuida de tudo, entao o IPN
+    // legado so recebe 200 e nao processa nada.
+    const isLegacyIpn = url.searchParams.has('topic') && !url.searchParams.has('data.id');
+    if (isLegacyIpn) {
+      logStep('IPN legado ignorado (o webhook assinado ja processa)', { topic: url.searchParams.get('topic') });
+      return new Response(JSON.stringify({ received: true, ignored: 'ipn_legado' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
+      });
+    }
+
+    let bodyJson: any = {};
+    const rawBody = await req.text();
+    if (rawBody) {
+      try {
+        bodyJson = JSON.parse(rawBody);
+      } catch (_) {
+        logStep('Corpo da requisição não é JSON válido (provável teste de IPN)', { rawBody });
+      }
+    }
+
+    const type = bodyJson.type || url.searchParams.get('topic') || url.searchParams.get('type');
+    const data = bodyJson.data || (url.searchParams.get('id') ? { id: url.searchParams.get('id') } : undefined);
+
+    logStep('Webhook recebido', { type, action: bodyJson.action, data_id: data?.id, viaQueryString: !rawBody });
+
     if (type !== 'payment') {
       return new Response(JSON.stringify({ received: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
@@ -73,7 +125,12 @@ serve(async (req) => {
     }
 
     const paymentId = data?.id;
-    if (!paymentId) throw new Error('Payment ID não encontrado');
+    if (!paymentId) {
+      logStep('Payment ID não encontrado no payload/query -- respondendo 200 mesmo assim');
+      return new Response(JSON.stringify({ received: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
+      });
+    }
     const paymentIdStr = String(paymentId);
 
     const supabaseClient = createClient(
@@ -88,17 +145,8 @@ serve(async (req) => {
     }
     const isSandbox = credentials.accessToken.startsWith('TEST-');
 
-    // Com o secret configurado: assinatura inválida = rejeitado, sem exceção.
-    //
-    // Sem o secret: registramos um alerta bem visível mas seguimos, porque o dado
-    // que realmente importa NÃO vem do corpo da requisição -- logo abaixo buscamos
-    // o pagamento direto na API do Mercado Pago com o nosso access token, e é de
-    // LÁ que saem status, valor e external_reference. Ou seja, mesmo sem assinatura
-    // ninguém consegue forjar "pedido pago": teria que existir um pagamento real e
-    // aprovado apontando pro pedido dele. Rejeitar aqui sem o secret só derrubaria
-    // as confirmações de pagamento sem ganho real de segurança.
     if (credentials.webhookSecret) {
-      const dataId = body.data?.id?.toString() || '';
+      const dataId = paymentIdStr;
       const isValidSignature = await verifyWebhookSignature(xSignature, xRequestId, dataId, credentials.webhookSecret);
       if (!isValidSignature) {
         logStep('ALERTA DE SEGURANÇA: Assinatura de webhook inválida - REJEITADO', { siteId });
@@ -116,7 +164,10 @@ serve(async (req) => {
     });
     if (!paymentResponse.ok) {
       const errorText = await paymentResponse.text();
-      throw new Error(`Erro ao buscar pagamento: ${errorText}`);
+      logStep('Pagamento não encontrado na API do MP (esperado em teste de IPN)', { paymentId, errorText });
+      return new Response(JSON.stringify({ received: true, note: 'payment_not_found' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
+      });
     }
     const payment = await paymentResponse.json();
     logStep('Detalhes do pagamento', {
@@ -139,9 +190,6 @@ serve(async (req) => {
       .single();
     if (orderError || !order) throw new Error('Pedido não encontrado');
 
-    // CONFERÊNCIA DE VALOR: antes marcávamos como pago só olhando o status do MP,
-    // sem checar QUANTO foi pago. Aqui rejeitamos pagamento a menor (fraude),
-    // mas aceitamos pagamento igual ou maior (com folga de 1 centavo pra arredondamento).
     if (payment.status === 'approved') {
       const valorPago = Number(payment.transaction_amount || 0);
       const valorEsperado = Number(order.total_amount || 0);
@@ -157,6 +205,16 @@ serve(async (req) => {
             details: { motivo: 'valor pago menor que total_amount', valorPago, valorEsperado },
           });
         } catch (_) { /* log é best-effort */ }
+
+        await notificarAdminPainel(supabaseClient, {
+          type: 'underpaid_suspect',
+          severity: 'critical',
+          title: 'Pagamento divergente -- ingresso NÃO liberado',
+          message: `Pedido ${order.id}: pago R$ ${valorPago.toFixed(2)} de R$ ${valorEsperado.toFixed(2)} esperado. Possível manipulação no checkout.`,
+          orderId: order.id,
+          metadata: { paymentId: paymentIdStr, valorPago, valorEsperado, payerEmail: payment.payer?.email ?? order.customer_email },
+        });
+
         return new Response(JSON.stringify({ received: true, ignored: 'valor_divergente' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200
         });
@@ -184,11 +242,44 @@ serve(async (req) => {
       logStep('Falha ao registrar webhook_log', { error: String(logError) });
     }
 
+    if (payment.status === 'charged_back') {
+      try {
+        await supabaseClient.functions.invoke('send-notification', {
+          body: {
+            type: 'chargeback_alert',
+            data: {
+              orderId: order.id,
+              paymentId: paymentIdStr,
+              amount: payment.transaction_amount,
+              customerEmail: order.customer_email,
+            },
+          },
+        });
+        logStep('Alerta de chargeback disparado', { orderId, paymentId: paymentIdStr });
+      } catch (alertError) {
+        logStep('Falha ao disparar alerta de chargeback', { error: String(alertError) });
+      }
+
+      await notificarAdminPainel(supabaseClient, {
+        type: 'chargeback',
+        severity: 'critical',
+        title: 'Chargeback recebido do Mercado Pago',
+        message: `Pedido ${order.id}: contestação de R$ ${Number(payment.transaction_amount || 0).toFixed(2)}. Prazo curto (3-5 dias úteis) para responder com evidência.`,
+        orderId: order.id,
+        metadata: { paymentId: paymentIdStr, amount: payment.transaction_amount, customerEmail: order.customer_email },
+      });
+    }
+
+    // status_detail: sempre atualizado com o motivo mais recente do MP (aprovado,
+    // pendente, ou o codigo exato da recusa tipo cc_rejected_high_risk), mesmo
+    // quando o status geral (newStatus) nao mudou -- assim o admin sempre ve o
+    // motivo mais atual, nao só na primeira vez que o pedido mudou de status.
     if (newStatus !== previousStatus) {
       const { error: updateError } = await supabaseClient
         .from('orders')
         .update({
           status: newStatus,
+          status_detail: payment.status_detail ?? order.status_detail,
           payment_intent_id: paymentIdStr,
           mp_payment_id: paymentIdStr,
           payment_method: payment.payment_method_id ?? order.payment_method,
@@ -198,14 +289,6 @@ serve(async (req) => {
       if (updateError) throw new Error('Erro ao atualizar pedido');
       logStep('Status do pedido atualizado', { orderId, previousStatus, newStatus });
 
-      // O estoque já foi reservado atomicamente (reserve_tickets) no momento em
-      // que o Pix/cartão foi gerado -- então aqui NÃO incrementamos quantity_sold
-      // de novo (isso duplicaria a contagem). Só devolvemos o estoque reservado
-      // se o pagamento acabou não indo pra frente.
-      // Inclui previousStatus 'paid' pra cobrir estorno/chargeback feito direto no
-      // painel do Mercado Pago (fora do nosso /admin). Quando o estorno vem pela
-      // função refund-order, ela já mudou o status antes -- então newStatus ===
-      // previousStatus e este bloco nem roda, evitando devolver estoque em dobro.
       if ((newStatus === 'cancelled' || newStatus === 'refunded') &&
           (previousStatus === 'pending' || previousStatus === 'paid')) {
         for (const item of order.order_items) {
@@ -219,52 +302,80 @@ serve(async (req) => {
         }
         logStep('Estoque reservado devolvido (pagamento não confirmado)', { orderId });
       }
+    } else if (payment.status_detail && payment.status_detail !== order.status_detail) {
+      await supabaseClient
+        .from('orders')
+        .update({ status_detail: payment.status_detail })
+        .eq('id', orderId);
     }
 
     if (newStatus === 'paid') {
-      const { data: existingTickets, error: checkError } = await supabaseClient
-        .from('tickets')
-        .select('id')
-        .in('order_item_id', order.order_items.map((item: any) => item.id))
-        .limit(1);
-      if (checkError) logStep('Erro ao verificar ingressos existentes', checkError);
-
-      if (existingTickets && existingTickets.length > 0) {
-        logStep('Ingressos já existem para este pedido, pulando criação', { existingCount: existingTickets.length });
+      // ANTI-DUPLICIDADE: a criação dos ingressos acontece no banco, com trava por pedido.
+      // Se o Mercado Pago mandar 2 avisos do mesmo pagamento ao mesmo tempo, um cria e o outro
+      // recebe 0 -- então cupom e e-mail também não repetem.
+      // Retorno: quantos ingressos ESTA chamada criou. -1 = função do banco indisponível (usa o fallback).
+      let ingressosCriadosAgora = -1;
+      const { data: criados, error: criarError } = await supabaseClient
+        .rpc('create_tickets_for_order', { p_order_id: orderId });
+      if (criarError) {
+        logStep('Falha na criação atômica de ingressos -- usando o caminho antigo (fallback)', { error: criarError });
       } else {
-        logStep('Gerando ingressos para pedido aprovado', { orderItemsCount: order.order_items.length });
+        ingressosCriadosAgora = Number(criados ?? 0);
+      }
 
-        for (const item of order.order_items) {
-          for (let i = 0; i < item.quantity; i++) {
-            const ticketCode = generateTicketCode();
-            const { data: newTicket, error: ticketError } = await supabaseClient
-              .from('tickets')
-              .insert({
-                order_item_id: item.id,
-                user_id: order.user_id,
-                event_id: order.event_id,
-                ticket_type_id: item.ticket_type_id,
-                ticket_code: ticketCode,
-                qr_code: ticketCode,
-                status: 'active',
-                site_id: order.site_id || siteId,
-                attendee_name: order.customer_name ?? null,
-                attendee_email: order.customer_email ?? null,
-                recipient_name: order.customer_name ?? null,
-                recipient_email: order.customer_email ?? null,
-              })
-              .select()
-              .single();
-            if (ticketError) {
-              logStep('Erro ao criar ingresso', { error: ticketError, item, ticketCode });
-            } else {
-              logStep('Ingresso criado', { ticketId: newTicket?.id, ticketCode });
+      let gerouIngressos = ingressosCriadosAgora > 0;
+
+      if (ingressosCriadosAgora === 0) {
+        logStep('Ingressos já existem para este pedido, pulando criação');
+      } else if (ingressosCriadosAgora > 0) {
+        logStep('Ingressos criados (atômico)', { orderId, quantidade: ingressosCriadosAgora });
+      } else {
+        // FALLBACK: caminho antigo, só roda se a função do banco falhar.
+        const { data: existingTickets, error: checkError } = await supabaseClient
+          .from('tickets')
+          .select('id')
+          .in('order_item_id', order.order_items.map((item: any) => item.id))
+          .limit(1);
+        if (checkError) logStep('Erro ao verificar ingressos existentes', checkError);
+
+        if (existingTickets && existingTickets.length > 0) {
+          logStep('Ingressos já existem para este pedido, pulando criação', { existingCount: existingTickets.length });
+        } else {
+          logStep('Gerando ingressos para pedido aprovado (fallback)', { orderItemsCount: order.order_items.length });
+          gerouIngressos = true;
+
+          for (const item of order.order_items) {
+            for (let i = 0; i < item.quantity; i++) {
+              const ticketCode = generateTicketCode();
+              const { data: newTicket, error: ticketError } = await supabaseClient
+                .from('tickets')
+                .insert({
+                  order_item_id: item.id,
+                  user_id: order.user_id,
+                  event_id: order.event_id,
+                  ticket_type_id: item.ticket_type_id,
+                  ticket_code: ticketCode,
+                  qr_code: ticketCode,
+                  status: 'active',
+                  site_id: order.site_id || siteId,
+                  attendee_name: order.customer_name ?? null,
+                  attendee_email: order.customer_email ?? null,
+                  recipient_name: order.customer_name ?? null,
+                  recipient_email: order.customer_email ?? null,
+                })
+                .select()
+                .single();
+              if (ticketError) {
+                logStep('Erro ao criar ingresso', { error: ticketError, item, ticketCode });
+              } else {
+                logStep('Ingresso criado', { ticketId: newTicket?.id, ticketCode });
+              }
             }
           }
-          // NOTA: quantity_sold NÃO é incrementado aqui -- já foi reservado
-          // atomicamente por reserve_tickets() na hora de gerar o Pix/cobrar o cartão.
         }
+      }
 
+      if (gerouIngressos) {
         if (order.coupon_id) {
           const { data: couponRow } = await supabaseClient
             .from('coupons').select('used_count').eq('id', order.coupon_id).maybeSingle();
