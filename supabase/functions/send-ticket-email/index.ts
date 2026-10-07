@@ -4,6 +4,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
+// Precisa ser um endereço do domínio verificado no Resend (premierpass.com.br).
+// onboarding@resend.dev é só pra teste e só entrega pro dono da conta Resend.
+const FROM = "PremierPass <naoresponda@premierpass.com.br>";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -63,12 +67,12 @@ serve(async (req) => {
 
     const requestBody: TicketEmailRequest = await req.json();
 
-    // ══════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════
     // AUTENTICACAO. Antes disto a funcao era aberta: qualquer pessoa da
     // internet disparava e-mail com a marca PremierPass pra qualquer
     // endereco. O webhook continua funcionando porque chama com a chave
     // de servico (isInternal).
-    // ══════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════
     const authHeader = req.headers.get("Authorization") || "";
     const jwt = authHeader.replace("Bearer ", "").trim();
     const isInternal = !!jwt && jwt === supabaseServiceKey;
@@ -135,7 +139,7 @@ serve(async (req) => {
       `).join("");
 
       const emailResponse = await resend.emails.send({
-        from: "PremierPass <onboarding@resend.dev>",
+        from: FROM,
         to: [recipientEmail],
         subject: `🎁 Você recebeu ${quantity || 1} ingresso${(quantity || 1) > 1 ? 's' : ''} cortesia para ${eventTitle}`,
         html: `
@@ -289,7 +293,7 @@ serve(async (req) => {
 
     // Send email
     const emailResponse = await resend.emails.send({
-      from: "PremierPass <onboarding@resend.dev>",
+      from: FROM,
       to: [order.customer_email || ""],
       subject: `🎫 Seus ingressos para ${order.events?.title}`,
       html: `
