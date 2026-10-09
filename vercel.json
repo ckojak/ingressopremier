@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/sitemap-eventos.xml", "destination": "/api/sitemap" },
+    { "source": "/evento/:slug", "destination": "/api/evento?slug=:slug" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
