@@ -29,28 +29,39 @@ const SEO = ({
   type = "website",
   schema,
 }: SEOProps) => {
-  const fullTitle = title ? `${title} | PremierPass` : defaultMeta.title;
+  const fullTitle = title ? `${title} | Premier Pass` : defaultMeta.title;
   const absoluteImage = image.startsWith("http")
     ? image
     : `${SITE_URL}${image.startsWith("/") ? "" : "/"}${image}`;
 
+  // Dados da empresa para o Google. Logo: adicionar "logo" aqui quando houver uma imagem quadrada (mín. 512x512) em /public.
   const defaultSchema = {
     "@context": "https://schema.org",
-    "@type": "Organization",
-    name: "Premier Pass",
-    url: SITE_URL,
-    logo: `${SITE_URL}/logo.png`,
-    sameAs: [
-      "https://instagram.com/premierpass",
-      "https://facebook.com/premierpass",
-      "https://twitter.com/premierpass",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${SITE_URL}/#organization`,
+        name: "Premier Pass",
+        alternateName: ["PremierPass"],
+        url: SITE_URL,
+        sameAs: ["https://www.instagram.com/premierpass.oficial/"],
+        contactPoint: {
+          "@type": "ContactPoint",
+          telephone: "+55-21-97993-4676",
+          contactType: "customer service",
+          availableLanguage: "Portuguese",
+        },
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${SITE_URL}/#website`,
+        name: "Premier Pass",
+        alternateName: ["PremierPass", "premierpass.com.br"],
+        url: SITE_URL,
+        inLanguage: "pt-BR",
+        publisher: { "@id": `${SITE_URL}/#organization` },
+      },
     ],
-    contactPoint: {
-      "@type": "ContactPoint",
-      telephone: "+55-21-99999-9999",
-      contactType: "customer service",
-      availableLanguage: "Portuguese",
-    },
   };
 
   return (
