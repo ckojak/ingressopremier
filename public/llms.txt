@@ -1,16 +1,27 @@
-# PremierPass
+# Premier Pass
 
-> Plataforma brasileira de venda de ingressos online para shows, festivais, teatro, esportes e eventos premium, com ingresso digital e pagamento seguro via Pix ou cartão.
+> Plataforma brasileira de venda de ingressos online para shows, festivais, teatro, esportes e eventos, com ingresso digital (QR Code) e pagamento por Pix ou cartão. Site: https://premierpass.com.br (também escrito PremierPass).
 
-## Pages
+## Como funciona
 
-- [Início](/): Eventos em destaque e busca de ingressos.
-- [Eventos](/eventos): Lista completa de eventos com filtros por data, cidade e categoria.
-- [Sobre](/sobre): Quem somos e como funciona a PremierPass.
-- [Suporte](/suporte): Perguntas frequentes e canais de atendimento.
-- [Meia-entrada](/meia-entrada): Regras da Lei da Meia-Entrada.
+- O cliente escolhe o evento, paga por Pix ou cartão e recebe o ingresso digital com QR Code por e-mail e na área "Meus Ingressos".
+- Na entrada, o QR Code é lido pela equipe do evento e o ingresso só vale uma vez.
+- Produtores de eventos criam e gerenciam seus eventos, ingressos, equipe de check-in e saques pela plataforma.
 
-## Optional
+## Eventos
 
-- [Termos de Serviço](/termos): Condições de uso da plataforma.
-- [Política de Privacidade](/privacidade): Tratamento de dados pessoais.
+- [Todos os eventos](https://premierpass.com.br/eventos): lista completa com filtros por data, cidade e categoria.
+- [Eventos em cartaz (sitemap)](https://premierpass.com.br/sitemap-eventos.xml): endereço de cada evento à venda.
+- Cada evento tem página própria em https://premierpass.com.br/evento/nome-do-evento, com data, local, preços e disponibilidade.
+
+## Regras e políticas
+
+- [Termos de Serviço](https://premierpass.com.br/termos): reembolso, direito de arrependimento (7 dias após a compra e com 48 horas de antecedência do evento) e Compra Protegida (opcional, R$ 3,00 por pedido).
+- [Política de Privacidade](https://premierpass.com.br/privacidade): tratamento de dados pessoais.
+- [Meia-entrada](https://premierpass.com.br/meia-entrada): regras da Lei da Meia-Entrada.
+
+## Contato
+
+- [Suporte](https://premierpass.com.br/suporte): perguntas frequentes e canais de atendimento.
+- Telefone/WhatsApp: +55 21 97993-4676
+- Instagram: https://www.instagram.com/premierpass.oficial/
