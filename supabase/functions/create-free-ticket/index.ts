@@ -9,6 +9,18 @@ const corsHeaders = {
 const log = (step: string, details?: unknown) =>
   console.log(`[CREATE-FREE-TICKET] ${step}${details ? `: ${JSON.stringify(details)}` : ''}`);
 
+// Valida CPF (11 dígitos + dígitos verificadores). Rejeita sequências repetidas (111.111.111-11 etc).
+const isValidCpf = (raw: unknown): boolean => {
+  const cpf = String(raw ?? '').replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  for (const t of [9, 10]) {
+    let sum = 0;
+    for (let i = 0; i < t; i++) sum += Number(cpf[i]) * (t + 1 - i);
+    if (((sum * 10) % 11) % 10 !== Number(cpf[t])) return false;
+  }
+  return true;
+};
+
 function generateTicketCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
@@ -62,6 +74,9 @@ serve(async (req) => {
     customer_cpf = (customer_cpf || '').replace(/\D/g, '') || null;
     if (!customer_name) throw new Error('Nome do comprador obrigatório');
 
+    // CPF obrigatório e válido (a regra não pode existir só na tela).
+    if (!customer_cpf || !isValidCpf(customer_cpf)) throw new Error('CPF inválido ou não informado');
+
     const ticketTypeIds = normalizedItems.map((i) => i.ticket_type_id);
     const [{ data: event }, { data: ticketTypes, error: ttErr }] = await Promise.all([
       supabase.from('events').select('id, title, site_id').eq('id', event_id).maybeSingle(),
@@ -81,6 +96,26 @@ serve(async (req) => {
     for (const tt of ticketTypes) {
       if (!tt.is_complimentary || Number(tt.price) !== 0) {
         throw new Error(`"${tt.name}" não é um ingresso cortesia — use pagamento normal.`);
+      }
+    }
+
+    // Limite por CPF: soma o que esse CPF já tem (pago ou pendente) do mesmo tipo
+    // de ingresso e compara com o max_per_order do tipo. Roda ANTES de reservar
+    // estoque, então não precisa devolver nada se bloquear.
+    for (const item of normalizedItems) {
+      const tt = ticketTypes.find((t: any) => t.id === item.ticket_type_id);
+      if (!tt) continue;
+      const limite = tt.max_per_order || 10;
+      const { data: usados, error: usadosErr } = await supabase
+        .from('order_items')
+        .select('quantity, orders!inner(customer_cpf, status)')
+        .eq('ticket_type_id', tt.id)
+        .eq('orders.customer_cpf', customer_cpf)
+        .in('orders.status', ['paid', 'pending']);
+      if (usadosErr) throw new Error('Não foi possível validar o limite por CPF. Tente novamente.');
+      const jaTem = (usados || []).reduce((s: number, r: any) => s + Number(r.quantity || 0), 0);
+      if (jaTem + item.quantity > limite) {
+        throw new Error(`Limite de ${limite} ingresso(s) por CPF atingido para "${tt.name}" (você já tem ${jaTem}).`);
       }
     }
 
