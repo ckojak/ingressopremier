@@ -16,8 +16,10 @@ interface CheckoutRequest {
   event_id: string;
   items: CheckoutItem[];
   site_id?: string;
+  customer_name?: string;
   customer_cpf?: string;
   customer_phone?: string;
+  purchase_protection?: boolean;
 }
 
 interface TicketType {
@@ -32,9 +34,23 @@ interface TicketType {
   event_id: string;
 }
 
+const PROTECTION_FEE = 3;
+
 const logStep = (step: string, details?: unknown) => {
   const detailsStr = details ? `: ${JSON.stringify(details)}` : '';
   console.log(`[MERCADOPAGO-CHECKOUT] ${step}${detailsStr}`);
+};
+
+// Valida CPF (11 dígitos + dígitos verificadores). Rejeita sequências repetidas (111.111.111-11 etc).
+const isValidCpf = (raw: unknown): boolean => {
+  const cpf = String(raw ?? '').replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  for (const t of [9, 10]) {
+    let sum = 0;
+    for (let i = 0; i < t; i++) sum += Number(cpf[i]) * (t + 1 - i);
+    if (((sum * 10) % 11) % 10 !== Number(cpf[t])) return false;
+  }
+  return true;
 };
 
 const getMercadoPagoCredentials = () => Deno.env.get('PREMIERPASS_MERCADOPAGO_ACCESS_TOKEN');
@@ -88,7 +104,7 @@ serve(async (req) => {
 
     logStep('Usuário autenticado', { id: user.id, email: user.email });
 
-    const { event_id, items, site_id, customer_cpf, customer_phone }: CheckoutRequest = await req.json();
+    const { event_id, items, site_id, customer_name, customer_cpf, customer_phone, purchase_protection }: CheckoutRequest = await req.json();
     logStep('Request recebido', { event_id, items, site_id });
 
     if (!event_id || !items || items.length === 0) {
@@ -108,6 +124,27 @@ serve(async (req) => {
       mergedQty.set(ttId, (mergedQty.get(ttId) || 0) + qty);
     }
     const normalizedItems = Array.from(mergedQty, ([ticket_type_id, quantity]) => ({ ticket_type_id, quantity }));
+
+    // CPF obrigatório e válido (a regra não pode existir só na tela) + limite de 4
+    // ingressos por CPF no evento, igual ao Pix. Roda ANTES de reservar estoque.
+    const cpfDigits = String(customer_cpf || '').replace(/\D/g, '');
+    if (!isValidCpf(cpfDigits)) throw new Error('CPF inválido ou não informado');
+
+    const { data: pedidosDoCpf } = await supabaseAdmin
+      .from('orders')
+      .select('id, order_items(quantity)')
+      .eq('event_id', event_id)
+      .eq('customer_cpf', cpfDigits)
+      .in('status', ['paid', 'pending']);
+    const jaComprou = (pedidosDoCpf || []).reduce(
+      (sum: number, o: any) =>
+        sum + (o.order_items || []).reduce((s: number, oi: any) => s + oi.quantity, 0),
+      0
+    );
+    const qtdNova = normalizedItems.reduce((s, i) => s + i.quantity, 0);
+    if (jaComprou + qtdNova > 4) {
+      throw new Error(`Limite de 4 ingressos por CPF atingido para este evento (você já tem ${jaComprou}).`);
+    }
 
     const { data: event, error: eventError } = await supabaseAdmin
       .from('events')
@@ -198,7 +235,9 @@ serve(async (req) => {
     }
 
     const serviceFee = Math.round(subtotal * 0.08 * 100) / 100;
-    const totalAmount = Math.round((subtotal + serviceFee) * 100) / 100;
+    // Compra Protegida (R$ 3,00): cobrada quando o cliente marca na tela, igual ao Pix.
+    const protectionFee = purchase_protection === true ? PROTECTION_FEE : 0;
+    const totalAmount = Math.round((subtotal + serviceFee + protectionFee) * 100) / 100;
     if (totalAmount <= 0) {
       await releaseAll();
       throw new Error('Valor inválido para pagamento');
@@ -213,7 +252,18 @@ serve(async (req) => {
       unit_price: serviceFee
     });
 
-    logStep('Totais calculados', { subtotal, serviceFee, totalAmount });
+    if (protectionFee > 0) {
+      mpItems.push({
+        id: 'purchase-protection',
+        title: 'Compra Protegida',
+        description: 'Reembolso em caso de imprevistos comprovados, conforme os Termos',
+        quantity: 1,
+        currency_id: 'BRL',
+        unit_price: protectionFee
+      });
+    }
+
+    logStep('Totais calculados', { subtotal, serviceFee, protectionFee, totalAmount });
 
     const { data: profile } = await supabaseAdmin
       .from('profiles')
@@ -221,9 +271,9 @@ serve(async (req) => {
       .eq('id', user.id)
       .maybeSingle();
 
-    const finalCpf = (customer_cpf || '').replace(/\D/g, '') || null;
+    const finalCpf = cpfDigits || null;
     const finalPhoneRaw = customer_phone || profile?.phone || null;
-    const finalName = profile?.full_name || user.email || 'Cliente';
+    const finalName = (customer_name || '').trim() || profile?.full_name || user.email || 'Cliente';
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -233,6 +283,8 @@ serve(async (req) => {
         site_id: effectiveSiteId,
         total_amount: totalAmount,
         service_fee: serviceFee,
+        purchase_protection: protectionFee > 0,
+        protection_fee: protectionFee,
         status: 'pending',
         payment_method: 'mercadopago',
         customer_name: finalName,
