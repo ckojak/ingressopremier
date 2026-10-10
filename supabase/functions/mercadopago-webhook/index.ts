@@ -275,6 +275,31 @@ serve(async (req) => {
     // quando o status geral (newStatus) nao mudou -- assim o admin sempre ve o
     // motivo mais atual, nao só na primeira vez que o pedido mudou de status.
     if (newStatus !== previousStatus) {
+      // REEMBOLSO / CHARGEBACK feito direto no Mercado Pago: o ingresso tem que parar
+      // de valer (o check-in já recusa ingresso cancelado). Só vale para reembolso total
+      // ou chargeback -- uma tentativa recusada/cancelada NUNCA cancela ingresso.
+      // Roda ANTES de atualizar o pedido: se falhar, o erro faz o Mercado Pago reenviar
+      // o aviso e o pedido continua "paid" até dar certo. Ingresso já usado na porta
+      // (is_used) não é mexido, para preservar o histórico de presença.
+      if (newStatus === 'refunded' && previousStatus === 'paid' &&
+          (payment.status === 'refunded' || payment.status === 'charged_back')) {
+        const itemIds = (order.order_items || []).map((oi: any) => oi.id);
+        if (itemIds.length > 0) {
+          const { data: cancelados, error: cancelError } = await supabaseClient
+            .from('tickets')
+            .update({ status: 'cancelled' })
+            .in('order_item_id', itemIds)
+            .eq('status', 'active')
+            .eq('is_used', false)
+            .select('id');
+          if (cancelError) {
+            logStep('Erro ao cancelar ingressos do pedido reembolsado', { orderId, cancelError });
+            throw new Error('Erro ao cancelar ingressos do pedido reembolsado');
+          }
+          logStep('Ingressos cancelados (reembolso/chargeback)', { orderId, paymentStatus: payment.status, quantidade: cancelados?.length ?? 0 });
+        }
+      }
+
       const { error: updateError } = await supabaseClient
         .from('orders')
         .update({
