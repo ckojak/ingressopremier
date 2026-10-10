@@ -11,6 +11,18 @@ const PROTECTION_FEE = 3;
 const log = (step: string, details?: unknown) =>
   console.log(`[CREATE-PIX] ${step}${details ? `: ${JSON.stringify(details)}` : ''}`);
 
+// Valida CPF (11 dígitos + dígitos verificadores). Rejeita sequências repetidas (111.111.111-11 etc).
+const isValidCpf = (raw: unknown): boolean => {
+  const cpf = String(raw ?? '').replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  for (const t of [9, 10]) {
+    let sum = 0;
+    for (let i = 0; i < t; i++) sum += Number(cpf[i]) * (t + 1 - i);
+    if (((sum * 10) % 11) % 10 !== Number(cpf[t])) return false;
+  }
+  return true;
+};
+
 async function applyCoupon(supabase: any, code: string | undefined, eventId: string, subtotal: number) {
   if (!code) return { discount: 0, couponId: null as string | null, couponCode: null as string | null };
 
@@ -90,6 +102,9 @@ serve(async (req) => {
     customer_phone = customer_phone || profile?.phone || null;
     customer_cpf = (customer_cpf || '').replace(/\D/g, '') || null;
     if (!customer_name) throw new Error('Nome do comprador obrigatório');
+
+    // CPF obrigatório e válido (a regra não pode existir só na tela).
+    if (!customer_cpf || !isValidCpf(customer_cpf)) throw new Error('CPF inválido ou não informado');
 
     if (customer_cpf && customer_cpf.length >= 11) {
       const { data: existingOrders } = await supabase
